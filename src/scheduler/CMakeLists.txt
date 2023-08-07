@@ -11,11 +11,12 @@ target_sources(
 )
 
 
-IF(${PENDING_KEYS} STREQUAL "MAP")
-    message ("Compiling with pending keys in a MAP")
-    target_compile_definitions(scheduler PUBLIC MAP_PENDING)
+
+IF(${COPY} STREQUAL "CONCURRENT")
+    message ("Compiling with workload graph and partition map copied concurrently")
+    target_compile_definitions(scheduler PUBLIC CONCURRENT_COPY)
 ELSE()
-    message ("Compiling with pending keys in a VECTOR")
+    message ("Compiling with workload graph and partition map copied while waiting")
 ENDIF()
 
 target_include_directories(

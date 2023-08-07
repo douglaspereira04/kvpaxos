@@ -13,6 +13,14 @@ template <typename T>
 class Graph {
 public:
     Graph() = default;
+    
+    Graph(Graph<T> &g){
+        vertex_weight_ = g.vertex_weight_;
+        edges_weight_ = g.edges_weight_;
+        n_edges_ = g.n_edges_;
+        total_vertex_weight_ = g.total_vertex_weight_;
+        total_edges_weight_ = g.total_edges_weight_;
+    }
 
     void add_vertice(T data, int weight = 0) {
         vertex_weight_[data] = weight;

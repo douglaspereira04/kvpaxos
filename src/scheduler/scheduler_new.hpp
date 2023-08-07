@@ -52,6 +52,9 @@ public:
 
         sem_init(&repartition_semaphore_, 0, 0);
         repartition_thread_ = std::thread(&NewScheduler<T>::repartition_loop, this);
+
+        sem_init(&swap_maps_semaphore_, 0, 0);
+        sem_init(&continue_reparting_semaphore_, 0, 0);
     }
 
     ~NewScheduler() {
@@ -93,24 +96,11 @@ public:
             return;
         }
 
-        #if defined(MAP_PENDING)
-            //Restores "forgotten" keys "on demand"
-            auto it = pending_keys_.find(request.key);
-            if((!reparting_) && (it != pending_keys_.end())){
-                if(!mapped(request.key)){
-                    auto key = (*it).first;
-                    auto partition_id = (*it).second;
-                    add_key(key, partition_id);
-                }
-                pending_keys_.erase(it);
-            } 
-            else 
-        #endif
-            if (type == WRITE) {
-                if (not mapped(request.key)) {
-                    add_key(request.key);
-                }
+        if (type == WRITE) {
+            if (not mapped(request.key)) {
+                add_key(request.key);
             }
+        }
 
         auto partitions = std::move(involved_partitions(request));
         if (partitions.empty()) {
@@ -136,44 +126,44 @@ public:
             n_dispatched_requests_++;
             
             
-            if ( change_partitions_map_ ) {
+            if (sem_trywait(&swap_maps_semaphore_)==0) {
             //Repartition completed, time to change swap the partition map
                 
                 //Wait graph thread to process all requests
                 graph_sync();
-                reparting_ = false;
+
+                reparting_ = false; //When CONCURRENT_COPY is ON "reparting_ is already implicitly locked"
 
                 delete data_to_partition_;
                 data_to_partition_ = data_to_partition_2_;
                 data_to_partition_copy_ = *data_to_partition_;
 
-                #if !defined(MAP_PENDING)
-                    //Restores all the "forgotten" keys when the repartition is completed
-                    auto it = pending_keys_.begin();
-                    for (; it < pending_keys_.end(); it++){
-                        auto key = (*it).first;
-                        auto partition_id = (*it).second;
-                        add_key(key, partition_id);
-                        pending_keys_.erase(it);
-                    }
-                #endif
+                //Restores all the "forgotten" keys when the repartition is completed
+                auto it = pending_keys_.begin();
+                for (; it < pending_keys_.end(); it++){
+                    auto key = (*it).first;
+                    auto partition_id = (*it).second;
+                    add_key(key, partition_id);
+                    pending_keys_.erase(it);
+                }
 
                 sync_all_partitions();
 
-                change_partitions_map_ = false;
+                sem_post(&continue_reparting_semaphore_);
             } else if (
                 n_dispatched_requests_ % repartition_interval_ == 0
             ) {
-
-                //The partition map and workload graph are copied 
-                // while graph thread has no pending operations,
-                // guaranteeing tha both are consistent in a way that
-                // every key present in the copy of the map 
-                // is also present in the copy of the workload graph
-                graph_sync();
-                reparting_ = true;
-                repart_data_to_partition_ = *data_to_partition_;
-                repart_workload_graph_ = model::Graph<T>(workload_graph_);
+                #if !defined(CONCURRENT_COPY)
+                    //The partition map and workload graph are copied 
+                    // while graph thread has no pending operations,
+                    // guaranteeing tha both are consistent in a way that
+                    // every key present in the copy of the map 
+                    // is also present in the copy of the workload graph
+                    graph_sync();
+                    reparting_ = true;
+                    repart_data_to_partition_ = *data_to_partition_;
+                    repart_workload_graph_ = model::Graph<T>(workload_graph_);
+                #endif
                 
                 //When copy is done a signal is emited to the repartition thread
                 sem_post(&repartition_semaphore_);
@@ -254,16 +244,20 @@ private:
         auto partition_id = round_robin_counter_;
         round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
 
+        #if defined(CONCURRENT_COPY)
+            reparting_mutex_.lock();
+        #endif
+
         if(reparting_){
             //Saves keys that wont be present in the reparted graph
-            #if defined(MAP_PENDING)
-                pending_keys_.emplace(key,partition_id);
-            #else
-                pending_keys_.push_back(std::make_pair(key,partition_id));
-            #endif
+            pending_keys_.push_back(std::make_pair(key,partition_id));
         }
 
         add_key(key, partition_id);
+
+        #if defined(CONCURRENT_COPY)
+            reparting_mutex_.unlock();
+        #endif
     }
 
 
@@ -341,12 +335,22 @@ private:
         while(true){
             sem_wait(&repartition_semaphore_);
 
+            #if defined(CONCURRENT_COPY)
+                reparting_mutex_.lock();
+                reparting_ = true;
+                reparting_mutex_.unlock();
+
+                repart_data_to_partition_ = *data_to_partition_;
+                repart_workload_graph_ = model::Graph<T>(workload_graph_);
+            #endif
+
             //New partition map is created
             data_to_partition_2_ = repart();
             
-            //Send a signal to the scheduler 
-            change_partitions_map_ = true;
-
+            //Send a signal to the scheduler
+            sem_post(&swap_maps_semaphore_);
+            //Waits for the swap completes before another repartition
+            sem_wait(&continue_reparting_semaphore_);
         }
     }
 
@@ -399,18 +403,18 @@ private:
 
     sem_t repartition_semaphore_;
     std::thread repartition_thread_;
-    bool change_partitions_map_ = false;
     model::Graph<T> repart_workload_graph_;
     std::unordered_map<T, Partition<T>*> repart_data_to_partition_;
 
 
     bool reparting_;
-    #if defined(MAP_PENDING) //Restores a key only on first use after map swap
-        std::unordered_map<T, int> pending_keys_;
-    #else //Restores all keys right after map swap, before any scheduling
-        std::vector<std::pair<T, int>> pending_keys_;
+    std::vector<std::pair<T, int>> pending_keys_;
+    #if defined(CONCURRENT_COPY)
+        std::mutex reparting_mutex_;
     #endif
 
+    sem_t swap_maps_semaphore_;
+    sem_t continue_reparting_semaphore_;
 
     std::thread graph_thread_;
     std::queue<struct client_message> graph_requests_queue_;
