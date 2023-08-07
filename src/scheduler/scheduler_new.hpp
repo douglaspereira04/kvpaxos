@@ -37,7 +37,8 @@ public:
                 model::CutMethod repartition_method
     ) : n_partitions_{n_partitions},
         repartition_interval_{repartition_interval},
-        repartition_method_{repartition_method}
+        repartition_method_{repartition_method},
+        reparting_{false}
     {
         for (auto i = 0; i < n_partitions_; i++) {
             auto* partition = new Partition<T>(i);
@@ -127,11 +128,20 @@ public:
                 
                 //Wait graph thread to process all requests
                 graph_sync();
-
+                reparting_ = false;
 
                 delete data_to_partition_;
                 data_to_partition_ = data_to_partition_2_;
                 data_to_partition_copy_ = *data_to_partition_;
+
+                //Restores all the "forgotten" keys when the repartition is completed
+                auto it = pending_keys_.begin();
+                for (; it < pending_keys_.end(); it++){
+                    auto key = (*it).first;
+                    auto partition_id = (*it).second;
+                    add_key(key, partition_id);
+                    pending_keys_.erase(it);
+                }
 
                 sync_all_partitions();
 
@@ -146,10 +156,11 @@ public:
                 // every key present in the copy of the map 
                 // is also present in the copy of the workload graph
                 graph_sync();
+                reparting_ = true;
                 repart_data_to_partition_ = *data_to_partition_;
                 repart_workload_graph_ = model::Graph<T>(workload_graph_);
                 
-                //When copie is done a signal is emited to the repartition thread
+                //When copy is done a signal is emited to the repartition thread
                 sem_post(&repartition_semaphore_);
 
                 //The scheduling can continue while the partitioning is in progress
@@ -226,9 +237,19 @@ private:
 
     void add_key(T key) {
         auto partition_id = round_robin_counter_;
-        data_to_partition_->emplace(key, partitions_.at(partition_id));
-
         round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
+
+        if(reparting_){
+            //Saves keys that wont be present in the reparted graph
+            pending_keys_.push_back(std::make_pair(key,partition_id));
+        }
+
+        add_key(key, partition_id);
+    }
+
+
+    void add_key(T key, int partition_id) {
+        data_to_partition_->emplace(key, partitions_.at(partition_id));
 
         if (repartition_method_ != model::ROUND_ROBIN) {
             struct client_message write_message;
@@ -362,6 +383,10 @@ private:
     bool change_partitions_map_ = false;
     model::Graph<T> repart_workload_graph_;
     std::unordered_map<T, Partition<T>*> repart_data_to_partition_;
+
+
+    bool reparting_;
+    std::vector<std::pair<T, int>> pending_keys_;
 
 
     std::thread graph_thread_;
