@@ -52,6 +52,13 @@
 #include "graph/graph.hpp"
 
 
+#if defined(NEW_SCHEDULER)
+	#include "scheduler/scheduler_new.hpp"
+	#define Scheduler NewScheduler
+#else
+	#include "scheduler/scheduler.hpp"
+#endif
+
 
 using toml_config = toml::basic_value<
 	toml::discard_comments, std::unordered_map, std::vector

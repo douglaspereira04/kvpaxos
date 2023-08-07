@@ -23,6 +23,15 @@ ELSE()
     message ("Compiling with other Hashmap")
 ENDIF()
 
+
+IF(${SCHEDULER} STREQUAL "NEW")
+    message ("New scheduler")
+    target_compile_definitions(replica PUBLIC NEW_SCHEDULER)
+ELSE()
+    message ("Old Scheduler")
+    target_compile_definitions(replica PUBLIC OLD_SCHEDULER)
+ENDIF()
+
 target_sources(
     replica
         PRIVATE
