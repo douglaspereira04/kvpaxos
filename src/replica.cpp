@@ -43,10 +43,14 @@
 #include <utility>
 #include <vector>
 
+#include <cds/init.h>
+#include <cds/gc/hp.h>
+
 #include "request/request_generation.h"
 #include "types/types.h"
 #include "scheduler/scheduler.hpp"
 #include "graph/graph.hpp"
+
 
 
 using toml_config = toml::basic_value<
@@ -192,6 +196,7 @@ run(const toml_config& config)
 		std::cout << (repartition_time - start_execution_timestamp).count() << " ";
 	}
 	std::cout << std::endl;
+	exit(EXIT_SUCCESS);
 }
 
 static void
@@ -224,6 +229,11 @@ main(int argc, char const *argv[])
 		workload::export_requests(requests, export_path);
 
     }else{
+#if defined(MICHAEL) || defined(FELDMAN)
+		cds::Initialize();
+		cds::gc::HP gc;
+		cds::threading::Manager::attachThread();
+#endif
 		run(config);
 	}
 

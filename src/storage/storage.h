@@ -10,9 +10,19 @@
 
 #include "compresser/compresser.h"
 #include "types/types.h"
+//#include <cds/gc/hp.h>
 
 
-#if defined(TBB)
+#if defined(MICHAEL)
+
+    #include <cds/container/michael_kvlist_hp.h>
+    #include <cds/container/michael_map.h>
+    typedef cds::container::MichaelHashMap<cds::gc::HP, cds::container::MichaelKVList<cds::gc::HP, int, std::string>> storage_t;
+    
+#elif defined(FELDMAN)
+    #include <cds/container/feldman_hashmap_hp.h>
+    typedef cds::container::FeldmanHashMap<cds::gc::HP, int, std::string> storage_t;
+#elif defined(TBB)
     #include "tbb/concurrent_unordered_map.h"
     typedef tbb::concurrent_unordered_map<int, std::string> storage_t;
 #else

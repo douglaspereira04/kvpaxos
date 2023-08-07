@@ -130,6 +130,9 @@ private:
     */
 
     void thread_loop() {
+#if defined(FELDMAN) || defined(MICHAEL)
+		cds::threading::Manager::attachThread();
+#endif
         while (executing_) {
             sem_wait(&semaphore_);
             if (not executing_) {
@@ -200,6 +203,9 @@ private:
 
             n_executed_requests_++;
         }
+#if defined(FELDMAN) || defined(MICHAEL)
+		cds::threading::Manager::detachThread();
+#endif
     }
 
     int id_, socket_fd_, n_executed_requests_;

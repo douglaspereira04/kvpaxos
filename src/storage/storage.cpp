@@ -5,10 +5,18 @@
 namespace kvstorage {
 
 
-#if defined(TBB)
+#if defined(MICHAEL)
+     storage_t *create_storage_map(){ return new storage_t(2048,1); }
+#elif defined(FELDMAN)
+    storage_t *create_storage_map(){ return new storage_t(8,8); }
+#elif defined(TBB)
     storage_t *create_storage_map(){ return new storage_t(); }
 #else
     storage_t *create_storage_map(){ return new storage_t(); }
+#endif
+
+#if defined(MICHAEL) || defined(FELDMAN)
+    typedef typename storage_t::guarded_ptr GuardedPointer;
 #endif
 
 int VALUE_SIZE = 4096;
@@ -19,7 +27,12 @@ std::string Storage::read(int key) const {
     try {
         std::string val;
 
-#if defined(TBB)
+#if defined(MICHAEL) || defined(FELDMAN)
+		GuardedPointer gp = GuardedPointer(storage_->get(key));
+        if(gp){
+            val = gp->second;
+        }
+#elif defined(TBB)
         val = (*storage_)[key];
 #else 
         val = storage_->at(key);
@@ -36,7 +49,9 @@ std::string Storage::read(int key) const {
 }
 
 void Storage::write(int key, const std::string& value) {
-#if defined(TBB)
+#if defined(MICHAEL) || defined(FELDMAN)
+    storage_->insert(key,template_value);
+#elif defined(TBB)
     (*storage_)[key] = template_value;
 # else 
     storage_->insert(key, template_value);

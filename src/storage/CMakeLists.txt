@@ -1,6 +1,12 @@
 add_library(storage)
 
-IF(${STORAGE} STREQUAL "TBB")
+IF(${STORAGE} STREQUAL "FELDMAN")
+    message ("Compiling with Feldman Hashmap")
+    target_compile_definitions(storage PUBLIC FELDMAN)
+ELSEIF(${STORAGE} STREQUAL "MICHAEL")
+    message ("Compiling with Michael Hashmap")
+    target_compile_definitions(storage PUBLIC MICHAEL)
+ELSEIF(${STORAGE} STREQUAL "TBB")
     message ("Compiling with TBB Hashmap")
     target_compile_definitions(storage PUBLIC TBB)
 ELSE()
