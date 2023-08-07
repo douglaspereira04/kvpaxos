@@ -51,7 +51,7 @@ public:
 
     ~Scheduler() {
         for (auto partition: partitions_) {
-            delete partition;
+            delete partition.second;
         }
         delete data_to_partition_;
     }
