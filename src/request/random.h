@@ -8,15 +8,20 @@
 namespace rfunc {
 
 typedef std::function<int()> RandFunction;
+typedef std::function<double()> DoubleRandFunction;
 
-enum Distribution {FIXED, UNIFORM, BINOMIAL};
+enum Distribution {FIXED, UNIFORM, BINOMIAL, ZIPFIAN};
 const std::unordered_map<std::string, Distribution> string_to_distribution({
     {"FIXED", Distribution::FIXED},
     {"UNIFORM", Distribution::UNIFORM},
-    {"BINOMIAL", Distribution::BINOMIAL}
+    {"BINOMIAL", Distribution::BINOMIAL},
+    {"ZIPFIAN", Distribution::ZIPFIAN}
 });
 
 RandFunction uniform_distribution_rand(int min_value, int max_value);
+DoubleRandFunction uniform_double_distribution_rand(double min_value, double max_value);
+RandFunction zipfian_distribution(long min, long max);
+RandFunction scrambled_zipfian_distribution(long min, long max);
 RandFunction fixed_distribution(int value);
 RandFunction binomial_distribution(
     int n_experiments, double success_probability

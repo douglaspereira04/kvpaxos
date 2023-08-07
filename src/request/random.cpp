@@ -1,11 +1,22 @@
 #include "random.h"
 
+#include "scrambled_zipfian_int_distribution.cpp"
+#include "zipfian_int_distribution.cpp"
+
 namespace rfunc {
 
 RandFunction uniform_distribution_rand(int min_value, int max_value) {
     std::random_device rd;
     std::mt19937 generator(rd());
     std::uniform_int_distribution<int> distribution(min_value, max_value);
+
+    return std::bind(distribution, generator);
+}
+
+DoubleRandFunction uniform_double_distribution_rand(double min_value, double max_value) {
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::uniform_real_distribution<double> distribution(min_value, max_value);
 
     return std::bind(distribution, generator);
 }
@@ -27,6 +38,22 @@ RandFunction binomial_distribution(
 
     return std::bind(distribution, generator);
 }
+
+RandFunction zipfian_distribution(long min, long max) {
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    zipfian_int_distribution<int> distribution(min, max);
+    return std::bind(distribution, generator);
+}
+
+RandFunction scrambled_zipfian_distribution(long min, long max) {
+
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    scrambled_zipfian_int_distribution<int> distribution(min, max);
+    return std::bind(distribution, generator);
+}
+
 
 RandFunction ranged_binomial_distribution(
     int min_value, int n_experiments, double success_probability

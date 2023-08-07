@@ -203,6 +203,7 @@ usage(std::string prog)
 int
 main(int argc, char const *argv[])
 {
+
 	if (argc < 2) {
 		usage(std::string(argv[0]));
 		exit(1);
@@ -210,7 +211,21 @@ main(int argc, char const *argv[])
 
 	const auto config = toml::parse(argv[1]);
 
-	run(config);
+    const auto should_export_requests = toml::find<bool>(
+        config, "export"
+    );
 
-	return 0;
+    if (should_export_requests) {
+        auto export_path = toml::find<std::string>(
+			config, "output", "requests", "export_path"
+		);
+		auto requests = workload::create_requests(argv[1]);
+		
+		workload::export_requests(requests, export_path);
+
+    }else{
+		run(config);
+	}
+
+	
 }
