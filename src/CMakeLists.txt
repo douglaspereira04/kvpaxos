@@ -8,6 +8,13 @@ add_subdirectory(graph)
 
 add_executable(replica)
 
+IF(${STORAGE} STREQUAL "TBB")
+    message ("Compiling with TBB Hashmap")
+    target_compile_definitions(replica PUBLIC TBB)
+ELSE()
+    message ("Compiling with other Hashmap")
+ENDIF()
+
 target_sources(
     replica
         PRIVATE

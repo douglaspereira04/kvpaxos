@@ -5,6 +5,8 @@ include(cmake/base.cmake)
 include(cmake/project_options.cmake)
 include(cmake/conan.cmake)
 
+set(STORAGE "NONE" CACHE STRING "TBB, OTHER")
+
 conan(
     PACKAGES
         zlib/1.2.11

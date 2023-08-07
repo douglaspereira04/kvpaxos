@@ -1,5 +1,12 @@
 add_library(storage)
 
+IF(${STORAGE} STREQUAL "TBB")
+    message ("Compiling with TBB Hashmap")
+    target_compile_definitions(storage PUBLIC TBB)
+ELSE()
+    message ("Compiling with other Hashmap")
+ENDIF()
+
 target_sources(
     storage
         PUBLIC

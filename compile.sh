@@ -5,5 +5,5 @@ git checkout master
 cd ../../
 mkdir build
 cd build
-cmake ..
+cmake .. -DSTORAGE=$1
 make
