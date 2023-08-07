@@ -10,6 +10,14 @@ target_sources(
             partition.cpp
 )
 
+
+IF(${PENDING_KEYS} STREQUAL "MAP")
+    message ("Compiling with pending keys in a MAP")
+    target_compile_definitions(scheduler PUBLIC MAP_PENDING)
+ELSE()
+    message ("Compiling with pending keys in a VECTOR")
+ENDIF()
+
 target_include_directories(
     scheduler
         PUBLIC

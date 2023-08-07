@@ -93,11 +93,24 @@ public:
             return;
         }
 
-        if (type == WRITE) {
-            if (not mapped(request.key)) {
-                add_key(request.key);
+        #if defined(MAP_PENDING)
+            //Restores "forgotten" keys "on demand"
+            auto it = pending_keys_.find(request.key);
+            if((!reparting_) && (it != pending_keys_.end())){
+                if(!mapped(request.key)){
+                    auto key = (*it).first;
+                    auto partition_id = (*it).second;
+                    add_key(key, partition_id);
+                }
+                pending_keys_.erase(it);
+            } 
+            else 
+        #endif
+            if (type == WRITE) {
+                if (not mapped(request.key)) {
+                    add_key(request.key);
+                }
             }
-        }
 
         auto partitions = std::move(involved_partitions(request));
         if (partitions.empty()) {
@@ -134,14 +147,16 @@ public:
                 data_to_partition_ = data_to_partition_2_;
                 data_to_partition_copy_ = *data_to_partition_;
 
-                //Restores all the "forgotten" keys when the repartition is completed
-                auto it = pending_keys_.begin();
-                for (; it < pending_keys_.end(); it++){
-                    auto key = (*it).first;
-                    auto partition_id = (*it).second;
-                    add_key(key, partition_id);
-                    pending_keys_.erase(it);
-                }
+                #if !defined(MAP_PENDING)
+                    //Restores all the "forgotten" keys when the repartition is completed
+                    auto it = pending_keys_.begin();
+                    for (; it < pending_keys_.end(); it++){
+                        auto key = (*it).first;
+                        auto partition_id = (*it).second;
+                        add_key(key, partition_id);
+                        pending_keys_.erase(it);
+                    }
+                #endif
 
                 sync_all_partitions();
 
@@ -241,7 +256,11 @@ private:
 
         if(reparting_){
             //Saves keys that wont be present in the reparted graph
-            pending_keys_.push_back(std::make_pair(key,partition_id));
+            #if defined(MAP_PENDING)
+                pending_keys_.emplace(key,partition_id);
+            #else
+                pending_keys_.push_back(std::make_pair(key,partition_id));
+            #endif
         }
 
         add_key(key, partition_id);
@@ -386,7 +405,11 @@ private:
 
 
     bool reparting_;
-    std::vector<std::pair<T, int>> pending_keys_;
+    #if defined(MAP_PENDING) //Restores a key only on first use after map swap
+        std::unordered_map<T, int> pending_keys_;
+    #else //Restores all keys right after map swap, before any scheduling
+        std::vector<std::pair<T, int>> pending_keys_;
+    #endif
 
 
     std::thread graph_thread_;
