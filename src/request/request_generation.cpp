@@ -464,23 +464,18 @@ std::vector<workload::Request> generate_requests(
         0.0, 1.0
     );
     
-    //std::unordered_map<int,int> counter;
     for (auto i = 0; i < n_operations; i++) {
         request_type type = next_operation(operation_proportions, &operation_generator);
         
         auto key = data_generator();
         std::string size = "";
-        if(scan_proportion > 0){
+        if(type == request_type::SCAN){
             size = std::to_string(scan_length_generator());
         }
-        /*if(type == request_type::WRITE){
-            counter[key] = key;
-        }*/
         auto request = Request(type, key, size);
         requests.push_back(request);
     }
 
-    //std::cout << "Unique: " << counter.size() << std::endl;
     return requests;
 }
 
