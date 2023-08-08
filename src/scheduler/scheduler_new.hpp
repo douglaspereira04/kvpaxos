@@ -142,8 +142,10 @@ public:
                 auto it = pending_keys_.begin();
                 for (; it < pending_keys_.end(); it++){
                     auto key = (*it).first;
-                    auto partition_id = (*it).second;
-                    add_key(key, partition_id);
+                    if (!mapped(key)) {
+                        auto partition_id = (*it).second;
+                        add_key(key, partition_id);
+                    }
                     pending_keys_.erase(it);
                 }
 
