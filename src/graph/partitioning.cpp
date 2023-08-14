@@ -25,9 +25,9 @@ std::vector<int> cut_graph (
     bool firt_repartition = true
 ) {
     if (method == METIS) {
-        return multilevel_cut(graph, partitions.size(), method);
+        return multilevel_cut_old(graph, partitions.size(), method);
     } else if (method == KAHIP) {
-        return multilevel_cut(graph, partitions.size(), method);
+        return multilevel_cut_old(graph, partitions.size(), method);
     } else if (method == FENNEL) {
         return fennel_cut(graph, partitions.size());
     } else {
@@ -35,7 +35,110 @@ std::vector<int> cut_graph (
     }
 }
 
+
+bool multilevel_cut_data(
+    const Graph<int>& graph, 
+    std::vector<int>& x_edges,
+    std::vector<int>& edges,
+    std::vector<int>& vertice_weight,
+    std::vector<int>& edges_weight
+)
+{   
+    std::unordered_map<int, int> vertex;
+    //auto sorted_vertex = std::move(graph.sorted_vertex());
+    auto sorted_vertex = std::move(graph.sorted_vertex(vertex));
+
+    x_edges.push_back(0);
+    for (auto& vertice : sorted_vertex) {
+        auto last_edge_index = x_edges.back();
+        auto n_neighbours = 0;
+
+        for (auto& vk: graph.vertice_edges(vertice)) {
+            auto neighbour = vk.first;
+            if(vertex.find(neighbour) != vertex.end()){
+                auto weight = vk.second;
+                edges.push_back(neighbour);
+                edges_weight.push_back(weight);
+                n_neighbours++;
+            }
+        }
+
+        x_edges.push_back(last_edge_index + n_neighbours);
+        vertice_weight.push_back(vertice);
+    }
+
+    return true;
+}
+
 std::vector<int> multilevel_cut(
+    const Graph<int>& graph, 
+    std::vector<int>& x_edges,
+    std::vector<int>& edges,
+    std::vector<int>& vertice_weight,
+    std::vector<int>& edges_weight,
+    int n_partitions,
+    CutMethod cut_method
+)
+{
+    int n_constrains = 1;
+    int options[METIS_NOPTIONS];
+    METIS_SetDefaultOptions(options);
+    options[METIS_OPTION_OBJTYPE] = METIS_OBJTYPE_CUT;
+    options[METIS_OPTION_NUMBERING] = 0;
+    options[METIS_OPTION_UFACTOR] = 200;
+
+    int objval;
+    int n_vertex = vertice_weight.size();
+    auto vertex_partitions = std::vector<int>(n_vertex, 0);
+    if (cut_method == METIS) {
+        METIS_PartGraphKway(
+            &n_vertex, &n_constrains, x_edges.data(), edges.data(),
+            vertice_weight.data(), NULL, edges_weight.data(), &n_partitions, NULL,
+            NULL, options, &objval, vertex_partitions.data()
+        );
+    } else {
+        double imbalance = 0.2;  // equal to METIS default imbalance
+        kaffpa(
+            &n_vertex, vertice_weight.data(), x_edges.data(),
+            edges_weight.data(), edges.data(), &n_partitions,
+            &imbalance, true, -1, FAST, &objval,
+            vertex_partitions.data()
+        );
+    }
+
+    return vertex_partitions;
+}
+
+std::vector<int> multilevel_cut(
+    const Graph<int>& graph, int n_partitions, CutMethod cut_method
+)
+{
+    auto x_edges = std::vector<int>();
+    auto edges = std::vector<int>();
+    auto vertice_weight = std::vector<int>();
+    auto edges_weight = std::vector<int>();
+
+    
+    multilevel_cut_data(
+        graph, 
+        x_edges,
+        edges,
+        vertice_weight,
+        edges_weight
+    );
+
+    return multilevel_cut(
+    graph, 
+    x_edges,
+    edges,
+    vertice_weight,
+    edges_weight,
+    n_partitions,
+    cut_method);
+}
+
+
+std::vector<int> multilevel_cut_old(
     const Graph<int>& graph, int n_partitions, CutMethod cut_method
 )
 {

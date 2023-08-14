@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include <map>
 #include <vector>
 
 
@@ -68,6 +69,17 @@ public:
         return sorted_vertex_;
     }
 
+
+    std::vector<T> sorted_vertex(std::unordered_map<T, int>& vertex_weight) const {
+        std::vector<T> sorted_vertex_;
+        for (auto& it : vertex_weight_) {
+            sorted_vertex_.emplace_back(it.first);
+            vertex_weight[it.first] = it.second;
+        }
+        std::sort(sorted_vertex_.begin(), sorted_vertex_.end());
+        return sorted_vertex_;
+    }
+
     std::size_t n_vertex() const {return vertex_weight_.size();}
     std::size_t n_edges() const {return edges_weight_.size();}
     int total_vertex_weight() const {return total_vertex_weight_;}
@@ -78,6 +90,11 @@ public:
         return edges_weight_.at(vertice);
     }
     const std::unordered_map<T, int>& vertex() const {return vertex_weight_;}
+
+    void vertice_weight(T data, int weight) {vertex_weight_[data] = weight;}
+
+    const std::unordered_map<T, int> edge_weight(T from) const {return edges_weight_[from];}
+    void edge_weight(T from, T to, int weight) {vertex_weight_[from][to] = weight;}
 
 private:
     std::unordered_map<T, int> vertex_weight_;

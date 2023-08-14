@@ -38,7 +38,26 @@ std::vector<int> cut_graph (
     bool first_repartition /* = true */
 );
 
+bool multilevel_cut_data(
+    const Graph<int>& graph, 
+    std::vector<int>& x_edges,
+    std::vector<int>& edges,
+    std::vector<int>& vertice_weight,
+    std::vector<int>& edges_weight
+);
+std::vector<int> multilevel_cut(
+    const Graph<int>& graph, 
+    std::vector<int>& x_edges,
+    std::vector<int>& edges,
+    std::vector<int>& vertice_weight,
+    std::vector<int>& edges_weight,
+    int n_partitions,
+    CutMethod cut_method
+);
+
 std::vector<int> multilevel_cut
+    (const Graph<int>& graph, int n_partitions, CutMethod cut_method);
+std::vector<int> multilevel_cut_old
     (const Graph<int>& graph, int n_partitions, CutMethod cut_method);
 std::vector<int> fennel_cut(const Graph<int>& graph, int n_partitions);
 std::vector<int> refennel_cut(

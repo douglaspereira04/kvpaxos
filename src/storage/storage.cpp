@@ -23,19 +23,19 @@ int VALUE_SIZE = 4096;
 std::string template_value(VALUE_SIZE, '*');
 
 
-std::string Storage::read(int key) const {
+std::string Storage::read(int key) {
     try {
         std::string val;
 
 #if defined(MICHAEL) || defined(FELDMAN)
-		GuardedPointer gp = GuardedPointer(storage_->get(key));
+		GuardedPointer gp(storage_.get(key));
         if(gp){
             val = gp->second;
         }
 #elif defined(TBB)
-        val = (*storage_)[key];
+        val = storage_.at(key);
 #else 
-        val = storage_->at(key);
+        val = storage_.at(key);
 #endif
         return decompress(val);
 
@@ -49,19 +49,20 @@ std::string Storage::read(int key) const {
 }
 
 void Storage::write(int key, const std::string& value) {
+    auto compressed_value = compress(template_value);
 #if defined(MICHAEL) || defined(FELDMAN)
-    storage_->insert(key,template_value);
+    storage_.insert(key,compressed_value);
 #elif defined(TBB)
-    (*storage_)[key] = template_value;
+    storage_[key] = compressed_value;
 # else 
-    storage_->insert(key, template_value);
+    storage_.insert(key, compressed_value);
 #endif
 }
 
 std::vector<std::string> Storage::scan(int start, int length) {
     auto values = std::vector<std::string>();
     for (auto i = 0; i < length; i++) {
-        auto key = (start + i) % storage_->size();
+        auto key = (start + i) % storage_.size();
         values.push_back(read(key));
     }
     return values;

@@ -23,6 +23,7 @@
 #include "request/request.hpp"
 #include "storage/storage.h"
 #include "types/types.h"
+#include <iostream>
 
 
 namespace kvpaxos {
@@ -55,6 +56,10 @@ public:
 
         sem_init(&swap_maps_semaphore_, 0, 0);
         sem_init(&continue_reparting_semaphore_, 0, 0);
+
+        #if !defined(CONCURRENT_COPY)
+            sem_init(&copy_semaphore_, 0, 0);
+        #endif
     }
 
     ~NewScheduler() {
@@ -128,7 +133,6 @@ public:
             
             if (sem_trywait(&swap_maps_semaphore_)==0) {
             //Repartition completed, time to change swap the partition map
-                
                 //Wait graph thread to process all requests
                 graph_sync();
 
@@ -162,14 +166,15 @@ public:
                     // every key present in the copy of the map 
                     // is also present in the copy of the workload graph
                     graph_sync();
-                    reparting_ = true;
-                    repart_data_to_partition_ = *data_to_partition_;
-                    repart_workload_graph_ = model::Graph<T>(workload_graph_);
                 #endif
+                reparting_ = true;
                 
                 //When copy is done a signal is emited to the repartition thread
                 sem_post(&repartition_semaphore_);
 
+                #if !defined(CONCURRENT_COPY)
+                    sem_wait(&copy_semaphore_);
+                #endif
                 //The scheduling can continue while the partitioning is in progress
             }
         }
@@ -246,20 +251,12 @@ private:
         auto partition_id = round_robin_counter_;
         round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
 
-        #if defined(CONCURRENT_COPY)
-            reparting_mutex_.lock();
-        #endif
-
         if(reparting_){
             //Saves keys that wont be present in the reparted graph
             pending_keys_.push_back(std::make_pair(key,partition_id));
         }
 
         add_key(key, partition_id);
-
-        #if defined(CONCURRENT_COPY)
-            reparting_mutex_.unlock();
-        #endif
     }
 
 
@@ -334,20 +331,29 @@ private:
     }
 
     void repartition_loop(){
+
         while(true){
             sem_wait(&repartition_semaphore_);
-
+            
             #if defined(CONCURRENT_COPY)
-                reparting_mutex_.lock();
-                reparting_ = true;
-                reparting_mutex_.unlock();
+                repart_data_to_partition_ = data_to_partition_;
+                repart_workload_graph_ = &workload_graph_;
+            #else
+                //delete copies
+                repart_data_to_partition_ = new std::unordered_map<T, Partition<T>*>(*data_to_partition_);
+                repart_workload_graph_ = new model::Graph<T>(workload_graph_);
 
-                repart_data_to_partition_ = *data_to_partition_;
-                repart_workload_graph_ = model::Graph<T>(workload_graph_);
+                sem_post(&copy_semaphore_);
             #endif
 
             //New partition map is created
             data_to_partition_2_ = repart();
+
+            #if !defined(CONCURRENT_COPY)
+                delete repart_data_to_partition_;
+                delete repart_workload_graph_;
+            #endif
+
             
             //Send a signal to the scheduler
             sem_post(&swap_maps_semaphore_);
@@ -361,19 +367,49 @@ private:
         auto start_timestamp = std::chrono::system_clock::now();
         repartition_timestamps_.emplace_back(start_timestamp);
 
-        auto partition_scheme = std::move(
-            model::cut_graph(
-                repart_workload_graph_,
-                partitions_,
-                repartition_method_,
-                repart_data_to_partition_,
-                first_repartition
-            )
-        );
+        std::vector<int> partition_scheme;
+
+        //METIS and KAHIP dont depend on the old partition map
+        if(repartition_method_== model::CutMethod::KAHIP 
+        || repartition_method_== model::CutMethod::METIS ){
+            std::vector<int> x_edges;
+            std::vector<int> edges;
+            std::vector<int> vertice_weight;
+            std::vector<int> edges_weight;
+
+            model::multilevel_cut_data(
+                *repart_workload_graph_, 
+                x_edges,
+                edges,
+                vertice_weight,
+                edges_weight
+            );
+            
+
+            partition_scheme = multilevel_cut(
+            *repart_workload_graph_, 
+            x_edges,
+            edges,
+            vertice_weight,
+            edges_weight,
+            partitions_.size(),
+            repartition_method_);
+        }else{
+            partition_scheme = std::move(
+                model::cut_graph(
+                    *repart_workload_graph_,
+                    partitions_,
+                    repartition_method_,
+                    *repart_data_to_partition_,
+                    first_repartition
+                )
+            );
+        }
+
 
 
         auto data_to_partition = new std::unordered_map<T, Partition<T>*>();
-        auto sorted_vertex = std::move(repart_workload_graph_.sorted_vertex());
+        auto sorted_vertex = std::move(repart_workload_graph_->sorted_vertex());
         for (auto i = 0; i < partition_scheme.size(); i++) {
             auto partition = partition_scheme[i];
             if (partition >= n_partitions_) {
@@ -405,14 +441,15 @@ private:
 
     sem_t repartition_semaphore_;
     std::thread repartition_thread_;
-    model::Graph<T> repart_workload_graph_;
-    std::unordered_map<T, Partition<T>*> repart_data_to_partition_;
+    model::Graph<T>* repart_workload_graph_;
+    std::unordered_map<T, Partition<T>*>* repart_data_to_partition_;
 
 
     bool reparting_;
     std::vector<std::pair<T, int>> pending_keys_;
-    #if defined(CONCURRENT_COPY)
-        std::mutex reparting_mutex_;
+    
+    #if !defined(CONCURRENT_COPY)
+        sem_t copy_semaphore_;
     #endif
 
     sem_t swap_maps_semaphore_;

@@ -38,6 +38,7 @@ public:
         repartition_interval_{repartition_interval},
         repartition_method_{repartition_method}
     {
+        
         for (auto i = 0; i < n_partitions_; i++) {
             auto* partition = new Partition<T>(i);
             partitions_.emplace(i, partition);

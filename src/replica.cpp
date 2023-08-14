@@ -48,7 +48,6 @@
 
 #include "request/request_generation.h"
 #include "types/types.h"
-#include "scheduler/scheduler.hpp"
 #include "graph/graph.hpp"
 
 
@@ -203,7 +202,7 @@ run(const toml_config& config)
 		std::cout << (repartition_time - start_execution_timestamp).count() << " ";
 	}
 	std::cout << std::endl;
-	exit(EXIT_SUCCESS);
+	//exit(EXIT_SUCCESS);
 }
 
 static void
@@ -220,6 +219,7 @@ main(int argc, char const *argv[])
 		usage(std::string(argv[0]));
 		exit(1);
 	}
+	std::cout << "BEGIN" << std::endl;
 
 	const auto config = toml::parse(argv[1]);
 
@@ -231,9 +231,9 @@ main(int argc, char const *argv[])
         auto export_path = toml::find<std::string>(
 			config, "output", "requests", "export_path"
 		);
-		auto requests = workload::create_requests(argv[1]);
+		workload::create_requests(argv[1]);
 		
-		workload::export_requests(requests, export_path);
+		//workload::export_requests(requests, export_path);
 
     }else{
 #if defined(MICHAEL) || defined(FELDMAN)

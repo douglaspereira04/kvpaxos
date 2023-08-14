@@ -33,24 +33,25 @@
 
 namespace kvstorage {
 
-storage_t *create_storage_map();
-
 class Storage {
 public:
-    Storage() {
-        storage_ = create_storage_map();
-    }
+    Storage() = default;
 
-    ~Storage(){
-        delete storage_;
-    }
-
-    std::string read(int key) const;
+    std::string read(int key);
     void write(int key, const std::string& value);
     std::vector<std::string> scan(int start, int length);
     
 private:
-    storage_t* storage_;
+#if defined(MICHAEL)
+    storage_t storage_ = storage_t(2048,1);
+#elif defined(FELDMAN)
+    storage_t storage_ = storage_t(8,8);
+#elif defined(TBB)
+    storage_t storage_ = storage_t();
+#else
+    storage_t storage_ = storage_t();
+#endif
+
 
 
 };

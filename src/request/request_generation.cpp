@@ -383,11 +383,14 @@ request_type next_operation(
 
 }
 
-std::vector<workload::Request> generate_requests(
+void generate_export_requests(
     const toml_config& config
 ) {
-    std::vector<workload::Request> requests;
     std::vector<std::pair<request_type, double>> operation_proportions;
+
+    auto export_path = toml::find<std::string>(
+        config, "output", "requests", "export_path"
+    );
 
     const auto n_records = toml::find<int>(
         config, "workload", "n_records"
@@ -463,6 +466,9 @@ std::vector<workload::Request> generate_requests(
     rfunc::DoubleRandFunction operation_generator = rfunc::uniform_double_distribution_rand(
         0.0, 1.0
     );
+
+
+    std::ofstream ofs(export_path, std::ofstream::out);
     
     for (auto i = 0; i < n_operations; i++) {
         request_type type = next_operation(operation_proportions, &operation_generator);
@@ -473,10 +479,10 @@ std::vector<workload::Request> generate_requests(
             size = std::to_string(scan_length_generator());
         }
         auto request = Request(type, key, size);
-        requests.push_back(request);
+        ofs << static_cast<int>(request.type()) << "," << request.key() << "," << request.args() << "," << std::endl;
     }
 
-    return requests;
+    ofs.close();
 }
 
 std::vector<Request> create_requests(
@@ -491,7 +497,7 @@ std::vector<Request> create_requests(
     std::vector<workload::Request> requests;
 
     if(is_one_distribution){
-        requests = generate_requests(config);
+        generate_export_requests(config);
     }else{
         /*
             O programa utilizava instâncias diferentes de geradores de números para requisições
