@@ -65,6 +65,7 @@ std::vector<workload::Request> generate_requests(
     const toml_config& config
 );
 
+Request import_cs_request(std::ifstream &file);
 
 void export_requests(std::vector<Request> requests, std::string output_path);
 }

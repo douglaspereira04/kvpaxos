@@ -2,6 +2,8 @@
 #include <iostream>
 #include "scrambled_zipfian_int_distribution.cpp"
 #include <unordered_map>
+#include <stdio.h>
+#include <unistd.h>
 
 namespace workload {
 
@@ -11,6 +13,29 @@ Request make_request(char* type_buffer, char* key_buffer, char* arg_buffer) {
     auto arg = std::string(arg_buffer);
 
     return Request(type, key, arg);
+}
+
+
+
+Request make_request(int &type_buffer, int &key_buffer, int &arg_buffer) {
+    auto type = static_cast<request_type>(type_buffer);
+    auto key = key_buffer;
+    auto arg = std::to_string(arg_buffer);
+
+    return Request(type, key, arg);
+}
+
+Request import_cs_request(std::ifstream &file)
+{    
+    std::string line;
+    int type, key, arg;
+    std::getline(file, line);
+    sscanf(line.c_str(), "%d,%d,%d", &type,&key,&arg);
+    return make_request(
+        type,
+        key,
+        arg
+    );
 }
 
 std::vector<Request> import_cs_requests(const std::string& file_path)
@@ -387,7 +412,7 @@ void generate_export_requests(
     const toml_config& config
 ) {
     std::vector<std::pair<request_type, double>> operation_proportions;
-
+    long long n_requests = 0;
     auto export_path = toml::find<std::string>(
         config, "output", "requests", "export_path"
     );
@@ -399,6 +424,7 @@ void generate_export_requests(
     const auto n_operations = toml::find<int>(
         config, "workload", "n_operations"
     );
+    n_requests = n_operations;
 
     const auto data_distribution_str = toml::find<std::string>(
         config, "workload", "data_distribution"
@@ -430,7 +456,7 @@ void generate_export_requests(
         );
     } else if (data_distribution == rfunc::ZIPFIAN) {
         int expectednewkeys = (int) ((n_operations) * insert_proportion * 2.0);
-        data_generator = rfunc::scrambled_zipfian_distribution(0, n_records);
+        data_generator = rfunc::scrambled_zipfian_distribution(0, n_records + expectednewkeys);
     }
 
     rfunc::RandFunction scan_length_generator;
@@ -477,10 +503,13 @@ void generate_export_requests(
         std::string size = "";
         if(type == request_type::SCAN){
             size = std::to_string(scan_length_generator());
+            n_requests += (std::stoi(size)-1);
         }
         auto request = Request(type, key, size);
         ofs << static_cast<int>(request.type()) << "," << request.key() << "," << request.args() << "," << std::endl;
     }
+    
+    std::cout << "n_requests: " << n_requests << std::endl; 
 
     ofs.close();
 }
