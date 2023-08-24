@@ -4,17 +4,6 @@
 
 namespace kvstorage {
 
-
-#if defined(MICHAEL)
-     storage_t *create_storage_map(){ return new storage_t(2048,1); }
-#elif defined(FELDMAN)
-    storage_t *create_storage_map(){ return new storage_t(8,8); }
-#elif defined(TBB)
-    storage_t *create_storage_map(){ return new storage_t(); }
-#else
-    storage_t *create_storage_map(){ return new storage_t(); }
-#endif
-
 #if defined(MICHAEL) || defined(FELDMAN)
     typedef typename storage_t::guarded_ptr GuardedPointer;
 #endif
