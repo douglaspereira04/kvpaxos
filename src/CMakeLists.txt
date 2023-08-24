@@ -24,12 +24,18 @@ ELSE()
 ENDIF()
 
 
-IF(${SCHEDULER} STREQUAL "NEW")
-    message ("New scheduler")
-    target_compile_definitions(replica PUBLIC NEW_SCHEDULER)
+IF(${SCHEDULER} STREQUAL "COPY")
+    message ("Copy graph")
+    target_compile_definitions(replica PUBLIC COPY)
+    ELSEIF(${SCHEDULER} STREQUAL "GRAPH")
+        message ("Graph reparts")
+        target_compile_definitions(replica PUBLIC GRAPH_REPARTS)
+ELSEIF(${SCHEDULER} STREQUAL "CARELESS")
+    message ("Careless reparts")
+    target_compile_definitions(replica PUBLIC CARELESS)
 ELSE()
-    message ("Old Scheduler")
-    target_compile_definitions(replica PUBLIC OLD_SCHEDULER)
+    message ("Old method")
+    target_compile_definitions(replica PUBLIC OLD)
 ENDIF()
 
 target_sources(

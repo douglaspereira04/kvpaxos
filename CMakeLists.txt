@@ -6,8 +6,7 @@ include(cmake/project_options.cmake)
 include(cmake/conan.cmake)
 
 set(STORAGE "NONE" CACHE STRING "FELDMAN, MICHAEL, TBB")
-set(SCHEDULER "OLD" CACHE STRING "OLD, NEW")
-set(COPY "CONCURRENT" CACHE STRING "CONCURRENT, SYNC")
+set(SCHEDULER "OLD" CACHE STRING "OLD, COPY, GRAPH")
 
 conan(
     PACKAGES
