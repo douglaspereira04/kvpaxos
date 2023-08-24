@@ -33,11 +33,11 @@ public:
         if (edges_weight_[from].find(to) == edges_weight_[from].end()) {
             edges_weight_[from][to] = 0;
             edges_weight_[to][from] = 0;
+            n_edges_++;
         }
 
         edges_weight_[from][to] = weight;
         edges_weight_[to][from] = weight;
-        n_edges_++;
         total_edges_weight_ += weight;
     }
 
@@ -81,7 +81,7 @@ public:
     }
 
     std::size_t n_vertex() const {return vertex_weight_.size();}
-    std::size_t n_edges() const {return edges_weight_.size();}
+    std::size_t n_edges() const {return n_edges_;}
     int total_vertex_weight() const {return total_vertex_weight_;}
     int total_edges_weight() const {return total_edges_weight_;}
     int vertice_weight(T vertice) const {return vertex_weight_.at(vertice);}
