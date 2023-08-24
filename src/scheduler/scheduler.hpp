@@ -134,16 +134,16 @@ public:
         auto partitions = std::move(involved_partitions(request));
         if (partitions.empty()) {
             request.type = ERROR;
-            return partitions_.at(0)->push_request(request);
-        }
-
-        auto arbitrary_partition = *begin(partitions);
-        if (partitions.size() > 1) {
-            sync_partitions(partitions);
-            arbitrary_partition->push_request(request);
-            sync_partitions(partitions);
-        } else {
-            arbitrary_partition->push_request(request);
+            partitions_.at(0)->push_request(request);
+        }else{
+            auto arbitrary_partition = *begin(partitions);
+            if (partitions.size() > 1) {
+                sync_partitions(partitions);
+                arbitrary_partition->push_request(request);
+                sync_partitions(partitions);
+            } else {
+                arbitrary_partition->push_request(request);
+            }
         }
 
         if (repartition_method_ != model::ROUND_ROBIN) {
