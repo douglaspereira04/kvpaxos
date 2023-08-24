@@ -1,5 +1,5 @@
-#ifndef _KVPAXOS_SCHEDULER_H_
-#define _KVPAXOS_SCHEDULER_H_
+#ifndef _KVPAXOS_COPY_SCHEDULER_H_
+#define _KVPAXOS_COPY_SCHEDULER_H_
 
 
 #include <condition_variable>
@@ -23,14 +23,16 @@
 #include "storage/storage.h"
 #include "types/types.h"
 
+#include "scheduler.hpp"
+
 
 namespace kvpaxos {
 
 template <typename T>
-class Scheduler {
+class CopyScheduler : Scheduler<T> {
 public:
 
-    Scheduler(int n_requests,
+    CopyScheduler(int n_requests,
                 int repartition_interval,
                 int n_partitions,
                 model::CutMethod repartition_method
@@ -38,7 +40,8 @@ public:
         repartition_interval_{repartition_interval},
         repartition_method_{repartition_method}
     {
-       std::cout << "OLD_SCHEDULER" << std::endl; 
+       std::cout << "COPY_SCHEDULER" << std::endl; 
+
         for (auto i = 0; i < n_partitions_; i++) {
             auto* partition = new Partition<T>(i);
             partitions_.emplace(i, partition);
@@ -47,75 +50,7 @@ public:
 
         sem_init(&graph_requests_semaphore_, 0, 0);
         pthread_barrier_init(&repartition_barrier_, NULL, 2);
-        graph_thread_ = std::thread(&Scheduler<T>::update_graph_loop, this);
-    }
-
-    ~Scheduler() {
-        for (auto partition: partitions_) {
-            delete partition.second;
-        }
-        delete data_to_partition_;
-    }
-
-    void process_populate_requests(const std::vector<workload::Request>& requests) {
-        for (auto& request : requests) {
-            add_key(request.key());
-        }
-        Partition<T>::populate_storage(requests);
-    }
-
-    void run() {
-        for (auto& kv : partitions_) {
-            kv.second->start_worker_thread();
-        }
-    }
-
-    int n_executed_requests() {
-        auto n_executed_requests = 0;
-        for (auto& kv: partitions_) {
-            auto* partition = kv.second;
-            n_executed_requests += partition->n_executed_requests();
-        }
-        return n_executed_requests;
-    }
-    
-    int graph_queue_size(){
-        graph_requests_mutex_.lock();
-        int size = graph_requests_queue_.size();
-
-        graph_requests_mutex_.unlock();
-        return size;
-    }
-
-    int graph_vertices(){
-        graph_requests_mutex_.lock();
-        int size = workload_graph_.n_vertex();
-
-        graph_requests_mutex_.unlock();
-        return size;
-    }
-
-    int graph_edges(){
-        graph_requests_mutex_.lock();
-        int size = workload_graph_.n_edges();
-
-        graph_requests_mutex_.unlock();
-        return size;
-    }
-
-    int n_dispatched_requests(){
-        return n_dispatched_requests_;
-    }
-
-    const std::vector<time_point>& repartition_timestamps() const {
-        return repartition_timestamps_;
-    }
-
-    const std::vector<duration>& graph_copy_duration() const {
-        return graph_copy_duration_;
-    }
-    const std::vector<time_point>& repartition_end_timestamps() const {
-        return repartition_end_timestamps_;
+        graph_thread_ = std::thread(&CopyScheduler<T>::update_graph_loop, this);
     }
 
     void schedule_and_answer(struct client_message& request) {
@@ -138,7 +73,17 @@ public:
         }
 
         auto arbitrary_partition = *begin(partitions);
-        if (partitions.size() > 1) {
+        if (
+    const std::vector<time_point>& repartition_timestamps() const {
+        return repartition_timestamps_;
+    }
+
+    const std::vector<duration>& graph_copy_duration() const {
+        return graph_copy_duration_;
+    }
+    const std::vector<duration>& repartition_duration() const {
+        return repartition_duration_;
+    }partitions.size() > 1) {
             sync_partitions(partitions);
             arbitrary_partition->push_request(request);
             sync_partitions(partitions);
@@ -165,9 +110,10 @@ public:
                 sem_post(&graph_requests_semaphore_);
 
                 pthread_barrier_wait(&repartition_barrier_);
+                auto start_timestamp = std::chrono::system_clock::now();
                 repartition_data();
-                auto end_timestamp = std::chrono::system_clock::now();
-                repartition_end_timestamps_.push_back(end_timestamp);
+                duration repartition_duration = std::chrono::system_clock::now()-start_timestamp;
+                repartition_duration_.push_back(repartition_duration);
                 graph_copy_duration_.push_back(std::chrono::nanoseconds::zero());
                 sync_all_partitions();
             }
@@ -175,58 +121,6 @@ public:
     }
 
 private:
-    std::unordered_set<Partition<T>*> involved_partitions(
-        const struct client_message& request)
-    {
-        std::unordered_set<Partition<T>*> partitions;
-        auto type = static_cast<request_type>(request.type);
-
-        auto range = 1;
-        if (type == SCAN) {
-            range = std::stoi(request.args);
-        }
-
-        for (auto i = 0; i < range; i++) {
-            if (not mapped(request.key + i)) {
-                return std::unordered_set<Partition<T>*>();
-            }
-
-            partitions.insert(data_to_partition_->at(request.key + i));
-        }
-
-        return partitions;
-    }
-
-    struct client_message create_sync_request(int n_partitions) {
-        struct client_message sync_message;
-        sync_message.id = sync_counter_;
-        sync_message.type = SYNC;
-
-        // this is a gross workaround to send the barrier to the partitions.
-        // a more elegant approach would be appreciated.
-        auto* barrier = new pthread_barrier_t();
-        pthread_barrier_init(barrier, NULL, n_partitions);
-        sync_message.s_addr = (unsigned long) barrier;
-
-        return sync_message;
-    }
-
-    void sync_partitions(const std::unordered_set<Partition<T>*>& partitions) {
-        auto sync_message = std::move(
-            create_sync_request(partitions.size())
-        );
-        for (auto partition : partitions) {
-            partition->push_request(sync_message);
-        }
-    }
-
-    void sync_all_partitions() {
-        std::unordered_set<Partition<T>*> partitions;
-        for (auto i = 0; i < partitions_.size(); i++) {
-            partitions.insert(partitions_.at(i));
-        }
-        sync_partitions(partitions);
-    }
 
     void add_key(T key) {
         auto partition_id = round_robin_counter_;
@@ -246,10 +140,6 @@ private:
             graph_requests_mutex_.unlock();
             sem_post(&graph_requests_semaphore_);
         }
-    }
-
-    bool mapped(T key) const {
-        return data_to_partition_->find(key) != data_to_partition_->end();
     }
 
     void update_graph_loop() {
@@ -287,7 +177,7 @@ private:
             }
 
             workload_graph_.increase_vertice_weight(data[i]);
-            //data_to_partition_copy_.at(data[i])->increase_weight(data[i]);
+            data_to_partition_copy_.at(data[i])->increase_weight(data[i]);
             for (auto j = i+1; j < data.size(); j++) {
                 if (not workload_graph_.vertice_exists(data[j])) {
                     workload_graph_.add_vertice(data[j]);
@@ -350,7 +240,7 @@ private:
 
     std::vector<time_point> repartition_timestamps_;
     std::vector<duration> graph_copy_duration_;
-    std::vector<time_point> repartition_end_timestamps_;
+    std::vector<duration> repartition_duration_;
 
     model::Graph<T> workload_graph_;
     model::CutMethod repartition_method_;
