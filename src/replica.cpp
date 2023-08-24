@@ -51,9 +51,9 @@
 #include "graph/graph.hpp"
 
 
-#if defined(NEW_SCHEDULER)
-	#include "scheduler/scheduler_new.hpp"
-	#define Scheduler NewScheduler
+#if defined(COPY)
+	#include "scheduler/copy_scheduler.hpp"
+	#define Scheduler CopyScheduçer
 #else
 	#include "scheduler/scheduler.hpp"
 #endif
@@ -64,7 +64,7 @@ using toml_config = toml::basic_value<
 >;
 
 static int verbose = 0;
-static int SLEEP = 1;
+static int SLEEP = 100;
 static bool RUNNING = true;
 
 
@@ -74,11 +74,16 @@ metrics_loop(int sleep_duration, int n_requests, kvpaxos::Scheduler<int>* schedu
 	auto already_counted_throughput = 0;
 	auto counter = 0;
 	while (RUNNING) {
-		std::this_thread::sleep_for(std::chrono::seconds(sleep_duration));
+		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
 		auto executed_requests = scheduler->n_executed_requests();
+		//auto graph_queue_size = scheduler->graph_queue_size();
+		auto graph_vertices = scheduler->graph_vertices();
+		auto graph_edges = scheduler->graph_edges();
 		auto throughput = executed_requests - already_counted_throughput;
-		std::cout << counter << ",";
-		std::cout << throughput << "\n";
+		std::cout << counter/10.0 << ",";
+		std::cout << throughput << ",";
+		std::cout << graph_vertices << ",";
+		std::cout << graph_edges << "\n";
 		already_counted_throughput += throughput;
 		counter++;
 
@@ -123,6 +128,24 @@ initialize_scheduler(
 	scheduler->run();
 	return scheduler;
 }
+static int client_message_id = 0;
+struct client_message
+to_client_message(
+	workload::Request& request)
+{
+	struct client_message client_message;
+	client_message.sin_port = htons(0);
+	client_message.id = client_message_id;
+	client_message.type = request.type();
+	client_message.key = request.key();
+	for (auto i = 0; i < request.args().size(); i++) {
+		client_message.args[i] = request.args()[i];
+	}
+	client_message.args[request.args().size()] = 0;
+	client_message.size = request.args().size();
+	client_message_id++;
+	return client_message;
+}
 
 std::vector<struct client_message>
 to_client_messages(
@@ -152,12 +175,15 @@ to_client_messages(
 void
 execute_requests(
 	kvpaxos::Scheduler<int>& scheduler,
-	std::vector<struct client_message>& requests,
+	std::ifstream &requests_file,
 	int print_percentage)
-{
-	for (auto& request: requests) {
-		scheduler.schedule_and_answer(request);
+{	
+	while (requests_file.peek() != EOF) {
+		workload::Request request= workload::import_cs_request(requests_file);
+		struct client_message message = to_client_message(request);
+		scheduler.schedule_and_answer(message);
 	}
+
 }
 
 std::unordered_map<int, time_point>
@@ -169,26 +195,37 @@ join_maps(std::vector<std::unordered_map<int, time_point>> maps) {
 	return joined_map;
 }
 
+size_t count_requests(std::string &requests_path){
+    std::ifstream requests_file (requests_path);   
+	size_t count = (size_t)std::count_if(std::istreambuf_iterator<char>{requests_file}, {}, [](char c) { return c == '\n'; });
+	requests_file.close();
+	return count;
+}
+
 static void
 run(const toml_config& config)
 {
 	auto requests_path = toml::find<std::string>(
 		config, "requests_path"
 	);
-	auto requests = std::move(workload::import_cs_requests(requests_path));
-	auto* scheduler = initialize_scheduler(requests.size(), config);
 
+	auto n_requests = toml::find<int>(
+		config, "n_requests"
+	);
+	
+	std::ifstream requests_file(requests_path);
+	auto* scheduler = initialize_scheduler(n_requests, config);
 	auto throughput_thread = std::thread(
-		metrics_loop, SLEEP, requests.size(), scheduler
+		metrics_loop, SLEEP, n_requests, scheduler
 	);
 
 	auto print_percentage = toml::find<int>(
 		config, "print_percentage"
 	);
-	auto client_messages = to_client_messages(requests);
 
 	auto start_execution_timestamp = std::chrono::system_clock::now();
-	execute_requests(*scheduler, client_messages, print_percentage);
+	execute_requests(*scheduler, requests_file, print_percentage);
+	requests_file.close();
 
 	throughput_thread.join();
 	auto end_execution_timestamp = std::chrono::system_clock::now();
@@ -197,10 +234,23 @@ run(const toml_config& config)
 	std::cout << "Makespan: " << makespan.count() << "\n";
 
 	auto& repartition_times = scheduler->repartition_timestamps();
-	std::cout << "Repartition at: ";
+	std::cout << "Repartition,Duration,CopyTime:\n";
+	auto copy_time_it = scheduler->graph_copy_duration().begin();
+	auto repartition_end_it = scheduler->repartition_end_timestamps().begin();
 	for (auto& repartition_time : repartition_times) {
-		std::cout << (repartition_time - start_execution_timestamp).count() << " ";
+		int end_time = -1;
+		int copy_time = -1;
+		if(copy_time_it != scheduler->graph_copy_duration().end()){
+			copy_time = (*copy_time_it).count();
+		}
+		if(repartition_end_it != scheduler->repartition_end_timestamps().end()){
+			end_time = (*repartition_end_it - start_execution_timestamp).count();
+		}
+		std::cout << (repartition_time - start_execution_timestamp).count() << "," << end_time << ","<< copy_time << "\n";
+		copy_time_it++;
+		repartition_end_it++;
 	}
+
 	std::cout << std::endl;
 	//exit(EXIT_SUCCESS);
 }
@@ -219,7 +269,6 @@ main(int argc, char const *argv[])
 		usage(std::string(argv[0]));
 		exit(1);
 	}
-	std::cout << "BEGIN" << std::endl;
 
 	const auto config = toml::parse(argv[1]);
 
@@ -236,11 +285,11 @@ main(int argc, char const *argv[])
 		//workload::export_requests(requests, export_path);
 
     }else{
-#if defined(MICHAEL) || defined(FELDMAN)
-		cds::Initialize();
-		cds::gc::HP gc;
-		cds::threading::Manager::attachThread();
-#endif
+		#if defined(MICHAEL) || defined(FELDMAN)
+			cds::Initialize();
+			cds::gc::HP gc;
+			cds::threading::Manager::attachThread();
+		#endif
 		run(config);
 	}
 
