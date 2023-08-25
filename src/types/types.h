@@ -18,6 +18,7 @@
 
 
 typedef std::chrono::_V2::system_clock::time_point time_point;
+typedef std::chrono::_V2::system_clock::duration duration;
 
 struct reply_message {
 	int id;

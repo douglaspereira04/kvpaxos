@@ -29,16 +29,15 @@ const std::unordered_map<std::string, CutMethod> string_to_cut_method({
     {"ROUND_ROBIN", ROUND_ROBIN}
 });
 
-std::vector<int> cut_graph (
-    const Graph<int>& graph,
-    std::unordered_map<int, kvpaxos::Partition<int>*>& partitions,
-    CutMethod method,
-    const std::unordered_map<int, kvpaxos::Partition<int>*>& old_data_to_partition,
-        /* = std::unordered_map<int, kvpaxos::Partition<int>*>() */
-    bool first_repartition /* = true */
+
+std::vector<int> multilevel_cut(
+    std::vector<int> &vertice_weight, 
+    std::vector<int> &x_edges, 
+    std::vector<int> &edges, 
+    std::vector<int> &edges_weight,
+    int n_partitions, 
+    CutMethod cut_method
 );
-std::vector<int> multilevel_cut
-    (const Graph<int>& graph, int n_partitions, CutMethod cut_method);
 
 }
 

@@ -305,27 +305,38 @@ private:
         auto start_timestamp = std::chrono::system_clock::now();
         repartition_timestamps_.emplace_back(start_timestamp);
 
+        std::vector<int> vertice_weight;
+        std::vector<int> x_edges;
+        std::vector<int> edges;
+        std::vector<int> edges_weight;
+
+        std::unordered_map<T,int> vertice_to_pos =
+            workload_graph_.multilevel_cut_data(vertice_weight, x_edges, edges, edges_weight);
+
         auto partition_scheme = std::move(
-            model::cut_graph(
-                workload_graph_,
-                partitions_,
-                repartition_method_,
-                *data_to_partition_,
-                first_repartition
+            model::multilevel_cut(
+                vertice_weight, 
+                x_edges, 
+                edges, 
+                edges_weight,
+                partitions_.size(), 
+                repartition_method_
             )
         );
 
         delete data_to_partition_;
         data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
-        auto sorted_vertex = std::move(workload_graph_.sorted_vertex());
-        for (auto i = 0; i < partition_scheme.size(); i++) {
-            auto partition = partition_scheme[i];
+        
+        for (auto& it : vertice_to_pos) {
+            T key = it.first;
+            int position = it.second;
+            //position indicates the position of the key in partition scheme
+            int partition = partition_scheme[position];  
             if (partition >= n_partitions_) {
                 printf("ERROR: partition was %d!\n", partition);
                 fflush(stdout);
             }
-            auto data = sorted_vertex[i];
-            data_to_partition_->emplace(data, partitions_.at(partition));
+            data_to_partition_->emplace(key, partitions_.at(partition));
         }
 
         data_to_partition_copy_ = *data_to_partition_;

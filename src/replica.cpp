@@ -238,15 +238,15 @@ run(const toml_config& config)
 	auto copy_time_it = scheduler->graph_copy_duration().begin();
 	auto repartition_end_it = scheduler->repartition_end_timestamps().begin();
 	for (auto& repartition_time : repartition_times) {
-		int end_time = -1;
-		int copy_time = -1;
+		double end_time = -1;
+		double copy_time = -1;
 		if(copy_time_it != scheduler->graph_copy_duration().end()){
 			copy_time = (*copy_time_it).count();
 		}
 		if(repartition_end_it != scheduler->repartition_end_timestamps().end()){
 			end_time = (*repartition_end_it - start_execution_timestamp).count();
 		}
-		std::cout << (repartition_time - start_execution_timestamp).count() << "," << end_time << ","<< copy_time << "\n";
+		std::cout << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << "\n";
 		copy_time_it++;
 		repartition_end_it++;
 	}
