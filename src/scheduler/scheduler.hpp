@@ -29,7 +29,7 @@ namespace kvpaxos {
 template <typename T>
 class Scheduler {
 public:
-
+    Scheduler(){}
     Scheduler(int n_requests,
                 int repartition_interval,
                 int n_partitions,
@@ -38,7 +38,6 @@ public:
         repartition_interval_{repartition_interval},
         repartition_method_{repartition_method}
     {
-       std::cout << "OLD_SCHEDULER" << std::endl; 
         for (auto i = 0; i < n_partitions_; i++) {
             auto* partition = new Partition<T>(i);
             partitions_.emplace(i, partition);
@@ -156,25 +155,32 @@ public:
             if (
                 n_dispatched_requests_ % repartition_interval_ == 0
             ) {
-                struct client_message sync_message;
-                sync_message.type = SYNC;
-
-                graph_requests_mutex_.lock();
-                    graph_requests_queue_.push(sync_message);
-                graph_requests_mutex_.unlock();
-                sem_post(&graph_requests_semaphore_);
-
+                //std::cout << "REPART" <<std::endl;
+                notify_graph(SYNC);
                 pthread_barrier_wait(&repartition_barrier_);
+
                 repartition_data();
+
                 auto end_timestamp = std::chrono::system_clock::now();
                 repartition_end_timestamps_.push_back(end_timestamp);
                 graph_copy_duration_.push_back(std::chrono::nanoseconds::zero());
+
                 sync_all_partitions();
             }
         }
     }
 
-private:
+public:
+    void notify_graph(request_type type){
+        struct client_message sync_message;
+        sync_message.type = type;
+
+        graph_requests_mutex_.lock();
+            graph_requests_queue_.push(sync_message);
+        graph_requests_mutex_.unlock();
+        sem_post(&graph_requests_semaphore_);
+    }
+
     std::unordered_set<Partition<T>*> involved_partitions(
         const struct client_message& request)
     {

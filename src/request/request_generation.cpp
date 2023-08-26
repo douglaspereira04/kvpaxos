@@ -456,7 +456,7 @@ void generate_export_requests(
         );
     } else if (data_distribution == rfunc::ZIPFIAN) {
         int expectednewkeys = (int) ((n_operations) * insert_proportion * 2.0);
-        data_generator = rfunc::scrambled_zipfian_distribution(0, n_records + expectednewkeys);
+        data_generator = rfunc::scrambled_zipfian_distribution(0, n_records/*+ expectednewkeys*/);
     }
 
     rfunc::RandFunction scan_length_generator;

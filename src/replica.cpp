@@ -53,7 +53,7 @@
 
 #if defined(COPY)
 	#include "scheduler/copy_scheduler.hpp"
-	#define Scheduler CopyScheduçer
+	#define Scheduler CopyScheduler
 #else
 	#include "scheduler/scheduler.hpp"
 #endif
@@ -64,7 +64,7 @@ using toml_config = toml::basic_value<
 >;
 
 static int verbose = 0;
-static int SLEEP = 100;
+static int SLEEP = 1000;
 static bool RUNNING = true;
 
 
@@ -73,6 +73,7 @@ metrics_loop(int sleep_duration, int n_requests, kvpaxos::Scheduler<int>* schedu
 {
 	auto already_counted_throughput = 0;
 	auto counter = 0;
+	std::cout << "Sec,Throughput,GraphVertices,GraphEdges\n";
 	while (RUNNING) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
 		auto executed_requests = scheduler->n_executed_requests();
@@ -80,7 +81,7 @@ metrics_loop(int sleep_duration, int n_requests, kvpaxos::Scheduler<int>* schedu
 		auto graph_vertices = scheduler->graph_vertices();
 		auto graph_edges = scheduler->graph_edges();
 		auto throughput = executed_requests - already_counted_throughput;
-		std::cout << counter/10.0 << ",";
+		std::cout << counter << ",";
 		std::cout << throughput << ",";
 		std::cout << graph_vertices << ",";
 		std::cout << graph_edges << "\n";
@@ -231,10 +232,10 @@ run(const toml_config& config)
 	auto end_execution_timestamp = std::chrono::system_clock::now();
 
 	auto makespan = end_execution_timestamp - start_execution_timestamp;
-	std::cout << "Makespan: " << makespan.count() << "\n";
+	std::cout << "Makespan," << makespan.count() << "\n";
 
 	auto& repartition_times = scheduler->repartition_timestamps();
-	std::cout << "Repartition,Duration,CopyTime:\n";
+	std::cout << "Repartition,Duration,CopyTime\n";
 	auto copy_time_it = scheduler->graph_copy_duration().begin();
 	auto repartition_end_it = scheduler->repartition_end_timestamps().begin();
 	for (auto& repartition_time : repartition_times) {

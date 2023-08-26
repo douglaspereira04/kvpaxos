@@ -22,37 +22,58 @@
 #include "request/request.hpp"
 #include "storage/storage.h"
 #include "types/types.h"
-
 #include "scheduler.hpp"
 
 
 namespace kvpaxos {
 
+
 template <typename T>
-class CopyScheduler : Scheduler<T> {
+class CopyScheduler : public Scheduler<T> {
+public:
+
+struct InputGraph{
+    InputGraph(){}
+    InputGraph(model::Graph<T> &graph){
+        vertice_to_pos = graph.multilevel_cut_data(vertice_weight, x_edges, edges, edges_weight);
+    }
+
+    std::vector<int> vertice_weight;
+    std::vector<int> x_edges;
+    std::vector<int> edges;
+    std::vector<int> edges_weight;
+    std::unordered_map<T,int> vertice_to_pos;
+};
+
 public:
 
     CopyScheduler(int n_requests,
                 int repartition_interval,
                 int n_partitions,
                 model::CutMethod repartition_method
-    ) : n_partitions_{n_partitions},
-        repartition_interval_{repartition_interval},
-        repartition_method_{repartition_method}
-    {
-       std::cout << "COPY_SCHEDULER" << std::endl; 
+    ) {
+        this->n_partitions_ = n_partitions;
+        this->repartition_interval_ = repartition_interval;
+        this->repartition_method_ = repartition_method;
 
-        for (auto i = 0; i < n_partitions_; i++) {
+        for (auto i = 0; i < this->n_partitions_; i++) {
             auto* partition = new Partition<T>(i);
-            partitions_.emplace(i, partition);
+            this->partitions_.emplace(i, partition);
         }
-        data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
+        this->data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
 
-        sem_init(&graph_requests_semaphore_, 0, 0);
-        pthread_barrier_init(&repartition_barrier_, NULL, 2);
-        graph_thread_ = std::thread(&CopyScheduler<T>::update_graph_loop, this);
+        sem_init(&this->graph_requests_semaphore_, 0, 0);
+        pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
+        this->graph_thread_ = std::thread(&CopyScheduler<T>::update_graph_loop, this);
+        
+        sem_init(&repart_semaphore_, 0, 0);
+        sem_init(&schedule_semaphore_, 0, 0);
+        sem_init(&update_semaphore_, 0, 0);
+        sem_init(&continue_reparting_semaphore_, 0, 0);
+        reparting_thread_ = std::thread(&CopyScheduler<T>::reparting_loop, this);
+        
     }
-
+    
     void schedule_and_answer(struct client_message& request) {
         
         auto type = static_cast<request_type>(request.type);
@@ -61,192 +82,188 @@ public:
         }
 
         if (type == WRITE) {
-            if (not mapped(request.key)) {
+            if (not Scheduler<T>::mapped(request.key)) {
                 add_key(request.key);
             }
         }
 
-        auto partitions = std::move(involved_partitions(request));
+        auto partitions = std::move(Scheduler<T>::involved_partitions(request));
         if (partitions.empty()) {
             request.type = ERROR;
-            return partitions_.at(0)->push_request(request);
+            this->partitions_.at(0)->push_request(request);
+        }else{
+            auto arbitrary_partition = *begin(partitions);
+            if (partitions.size() > 1) {
+                Scheduler<T>::sync_partitions(partitions);
+                arbitrary_partition->push_request(request);
+                Scheduler<T>::sync_partitions(partitions);
+            } else {
+                arbitrary_partition->push_request(request);
+            }
         }
 
-        auto arbitrary_partition = *begin(partitions);
-        if (
-    const std::vector<time_point>& repartition_timestamps() const {
-        return repartition_timestamps_;
-    }
+        if (this->repartition_method_ != model::ROUND_ROBIN) {
+            this->graph_requests_mutex_.lock();
+                this->graph_requests_queue_.push(request);
+            this->graph_requests_mutex_.unlock();
+            sem_post(&this->graph_requests_semaphore_);
 
-    const std::vector<duration>& graph_copy_duration() const {
-        return graph_copy_duration_;
-    }
-    const std::vector<duration>& repartition_duration() const {
-        return repartition_duration_;
-    }partitions.size() > 1) {
-            sync_partitions(partitions);
-            arbitrary_partition->push_request(request);
-            sync_partitions(partitions);
-        } else {
-            arbitrary_partition->push_request(request);
-        }
+            this->n_dispatched_requests_++;
 
-        if (repartition_method_ != model::ROUND_ROBIN) {
-            graph_requests_mutex_.lock();
-                graph_requests_queue_.push(request);
-            graph_requests_mutex_.unlock();
-            sem_post(&graph_requests_semaphore_);
-
-            n_dispatched_requests_++;
-            if (
-                n_dispatched_requests_ % repartition_interval_ == 0
+            if(sem_trywait(&update_semaphore_) == 0){
+                //std::cout << "RECIEVE UPDATE SIGNAL" <<std::endl;
+                update_mutex_.lock();
+                    delete this->data_to_partition_;
+                    this->data_to_partition_ = updated_data_to_partition_;
+                    this->data_to_partition_copy_ = *this->data_to_partition_;
+                    //std::cout << "UPDATED" <<std::endl;
+                update_mutex_.unlock();
+                Scheduler<T>::sync_all_partitions();
+                
+                sem_post(&continue_reparting_semaphore_);
+                //std::cout << "UPDATE END" <<std::endl;
+            } else if(
+                this->n_dispatched_requests_ % this->repartition_interval_ == 0
             ) {
-                struct client_message sync_message;
-                sync_message.type = SYNC;
-
-                graph_requests_mutex_.lock();
-                    graph_requests_queue_.push(sync_message);
-                graph_requests_mutex_.unlock();
-                sem_post(&graph_requests_semaphore_);
-
-                pthread_barrier_wait(&repartition_barrier_);
-                auto start_timestamp = std::chrono::system_clock::now();
-                repartition_data();
-                duration repartition_duration = std::chrono::system_clock::now()-start_timestamp;
-                repartition_duration_.push_back(repartition_duration);
-                graph_copy_duration_.push_back(std::chrono::nanoseconds::zero());
-                sync_all_partitions();
+                //std::cout << "NOTIFY" <<std::endl;
+                Scheduler<T>::notify_graph(REPART);
             }
         }
     }
 
-private:
+protected:
+
 
     void add_key(T key) {
-        auto partition_id = round_robin_counter_;
-        data_to_partition_->emplace(key, partitions_.at(partition_id));
+        auto partition_id = this->round_robin_counter_;
+        this->data_to_partition_->emplace(key, this->partitions_.at(partition_id));
 
-        round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
+        this->round_robin_counter_ = (this->round_robin_counter_+1) % this->n_partitions_;
 
-        if (repartition_method_ != model::ROUND_ROBIN) {
+        if (this->repartition_method_ != model::ROUND_ROBIN) {
             struct client_message write_message;
             write_message.type = WRITE;
             write_message.key = key;
-            write_message.s_addr = (unsigned long) partitions_.at(partition_id);
+            write_message.s_addr = (unsigned long) this->partitions_.at(partition_id);
             write_message.sin_port = 1;
 
-            graph_requests_mutex_.lock();
-                graph_requests_queue_.push(write_message);
-            graph_requests_mutex_.unlock();
-            sem_post(&graph_requests_semaphore_);
+            this->graph_requests_mutex_.lock();
+                this->graph_requests_queue_.push(write_message);
+            this->graph_requests_mutex_.unlock();
+            sem_post(&this->graph_requests_semaphore_);
         }
     }
 
     void update_graph_loop() {
         while(true) {
-            sem_wait(&graph_requests_semaphore_);
-            graph_requests_mutex_.lock();
-                auto request = std::move(graph_requests_queue_.front());
-                graph_requests_queue_.pop();
-            graph_requests_mutex_.unlock();
-
+            sem_wait(&this->graph_requests_semaphore_);
+            this->graph_requests_mutex_.lock();
+                auto request = std::move(this->graph_requests_queue_.front());
+                this->graph_requests_queue_.pop();
+            this->graph_requests_mutex_.unlock();
+            
             if (request.type == SYNC) {
-                pthread_barrier_wait(&repartition_barrier_);
+                pthread_barrier_wait(&this->repartition_barrier_);
+            }  else if (request.type == REPART) {
+
+                input_graph_mutex_.lock();
+                    delete input_graph_;
+                    input_graph_ = new InputGraph(this->workload_graph_);
+                input_graph_mutex_.unlock();
+                //std::cout << "COPY" <<std::endl;
+
+                //std::cout << "SIGNAL REPARTING" <<std::endl;
+                sem_post(&repart_semaphore_);
             } else {
                 if (request.type == WRITE and request.sin_port == 1) {
                     auto partition = (Partition<T>*) request.s_addr;
-		            data_to_partition_copy_.emplace(request.key, partition);
+		            this->data_to_partition_copy_.emplace(request.key, partition);
 		            partition->insert_data(request.key);
                 }
-                update_graph(request);
+                Scheduler<T>::update_graph(request);
             }
         }
     }
 
-    void update_graph(const client_message& message) {
-        std::vector<int> data{message.key};
-        if (message.type == SCAN) {
-            for (auto i = 1; i < std::stoi(message.args); i++) {
-                data.emplace_back(message.key+i);
-            }
-        }
+    void reparting_loop(){
+        while(true){
+            sem_wait(&repart_semaphore_);
+            //std::cout << "RECIEVED REPARTING SIGNAL" <<std::endl;
 
-        for (auto i = 0; i < data.size(); i++) {
-            if (not workload_graph_.vertice_exists(data[i])) {
-                workload_graph_.add_vertice(data[i]);
-            }
+            input_graph_mutex_.lock();
+                //std::cout << "REPARTING" <<std::endl;
+                auto temp = repart(input_graph_);
+                //std::cout << "DONE REPARTING" <<std::endl;
+            input_graph_mutex_.unlock();
+            
+            update_mutex_.lock();
+                //std::cout << "UPDATED TEMP" <<std::endl;
+                updated_data_to_partition_ = temp;
+            update_mutex_.unlock();
 
-            workload_graph_.increase_vertice_weight(data[i]);
-            data_to_partition_copy_.at(data[i])->increase_weight(data[i]);
-            for (auto j = i+1; j < data.size(); j++) {
-                if (not workload_graph_.vertice_exists(data[j])) {
-                    workload_graph_.add_vertice(data[j]);
-                }
-                if (not workload_graph_.are_connected(data[i], data[j])) {
-                    workload_graph_.add_edge(data[i], data[j]);
-                }
+            auto end_timestamp = std::chrono::system_clock::now();
+            this->repartition_end_timestamps_.push_back(end_timestamp);
+            this->graph_copy_duration_.push_back(std::chrono::nanoseconds::zero());
+            sem_post(&update_semaphore_);
+            //std::cout << "SIGNALIZED UPDATE" <<std::endl;
 
-                workload_graph_.increase_edge_weight(data[i], data[j]);
-            }
+            sem_wait(&continue_reparting_semaphore_);
+            //std::cout << "CONTINUE REPART" <<std::endl;
         }
     }
 
-    void repartition_data() {
+    std::unordered_map<T, Partition<T>*>* repart(struct InputGraph* graph) {
         auto start_timestamp = std::chrono::system_clock::now();
-        repartition_timestamps_.emplace_back(start_timestamp);
+        this->repartition_timestamps_.emplace_back(start_timestamp);
 
         auto partition_scheme = std::move(
-            model::cut_graph(
-                workload_graph_,
-                partitions_,
-                repartition_method_,
-                *data_to_partition_,
-                first_repartition
+            model::multilevel_cut(
+                graph->vertice_weight, 
+                graph->x_edges, 
+                graph->edges, 
+                graph->edges_weight,
+                this->partitions_.size(), 
+                this->repartition_method_
             )
         );
 
-        delete data_to_partition_;
-        data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
-        auto sorted_vertex = std::move(workload_graph_.sorted_vertex());
-        for (auto i = 0; i < partition_scheme.size(); i++) {
-            auto partition = partition_scheme[i];
-            if (partition >= n_partitions_) {
+        auto data_to_partition = new std::unordered_map<T, Partition<T>*>();
+        
+        for (auto& it : graph->vertice_to_pos) {
+            T key = it.first;
+            int position = it.second;
+            //position indicates the position of the key in partition scheme
+            int partition = partition_scheme[position];  
+            if (partition >= this->n_partitions_) {
                 printf("ERROR: partition was %d!\n", partition);
                 fflush(stdout);
             }
-            auto data = sorted_vertex[i];
-            data_to_partition_->emplace(data, partitions_.at(partition));
+            data_to_partition->emplace(key, this->partitions_.at(partition));
         }
-
-        data_to_partition_copy_ = *data_to_partition_;
-        if (first_repartition) {
-            first_repartition = false;
+        
+        if (this->first_repartition) {
+            this->first_repartition = false;
         }
+        
+        return data_to_partition;
     }
+protected:
+    std::unordered_map<T, Partition<T>*>* updated_data_to_partition_;
+    InputGraph *input_graph_ = new InputGraph();
 
-    int n_partitions_;
-    int round_robin_counter_ = 0;
-    int sync_counter_ = 0;
-    int n_dispatched_requests_ = 0;
-    kvstorage::Storage storage_;
-    std::unordered_map<int, Partition<T>*> partitions_;
-    std::unordered_map<T, Partition<T>*>* data_to_partition_;
-    std::unordered_map<T, Partition<T>*> data_to_partition_copy_;
+    sem_t repart_semaphore_;
+    sem_t schedule_semaphore_;
+    sem_t update_semaphore_;
+    sem_t continue_reparting_semaphore_;
 
-    std::thread graph_thread_;
-    std::queue<struct client_message> graph_requests_queue_;
-    sem_t graph_requests_semaphore_;
-    std::mutex graph_requests_mutex_;
+    std::mutex input_graph_mutex_;
+    std::mutex update_mutex_;
 
-    std::vector<time_point> repartition_timestamps_;
-    std::vector<duration> graph_copy_duration_;
-    std::vector<duration> repartition_duration_;
+    std::thread reparting_thread_;
 
-    model::Graph<T> workload_graph_;
-    model::CutMethod repartition_method_;
-    int repartition_interval_;
-    bool first_repartition = true;
-    pthread_barrier_t repartition_barrier_;
+    std::vector<T> pending_keys_;
+
+    bool reparting;
     
 };
 

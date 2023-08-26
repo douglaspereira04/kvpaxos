@@ -43,7 +43,8 @@ enum request_type
 	WRITE,
 	SCAN,
 	SYNC,
-	ERROR
+	ERROR,
+	REPART
 };
 
 #endif
