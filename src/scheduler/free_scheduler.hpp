@@ -1,5 +1,5 @@
-#ifndef _KVPAXOS_COPY_SCHEDULER_H_
-#define _KVPAXOS_COPY_SCHEDULER_H_
+#ifndef _KVPAXOS_FREE_SCHEDULER_H_
+#define _KVPAXOS_FREE_SCHEDULER_H_
 
 
 #include <condition_variable>
@@ -29,7 +29,7 @@ namespace kvpaxos {
 
 
 template <typename T>
-class CopyScheduler : public Scheduler<T> {
+class FreeScheduler : public Scheduler<T> {
 public:
 
 struct InputGraph{
@@ -47,7 +47,7 @@ struct InputGraph{
 
 public:
 
-    CopyScheduler(int n_requests,
+    FreeScheduler(int n_requests,
                 int repartition_interval,
                 int n_partitions,
                 model::CutMethod repartition_method
@@ -64,13 +64,13 @@ public:
 
         sem_init(&this->graph_requests_semaphore_, 0, 0);
         pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
-        this->graph_thread_ = std::thread(&CopyScheduler<T>::update_graph_loop, this);
+        this->graph_thread_ = std::thread(&FreeScheduler<T>::update_graph_loop, this);
         
         sem_init(&repart_semaphore_, 0, 0);
         sem_init(&schedule_semaphore_, 0, 0);
         sem_init(&update_semaphore_, 0, 0);
         sem_init(&continue_reparting_semaphore_, 0, 0);
-        reparting_thread_ = std::thread(&CopyScheduler<T>::reparting_loop, this);
+        reparting_thread_ = std::thread(&FreeScheduler<T>::reparting_loop, this);
         
     }
     
@@ -112,12 +112,10 @@ public:
 
             if(sem_trywait(&update_semaphore_) == 0){
                 //std::cout << "RECIEVE UPDATE SIGNAL" <<std::endl;
-                update_mutex_.lock();
-                    delete this->data_to_partition_;
-                    this->data_to_partition_ = updated_data_to_partition_;
-                    this->data_to_partition_copy_ = *this->data_to_partition_;
+                delete this->data_to_partition_;
+                this->data_to_partition_ = updated_data_to_partition_;
+                this->data_to_partition_copy_ = *this->data_to_partition_;
                     //std::cout << "UPDATED" <<std::endl;
-                update_mutex_.unlock();
                 Scheduler<T>::sync_all_partitions();
                 
                 sem_post(&continue_reparting_semaphore_);
@@ -196,10 +194,8 @@ protected:
                 //std::cout << "DONE REPARTING" <<std::endl;
             input_graph_mutex_.unlock();
             
-            update_mutex_.lock();
-                //std::cout << "UPDATED TEMP" <<std::endl;
-                updated_data_to_partition_ = temp;
-            update_mutex_.unlock();
+            //std::cout << "UPDATED TEMP" <<std::endl;
+            updated_data_to_partition_ = temp;
 
             auto end_timestamp = std::chrono::system_clock::now();
             this->repartition_end_timestamps_.push_back(end_timestamp);

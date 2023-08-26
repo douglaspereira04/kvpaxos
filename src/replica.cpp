@@ -51,9 +51,9 @@
 #include "graph/graph.hpp"
 
 
-#if defined(COPY)
-	#include "scheduler/copy_scheduler.hpp"
-	#define Scheduler CopyScheduler
+#if defined(FREE)
+	#include "scheduler/free_scheduler.hpp"
+	#define Scheduler FreeScheduler
 #else
 	#include "scheduler/scheduler.hpp"
 #endif
