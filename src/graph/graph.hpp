@@ -3,7 +3,6 @@
 
 
 #include <algorithm>
-#include <unordered_map>
 #include <map>
 #include <vector>
 
@@ -12,6 +11,20 @@ namespace model {
 
 template <typename T>
 class Graph {
+
+public:
+#if defined(TBB_GRAPH)
+    #include "tbb/concurrent_unordered_map.h"
+    typedef tbb::concurrent_unordered_map<T, int> vertex_weight_t;
+    typedef tbb::concurrent_unordered_map<T, tbb::concurrent_unordered_map<T, int>>
+        edges_weight_t;
+#else
+    #include <unordered_map>
+    typedef std::unordered_map<T, int> vertex_weight_t;
+    typedef std::unordered_map<T, std::unordered_map<T, int>>
+        edges_weight_t;
+#endif
+
 public:
     Graph() = default;
     
@@ -24,8 +37,11 @@ public:
     }
 
     void add_vertice(T data, int weight = 0) {
+#if defined(TBB_GRAPH)
+    printf("AAAAAAA");
+#endif
         vertex_weight_[data] = weight;
-        edges_weight_[data] = std::unordered_map<T, int>();
+        edges_weight_[data] = vertex_weight_t();
         total_vertex_weight_ += weight;
     }
 
@@ -151,20 +167,20 @@ public:
     int total_edges_weight() const {return total_edges_weight_;}
     int vertice_weight(T vertice) const {return vertex_weight_.at(vertice);}
     int edge_weight(T from, T to) const {return edges_weight_.at(from).at(to);}
-    const std::unordered_map<T, int>& vertice_edges(T vertice) const {
+    /*const std::unordered_map<T, int>& vertice_edges(T vertice) const {
         return edges_weight_.at(vertice);
-    }
-    const std::unordered_map<T, int>& vertex() const {return vertex_weight_;}
+    }*/
+    //const std::unordered_map<T, int>& vertex() const {return vertex_weight_;}
 
     void vertice_weight(T data, int weight) {vertex_weight_[data] = weight;}
 
-    const std::unordered_map<T, int> edge_weight(T from) const {return edges_weight_[from];}
+    //const std::unordered_map<T, int> edge_weight(T from) const {return edges_weight_[from];}
     void edge_weight(T from, T to, int weight) {vertex_weight_[from][to] = weight;}
 
 private:
-    std::unordered_map<T, int> vertex_weight_;
-    std::unordered_map<T, std::unordered_map<T, int>>
-        edges_weight_;
+    vertex_weight_t vertex_weight_;
+    edges_weight_t edges_weight_;
+    
     int n_edges_{0};
     int total_vertex_weight_{0};
     int total_edges_weight_{0};

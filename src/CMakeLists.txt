@@ -35,6 +35,14 @@ ELSE()
     target_compile_definitions(replica PUBLIC OLD)
 ENDIF()
 
+IF(${GRAPH} STREQUAL "TBB_GRAPH")
+    message ("TBB Graph")
+    target_compile_definitions(replica PUBLIC TBB_GRAPH)
+ELSE()
+    message ("Unsync Graph")
+    target_compile_definitions(replica PUBLIC OLD_GRAPH)
+ENDIF()
+
 target_sources(
     replica
         PRIVATE
