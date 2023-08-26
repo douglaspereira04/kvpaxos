@@ -25,14 +25,14 @@ public:
     void
     insert(KeyType key, ValueType value){
         mtx.lock();
-        std::unordered_map<KeyType, ValueType>::operator[](key) = value; 
+        std::unordered_map<KeyType, ValueType>::insert(std::make_pair(key,value));
         mtx.unlock();
     }
 
     ValueType
     at(KeyType key){
         mtx.lock();
-        auto ret = std::unordered_map<KeyType, ValueType>::operator[](key); 
+        auto ret = std::unordered_map<KeyType, ValueType>::at(key);
         mtx.unlock();
         return ret;
     }
