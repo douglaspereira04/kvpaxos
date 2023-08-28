@@ -14,33 +14,19 @@ public:
   template<typename _UniformRandomBitGenerator>
   _IntType operator()(_UniformRandomBitGenerator &__urng)
   {
-    return this->operator()(__urng, items);
+    return next(__urng);
   }
+
+  zipfian_int_distribution(){}
 
   zipfian_int_distribution(_IntType min, _IntType max, double zipfian_constant, double zetan_)
   {
-    items = max - min + 1;
-    base = min;
-    zipfianconstant = zipfian_constant;
-    theta = zipfianconstant;
-    zeta2theta = zeta(2, theta);
-    alpha = 1.0 / (1.0 - theta);
-    zetan = zetan_;
-    countforzeta = items;
-    eta = (1 - pow(2.0 / items, 1 - theta)) / (1 - zeta2theta / zetan);
+    init(min, max, zipfian_constant, zetan_);
   }
 
   zipfian_int_distribution(_IntType min, _IntType max)
   {
-    items = max - min + 1;
-    base = min;
-    zipfianconstant = ZIPFIAN_CONSTANT;
-    theta = zipfianconstant;
-    zeta2theta = zeta(2, theta);
-    alpha = 1.0 / (1.0 - theta);
-    zetan = zetastatic(max - min + 1, zipfianconstant);
-    countforzeta = items;
-    eta = (1 - pow(2.0 / items, 1 - theta)) / (1 - zeta2theta / zetan);
+    init(min, max);
   }
 
   zipfian_int_distribution(const zipfian_int_distribution &t)
@@ -59,7 +45,12 @@ public:
   }
 
   template<typename _UniformRandomBitGenerator>
-  _IntType operator()(_UniformRandomBitGenerator &__urng, _IntType itemcount)
+  _IntType next(_UniformRandomBitGenerator &__urng){
+    return next(__urng, items);
+  }
+  
+  template<typename _UniformRandomBitGenerator>
+  _IntType next(_UniformRandomBitGenerator &__urng, _IntType itemcount)
   {
 
 		constexpr auto __urngmin = _UniformRandomBitGenerator::min();
@@ -101,6 +92,24 @@ public:
     return ret;
   }
   
+  protected:
+  void init(_IntType min, _IntType max, double zipfian_constant, double zetan_)
+  {
+    items = max - min + 1;
+    base = min;
+    zipfianconstant = zipfian_constant;
+    theta = zipfianconstant;
+    zeta2theta = zeta(2, theta);
+    alpha = 1.0 / (1.0 - theta);
+    zetan = zetan_;
+    countforzeta = items;
+    eta = (1 - pow(2.0 / items, 1 - theta)) / (1 - zeta2theta / zetan);
+  }
+
+  void init(_IntType min, _IntType max){
+    init(min, max, ZIPFIAN_CONSTANT, zetastatic(max - min + 1, ZIPFIAN_CONSTANT));
+  }
+  
   double zeta(long n, double thetaVal)
   {
     countforzeta = n;
@@ -134,7 +143,7 @@ public:
 public:
   static constexpr double ZIPFIAN_CONSTANT = 0.99;
 
-private:
+protected:
   std::mutex mtx;
 
   _IntType items;

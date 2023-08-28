@@ -7,7 +7,7 @@
 #include "zipfian_int_distribution.cpp"
 
 template<typename _IntType = int>
-class scrambled_zipfian_int_distribution
+class scrambled_zipfian_int_distribution : zipfian_int_distribution<_IntType>
 {
 
 public:
@@ -15,7 +15,7 @@ public:
   template<typename _UniformRandomBitGenerator>
   _IntType operator()(_UniformRandomBitGenerator &__urng)
   {
-    _IntType ret = gen->operator()(__urng);
+    _IntType ret = zipfian_int_distribution<_IntType>::next(__urng);
     ret = min + fnvhash64(ret) % itemcount;
     lastvalue = ret;
     return ret;
@@ -29,29 +29,24 @@ public:
     itemcount = max - min + 1;
     if (zipfianconstant_ == USED_ZIPFIAN_CONSTANT)
     {
-      gen = new zipfian_int_distribution<_IntType>(0, itemcount, zipfianconstant_, ZETAN);
+      zipfian_int_distribution<_IntType>::init(0, itemcount, zipfianconstant_, ZETAN);
     }
     else
     {
-      gen = new zipfian_int_distribution<_IntType>(0, itemcount, zipfianconstant_, zipfian_int_distribution<_IntType>::zetastatic(max - min + 1, zipfianconstant_));
+      zipfian_int_distribution<_IntType>::init(0, itemcount, zipfianconstant_, zipfian_int_distribution<_IntType>::zetastatic(max - min + 1, zipfianconstant_));
     }
   }
 
-  scrambled_zipfian_int_distribution(const scrambled_zipfian_int_distribution &t)
+  scrambled_zipfian_int_distribution(const scrambled_zipfian_int_distribution &t) : zipfian_int_distribution<_IntType>(t)
   {
-    gen = new zipfian_int_distribution<_IntType>(*t.gen);
     min = t.min;
     max = t.max;
     itemcount = t.itemcount;
     lastvalue = t.lastvalue;
   }
-  
-  ~scrambled_zipfian_int_distribution(){
-    delete gen;
-  }
 
 private:
-  zipfian_int_distribution<_IntType> *gen;
+  //zipfian_int_distribution<_IntType> *gen;
   _IntType min, max, itemcount;
   _IntType lastvalue;
 

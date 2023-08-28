@@ -433,17 +433,27 @@ void generate_export_requests(
     const auto read_proportion = toml::find<double>(
         config, "workload", "read_proportion"
     );
-    operation_proportions.push_back(std::make_pair(request_type::READ,read_proportion));
-    
+    if(read_proportion>0){
+        operation_proportions.push_back(std::make_pair(request_type::READ,read_proportion));
+    }
+
     const auto scan_proportion = toml::find<double>(
         config, "workload", "scan_proportion"
     );
 
+    const auto update_proportion = toml::find<double>(
+        config, "workload", "update_proportion"
+    );
+    if(update_proportion>0){
+        operation_proportions.push_back(std::make_pair(request_type::UPDATE,update_proportion));
+    }
+
     const auto insert_proportion = toml::find<double>(
         config, "workload", "insert_proportion"
     );
-    operation_proportions.push_back(std::make_pair(request_type::WRITE,insert_proportion));
-    
+    if(insert_proportion>0){
+        operation_proportions.push_back(std::make_pair(request_type::WRITE,insert_proportion));
+    }
 
     auto data_distribution = rfunc::string_to_distribution.at(
         data_distribution_str
@@ -456,7 +466,7 @@ void generate_export_requests(
         );
     } else if (data_distribution == rfunc::ZIPFIAN) {
         int expectednewkeys = (int) ((n_operations) * insert_proportion * 2.0);
-        data_generator = rfunc::scrambled_zipfian_distribution(0, n_records/*+ expectednewkeys*/);
+        data_generator = rfunc::scrambled_zipfian_distribution(0, n_records + expectednewkeys);
     }
 
     rfunc::RandFunction scan_length_generator;
@@ -496,15 +506,28 @@ void generate_export_requests(
 
     std::ofstream ofs(export_path, std::ofstream::out);
     
+    int present_keys = n_records;
     for (auto i = 0; i < n_operations; i++) {
         request_type type = next_operation(operation_proportions, &operation_generator);
         
-        auto key = data_generator();
+        int key;
         std::string size = "";
-        if(type == request_type::SCAN){
-            size = std::to_string(scan_length_generator());
-            n_requests += (std::stoi(size)-1);
+        if(type == request_type::READ || type == request_type::UPDATE){
+            do{
+                key = data_generator();
+            } while(key >= present_keys);
+        }else if(type == request_type::SCAN){
+            int size_value = scan_length_generator();
+            size = std::to_string(size_value);
+            n_requests += (size_value-1);
+            do{
+                key = data_generator();
+            } while(key+size_value >= present_keys);
+        } else if(type == request_type::WRITE){
+            key = present_keys;
+            present_keys++;
         }
+        
         auto request = Request(type, key, size);
         ofs << static_cast<int>(request.type()) << "," << request.key() << "," << request.args() << "," << std::endl;
     }
