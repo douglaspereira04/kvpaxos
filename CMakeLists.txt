@@ -6,7 +6,7 @@ include(cmake/project_options.cmake)
 include(cmake/conan.cmake)
 
 set(STORAGE "NONE" CACHE STRING "FELDMAN, MICHAEL, TBB")
-set(SCHEDULER "OLD" CACHE STRING "OLD, FREE")
+set(SCHEDULER "OLD" CACHE STRING "OLD, FREE, CARELESS")
 set(GRAPH "OLD_GRAPH" CACHE STRING "OLD_GRAPH, TBB_GRAPH")
 
 conan(
