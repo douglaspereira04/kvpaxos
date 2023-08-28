@@ -37,9 +37,6 @@ public:
     }
 
     void add_vertice(T data, int weight = 0) {
-#if defined(TBB_GRAPH)
-    printf("AAAAAAA");
-#endif
         vertex_weight_[data] = weight;
         edges_weight_[data] = vertex_weight_t();
         total_vertex_weight_ += weight;

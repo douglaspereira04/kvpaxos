@@ -54,6 +54,9 @@
 #if defined(FREE)
 	#include "scheduler/free_scheduler.hpp"
 	#define Scheduler FreeScheduler
+#elif defined(CARELESS)
+	#include "scheduler/careless_scheduler.hpp"
+	#define Scheduler CarelessScheduler
 #else
 	#include "scheduler/scheduler.hpp"
 #endif
@@ -88,7 +91,7 @@ metrics_loop(int sleep_duration, int n_requests, kvpaxos::Scheduler<int>* schedu
 		already_counted_throughput += throughput;
 		counter++;
 
-		if (executed_requests == n_requests) {
+		if (executed_requests >= n_requests) {
 			break;
 		}
 	}

@@ -41,6 +41,7 @@ enum request_type
 {
 	READ,
 	WRITE,
+	UPDATE,
 	SCAN,
 	SYNC,
 	ERROR,

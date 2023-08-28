@@ -27,11 +27,7 @@
 
 namespace kvpaxos {
 
-
 template <typename T>
-class FreeScheduler : public Scheduler<T> {
-public:
-
 struct InputGraph{
     InputGraph(){}
     InputGraph(model::Graph<T> &graph){
@@ -45,8 +41,12 @@ struct InputGraph{
     std::unordered_map<T,int> vertice_to_pos;
 };
 
+template <typename T>
+class FreeScheduler : public Scheduler<T> {
+
 public:
 
+    FreeScheduler() {}
     FreeScheduler(int n_requests,
                 int repartition_interval,
                 int n_partitions,
@@ -129,7 +129,7 @@ public:
         }
     }
 
-protected:
+public:
 
 
     void add_key(T key) {
@@ -166,7 +166,7 @@ protected:
 
                 input_graph_mutex_.lock();
                     delete input_graph_;
-                    input_graph_ = new InputGraph(this->workload_graph_);
+                    input_graph_ = new InputGraph<T>(this->workload_graph_);
                 input_graph_mutex_.unlock();
                 //std::cout << "COPY" <<std::endl;
 
@@ -208,7 +208,7 @@ protected:
         }
     }
 
-    std::unordered_map<T, Partition<T>*>* repart(struct InputGraph* graph) {
+    std::unordered_map<T, Partition<T>*>* repart(struct InputGraph<T>* graph) {
         auto start_timestamp = std::chrono::system_clock::now();
         this->repartition_timestamps_.emplace_back(start_timestamp);
 
@@ -243,9 +243,9 @@ protected:
         
         return data_to_partition;
     }
-protected:
+public:
     std::unordered_map<T, Partition<T>*>* updated_data_to_partition_;
-    InputGraph *input_graph_ = new InputGraph();
+    InputGraph<T> *input_graph_ = new InputGraph<T>();
 
     sem_t repart_semaphore_;
     sem_t schedule_semaphore_;
