@@ -42,6 +42,7 @@ public:
         this->n_partitions_ = n_partitions;
         this->repartition_interval_ = repartition_interval;
         this->repartition_method_ = repartition_method;
+        this->store_keys_ = false;
 
         for (auto i = 0; i < this->n_partitions_; i++) {
             auto* partition = new Partition<T>(i);
@@ -98,20 +99,12 @@ public:
             this->n_dispatched_requests_++;
 
             if(sem_trywait(&this->update_semaphore_) == 0){
-                //std::cout << "RECIEVE UPDATE SIGNAL" <<std::endl;
-                delete this->data_to_partition_;
-                this->data_to_partition_ = this->updated_data_to_partition_;
-                this->data_to_partition_copy_ = *this->data_to_partition_;
-                    //std::cout << "UPDATED" <<std::endl;
-                Scheduler<T>::sync_all_partitions();
-                
+                FreeScheduler<T>::change_partition_scheme();
                 sem_post(&this->continue_reparting_semaphore_);
-                //std::cout << "UPDATE END" <<std::endl;
             } else if(
                 this->n_dispatched_requests_ % this->repartition_interval_ == 0
             ) {
-
-                //std::cout << "SIGNAL REPARTING" <<std::endl;
+                this->store_keys_ = true;
                 sem_post(&this->repart_semaphore_);
             }
         }
@@ -122,25 +115,19 @@ public:
     void reparting_loop(){
         while(true){
             sem_wait(&this->repart_semaphore_);
-            //std::cout << "RECIEVED REPARTING SIGNAL" <<std::endl;
             
             delete this->input_graph_;
             this->input_graph_ = new InputGraph<T>(this->workload_graph_);
-            //std::cout << "REPARTING" <<std::endl;
             auto temp = FreeScheduler<T>::repart(this->input_graph_);
-            //std::cout << "DONE REPARTING" <<std::endl;
             
-            //std::cout << "UPDATED TEMP" <<std::endl;
             this->updated_data_to_partition_ = temp;
 
             auto end_timestamp = std::chrono::system_clock::now();
             this->repartition_end_timestamps_.push_back(end_timestamp);
             this->graph_copy_duration_.push_back(std::chrono::nanoseconds::zero());
             sem_post(&this->update_semaphore_);
-            //std::cout << "SIGNALIZED UPDATE" <<std::endl;
 
             sem_wait(&this->continue_reparting_semaphore_);
-            //std::cout << "CONTINUE REPART" <<std::endl;
         }
     }
 

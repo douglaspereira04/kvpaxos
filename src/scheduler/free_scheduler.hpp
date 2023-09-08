@@ -55,6 +55,7 @@ public:
         this->n_partitions_ = n_partitions;
         this->repartition_interval_ = repartition_interval;
         this->repartition_method_ = repartition_method;
+        store_keys_ = false;
 
         for (auto i = 0; i < this->n_partitions_; i++) {
             auto* partition = new Partition<T>(i);
@@ -83,7 +84,7 @@ public:
 
         if (type == WRITE) {
             if (not Scheduler<T>::mapped(request.key)) {
-                add_key(request.key);
+                FreeScheduler<T>::add_key(request.key);
             }
         }
 
@@ -111,19 +112,12 @@ public:
             this->n_dispatched_requests_++;
 
             if(sem_trywait(&update_semaphore_) == 0){
-                //std::cout << "RECIEVE UPDATE SIGNAL" <<std::endl;
-                delete this->data_to_partition_;
-                this->data_to_partition_ = updated_data_to_partition_;
-                this->data_to_partition_copy_ = *this->data_to_partition_;
-                    //std::cout << "UPDATED" <<std::endl;
-                Scheduler<T>::sync_all_partitions();
-                
+                FreeScheduler<T>::change_partition_scheme();
                 sem_post(&continue_reparting_semaphore_);
-                //std::cout << "UPDATE END" <<std::endl;
             } else if(
                 this->n_dispatched_requests_ % this->repartition_interval_ == 0
             ) {
-                //std::cout << "NOTIFY" <<std::endl;
+                store_keys_ = true; 
                 Scheduler<T>::notify_graph(REPART);
             }
         }
@@ -131,12 +125,28 @@ public:
 
 public:
 
+    void change_partition_scheme(){
+        delete this->data_to_partition_;
+        this->data_to_partition_ = updated_data_to_partition_;
+        
+        for (auto pending = this->pending_keys_.begin(); pending != this->pending_keys_.end(); pending++){
+            if(!Scheduler<T>::mapped(pending->first)){
+                FreeScheduler<T>::add_key(pending->first, pending->second);
+            }
+            this->pending_keys_.erase(pending);
+        }
+        
+        this->data_to_partition_copy_ = *this->data_to_partition_;
+        Scheduler<T>::sync_all_partitions();
+    }
 
     void add_key(T key) {
         auto partition_id = this->round_robin_counter_;
-        this->data_to_partition_->emplace(key, this->partitions_.at(partition_id));
-
         this->round_robin_counter_ = (this->round_robin_counter_+1) % this->n_partitions_;
+        add_key(key, partition_id);
+        if(store_keys_){
+            pending_keys_.push_back(std::make_pair(key, partition_id));
+        }
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {
             struct client_message write_message;
@@ -150,6 +160,10 @@ public:
             this->graph_requests_mutex_.unlock();
             sem_post(&this->graph_requests_semaphore_);
         }
+    }
+
+    void add_key(T key, int partition_id) {
+        this->data_to_partition_->emplace(key, this->partitions_.at(partition_id));
     }
 
     void update_graph_loop() {
@@ -168,9 +182,6 @@ public:
                     delete input_graph_;
                     input_graph_ = new InputGraph<T>(this->workload_graph_);
                 input_graph_mutex_.unlock();
-                //std::cout << "COPY" <<std::endl;
-
-                //std::cout << "SIGNAL REPARTING" <<std::endl;
                 sem_post(&repart_semaphore_);
             } else {
                 if (request.type == WRITE and request.sin_port == 1) {
@@ -186,25 +197,19 @@ public:
     void reparting_loop(){
         while(true){
             sem_wait(&repart_semaphore_);
-            //std::cout << "RECIEVED REPARTING SIGNAL" <<std::endl;
 
             input_graph_mutex_.lock();
-                //std::cout << "REPARTING" <<std::endl;
                 auto temp = repart(input_graph_);
-                //std::cout << "DONE REPARTING" <<std::endl;
             input_graph_mutex_.unlock();
             
-            //std::cout << "UPDATED TEMP" <<std::endl;
             updated_data_to_partition_ = temp;
 
             auto end_timestamp = std::chrono::system_clock::now();
             this->repartition_end_timestamps_.push_back(end_timestamp);
             this->graph_copy_duration_.push_back(std::chrono::nanoseconds::zero());
             sem_post(&update_semaphore_);
-            //std::cout << "SIGNALIZED UPDATE" <<std::endl;
 
             sem_wait(&continue_reparting_semaphore_);
-            //std::cout << "CONTINUE REPART" <<std::endl;
         }
     }
 
@@ -257,9 +262,8 @@ public:
 
     std::thread reparting_thread_;
 
-    std::vector<T> pending_keys_;
-
-    bool reparting;
+    bool store_keys_;
+    std::vector<std::pair<T, int>> pending_keys_;
     
 };
 
