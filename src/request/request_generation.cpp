@@ -1,19 +1,21 @@
 #include "request_generation.h"
 #include <iostream>
 #include "scrambled_zipfian_int_distribution.cpp"
+#include "acknowledged_counter.cpp"
+#include "skewed_latest_int_distribution.cpp"
 #include <unordered_map>
 #include <stdio.h>
 #include <unistd.h>
 
 namespace workload {
-
+/*
 Request make_request(char* type_buffer, char* key_buffer, char* arg_buffer) {
     auto type = static_cast<request_type>(std::stoi(type_buffer));
     auto key = std::stoi(key_buffer);
     auto arg = std::string(arg_buffer);
 
     return Request(type, key, arg);
-}
+}*/
 
 
 
@@ -37,7 +39,7 @@ Request import_cs_request(std::ifstream &file)
         arg
     );
 }
-
+/*
 std::vector<Request> import_cs_requests(const std::string& file_path)
 {
     std::ifstream infile(file_path);
@@ -110,7 +112,7 @@ std::vector<Request> random_single_data_requests(
         requests.push_back(request);
     }
     return requests;
-}
+}*/
 
 /*
 std::vector<Request> generate_fixed_data_requests(
@@ -128,7 +130,7 @@ std::vector<Request> generate_fixed_data_requests(
     shuffle_requests(requests);
     return requests;
 }*/
-
+/*
 std::vector<Request> random_multi_data_requests(
     int n_requests,
     int n_variables,
@@ -181,13 +183,13 @@ std::vector<workload::Request> generate_single_data_requests(
         );
 
         auto new_requests = std::vector<workload::Request>();
-        /*if (current_distribution == rfunc::FIXED) {
+        if (current_distribution == rfunc::FIXED) {
             const auto requests_per_data = floor(n_variables);
 
             new_requests = workload::generate_fixed_data_requests(
                 n_variables, requests_per_data
             );
-        } else */if (current_distribution == rfunc::UNIFORM) {
+        } else if (current_distribution == rfunc::UNIFORM) {
             auto data_rand = rfunc::uniform_distribution_rand(
                 0, n_variables-1
             );
@@ -283,9 +285,9 @@ std::vector<workload::Request> generate_multi_data_requests(
             size_rand = rfunc::uniform_distribution_rand(
                 min_involved_data[i], max_involved_data[i]
             );
-        } /*else if (size_distribution == rfunc::FIXED) {
+        } else if (size_distribution == rfunc::FIXED) {
             size_rand = rfunc::fixed_distribution(max_involved_data[i]);
-        } */else if (size_distribution == rfunc::BINOMIAL) {
+        } else if (size_distribution == rfunc::BINOMIAL) {
             const auto success_probability = toml::find<std::vector<double>>(
                 config, "workload", "requests", "multi_data",
                 "size_success_probability"
@@ -380,7 +382,7 @@ void export_requests(std::vector<Request> requests, std::string output_path){
     }
 
     ofs.close();
-}
+}*/
 
 
 request_type next_operation(
@@ -420,6 +422,7 @@ void generate_export_requests(
     const auto n_records = toml::find<int>(
         config, "workload", "n_records"
     );
+    acknowledged_counter<long> *insertkeysequence = new acknowledged_counter<long>(n_records);
     
     const auto n_operations = toml::find<int>(
         config, "workload", "n_operations"
@@ -467,6 +470,10 @@ void generate_export_requests(
     } else if (data_distribution == rfunc::ZIPFIAN) {
         int expectednewkeys = (int) ((n_operations) * insert_proportion * 2.0);
         data_generator = rfunc::scrambled_zipfian_distribution(0, n_records + expectednewkeys);
+    }  else if (data_distribution == rfunc::LATEST) {
+        auto zip = new zipfian_int_distribution<long>(0, insertkeysequence->last_value());
+        data_generator = rfunc::skewed_latest_distribution(insertkeysequence, zip);
+        //leaking
     }
 
     rfunc::RandFunction scan_length_generator;
@@ -506,7 +513,6 @@ void generate_export_requests(
 
     std::ofstream ofs(export_path, std::ofstream::out);
     
-    int present_keys = n_records;
     for (auto i = 0; i < n_operations; i++) {
         request_type type = next_operation(operation_proportions, &operation_generator);
         
@@ -515,23 +521,22 @@ void generate_export_requests(
         if(type == request_type::READ || type == request_type::UPDATE){
             do{
                 key = data_generator();
-            } while(key >= present_keys);
+            } while(key >= insertkeysequence->last_value());
         }else if(type == request_type::SCAN){
             int size_value = scan_length_generator();
             size = std::to_string(size_value);
             n_requests += (size_value-1);
             do{
                 key = data_generator();
-            } while(key+size_value >= present_keys);
+            } while(key+size_value >= insertkeysequence->last_value());
         } else if(type == request_type::WRITE){
-            key = present_keys;
-            present_keys++;
+            key = insertkeysequence->next();
+            insertkeysequence->acknowledge(key);
         }
         
         auto request = Request(type, key, size);
         ofs << static_cast<int>(request.type()) << "," << request.key() << "," << request.args() << "," << std::endl;
     }
-    
     std::cout << "n_requests: " << n_requests << std::endl; 
 
     ofs.close();
@@ -551,24 +556,6 @@ std::vector<Request> create_requests(
     if(is_one_distribution){
         generate_export_requests(config);
     }else{
-        /*
-            O programa utilizava instâncias diferentes de geradores de números para requisições
-            "Single Data" e "Multiple Data", o que pode não ser o desejado ao utilizar a distribuição 
-            "Scrambled Zipfian".
-        */
-
-        /*auto single_data_requests = generate_single_data_requests(config);
-        auto multi_data_requests = generate_multi_data_requests(config);
-
-        const auto single_data_pick_probability = toml::find<double>(
-            config, "workload", "requests", "single_data_pick_probability"
-        );
-
-        requests = workload::merge_requests(
-            single_data_requests,
-            multi_data_requests,
-            single_data_pick_probability
-        );*/
     }
 
     return requests;

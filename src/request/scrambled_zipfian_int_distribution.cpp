@@ -5,6 +5,7 @@
 #include <mutex> // std::mutex
 #include "random.h"
 #include "zipfian_int_distribution.cpp"
+#include <iostream>
 
 template<typename _IntType = int>
 class scrambled_zipfian_int_distribution : zipfian_int_distribution<_IntType>
@@ -29,11 +30,11 @@ public:
     itemcount = max - min + 1;
     if (zipfianconstant_ == USED_ZIPFIAN_CONSTANT)
     {
-      zipfian_int_distribution<_IntType>::init(0, itemcount, zipfianconstant_, ZETAN);
+      zipfian_int_distribution<_IntType>::init(0, ITEM_COUNT, zipfianconstant_, ZETAN);
     }
     else
     {
-      zipfian_int_distribution<_IntType>::init(0, itemcount, zipfianconstant_, zipfian_int_distribution<_IntType>::zetastatic(max - min + 1, zipfianconstant_));
+      zipfian_int_distribution<_IntType>::init(0, ITEM_COUNT, zipfianconstant_, zipfian_int_distribution<_IntType>::zetastatic(max - min + 1, zipfianconstant_));
     }
   }
 
@@ -45,7 +46,7 @@ public:
     lastvalue = t.lastvalue;
   }
 
-private:
+public:
   //zipfian_int_distribution<_IntType> *gen;
   _IntType min, max, itemcount;
   _IntType lastvalue;

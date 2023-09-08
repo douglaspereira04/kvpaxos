@@ -17,9 +17,6 @@ namespace workload {
 
 typedef toml::basic_value<toml::discard_comments, std::unordered_map> toml_config;
 
-std::vector<Request> import_requests(const std::string& file_path, const std::string& field);
-std::vector<Request> import_cs_requests(const std::string& file_path);
-
 /*
 Those generations were made for a simpler execution that doesn't differentiate
 request's commands, so it's no longer compatible. The code is commented since

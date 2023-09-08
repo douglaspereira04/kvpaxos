@@ -129,21 +129,6 @@ public:
             auto n_neighbours = 0;
             
             for (auto& e_it: edges_weight_.at(v)) {
-                //auto neighbour = vk.first;
-                /*
-                    Os procedimentos do Metis e Kahip mantém controle dos 
-                    elementos do grafo por meio somente das posições dos 
-                    vetores de entrada. A entrada requer que o vizinho indique 
-                    a posição correspondente do vertice vizinho no vetor vertice_weight. 
-                    Se os valores de chave dos vertices do grafo forem contiguos de 0 à N, 
-                    o vetor vertice_weight teria posições de 0 à N e os valores 
-                    de chave dos vizinhos seriam equivalentes às posições do vertice 
-                    em vertice_weight, não resultando em erros na construção da entrada. 
-                    No entanto, caso o conjunto de chaves não contenha valores contiguos 
-                    começando por 0, o vizinho pode apontar para uma posição fora do vetor vertice_weight.
-                */
-        
-                //Fix(2): usar o valor das posições em vertice_weight
                 if(vertice_positions.find(e_it.first) != vertice_positions.end()){
                     auto neighbour = vertice_positions[e_it.first];
                     auto weight = e_it.second;
@@ -164,14 +149,10 @@ public:
     int total_edges_weight() const {return total_edges_weight_;}
     int vertice_weight(T vertice) const {return vertex_weight_.at(vertice);}
     int edge_weight(T from, T to) const {return edges_weight_.at(from).at(to);}
-    /*const std::unordered_map<T, int>& vertice_edges(T vertice) const {
-        return edges_weight_.at(vertice);
-    }*/
-    //const std::unordered_map<T, int>& vertex() const {return vertex_weight_;}
+    
 
     void vertice_weight(T data, int weight) {vertex_weight_[data] = weight;}
 
-    //const std::unordered_map<T, int> edge_weight(T from) const {return edges_weight_[from];}
     void edge_weight(T from, T to, int weight) {vertex_weight_[from][to] = weight;}
 
 private:

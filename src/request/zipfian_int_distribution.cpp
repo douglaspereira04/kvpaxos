@@ -58,8 +58,6 @@ public:
 
     if (itemcount != countforzeta)
     {
-
-      mtx.lock();
       if (itemcount > countforzeta)
       {
         zetan = zeta(countforzeta, itemcount, theta, zetan);
@@ -70,7 +68,6 @@ public:
         zetan = zeta(itemcount, theta);
         eta = (1 - pow(2.0 / items, 1 - theta)) / (1 - zeta2theta / zetan);
       }
-      mtx.unlock();
     }
 
     double random = (double)__urng();
@@ -144,7 +141,6 @@ public:
   static constexpr double ZIPFIAN_CONSTANT = 0.99;
 
 protected:
-  std::mutex mtx;
 
   _IntType items;
   _IntType base;

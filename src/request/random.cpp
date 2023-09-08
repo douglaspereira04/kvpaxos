@@ -1,14 +1,16 @@
 #include "random.h"
-
 #include "scrambled_zipfian_int_distribution.cpp"
+#include "skewed_latest_int_distribution.cpp"
+#include "acknowledged_counter.cpp"
 #include "zipfian_int_distribution.cpp"
+
 
 namespace rfunc {
 
 RandFunction uniform_distribution_rand(int min_value, int max_value) {
     std::random_device rd;
     std::mt19937 generator(rd());
-    std::uniform_int_distribution<int> distribution(min_value, max_value);
+    std::uniform_int_distribution<long> distribution(min_value, max_value);
 
     return std::bind(distribution, generator);
 }
@@ -32,7 +34,7 @@ RandFunction binomial_distribution(
 ) {
     std::random_device rd;
     std::mt19937 generator(rd());
-    std::binomial_distribution<> distribution(
+    std::binomial_distribution<long> distribution(
         n_experiments, success_probability
     );
 
@@ -42,7 +44,7 @@ RandFunction binomial_distribution(
 RandFunction zipfian_distribution(long min, long max) {
     std::random_device rd;
     std::mt19937 generator(rd());
-    zipfian_int_distribution<int> distribution(min, max);
+    zipfian_int_distribution<long> distribution(min, max);
     return std::bind(distribution, generator);
 }
 
@@ -50,7 +52,14 @@ RandFunction scrambled_zipfian_distribution(long min, long max) {
 
     std::random_device rd;
     std::mt19937 generator(rd());
-    scrambled_zipfian_int_distribution<int> distribution(min, max);
+    scrambled_zipfian_int_distribution<long> distribution(min, max);
+    return std::bind(distribution, generator);
+}
+
+RandFunction skewed_latest_distribution(acknowledged_counter<long> *&counter, zipfian_int_distribution<long> *& zip){
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    skewed_latest_int_distribution<long> distribution(counter, zip);
     return std::bind(distribution, generator);
 }
 
