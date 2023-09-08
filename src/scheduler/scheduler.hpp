@@ -110,7 +110,7 @@ public:
         return repartition_timestamps_;
     }
 
-    const std::vector<duration>& graph_copy_duration() const {
+const std::vector<duration>& graph_copy_duration() const {
         return graph_copy_duration_;
     }
     const std::vector<time_point>& repartition_end_timestamps() const {
@@ -155,7 +155,6 @@ public:
             if (
                 n_dispatched_requests_ % repartition_interval_ == 0
             ) {
-                //std::cout << "REPART" <<std::endl;
                 notify_graph(SYNC);
                 pthread_barrier_wait(&repartition_barrier_);
 

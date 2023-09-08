@@ -42,10 +42,12 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <random>
 
 #include <cds/init.h>
 #include <cds/gc/hp.h>
 
+#include "request/skewed_latest_int_distribution.cpp"
 #include "request/request_generation.h"
 #include "types/types.h"
 #include "graph/graph.hpp"
@@ -57,6 +59,9 @@
 #elif defined(CARELESS)
 	#include "scheduler/careless_scheduler.hpp"
 	#define Scheduler CarelessScheduler
+#elif defined(NON_STOP)
+	#include "scheduler/non_stop_scheduler.hpp"
+	#define Scheduler NonStopScheduler
 #else
 	#include "scheduler/scheduler.hpp"
 #endif
@@ -70,6 +75,13 @@ static int verbose = 0;
 static int SLEEP = 1000;
 static bool RUNNING = true;
 
+int N_PARTITIONS = 2;
+int N_INITIAL_KEYS = 3;
+int REPARTITION_INTERVAL = 4;
+int REPARTITION_METHOD = 5;
+int REQUESTS_PATH = 6;
+
+char* *params;
 
 void
 metrics_loop(int sleep_duration, int n_requests, kvpaxos::Scheduler<int>* scheduler)
@@ -102,26 +114,35 @@ initialize_scheduler(
 	int n_requests,
 	const toml_config& config)
 {
+	/*
 	auto n_partitions = toml::find<int>(
 		config, "n_partitions"
 	);
 	auto repartition_method_s = toml::find<std::string>(
 		config, "repartition_method"
 	);
+	*/
+	auto n_partitions = atoi(params[N_PARTITIONS]);
+	auto repartition_interval = atoi(params[REPARTITION_INTERVAL]);
+	std::string repartition_method_s = params[REPARTITION_METHOD];
+
 	auto repartition_method = model::string_to_cut_method.at(
 		repartition_method_s
-	);
+	);/*
 	auto repartition_interval = toml::find<int>(
 		config, "repartition_interval"
-	);
+	);*/
+
 	auto* scheduler = new kvpaxos::Scheduler<int>(
 		n_requests, repartition_interval, n_partitions,
 		repartition_method
 	);
-
+	/*
 	auto n_initial_keys = toml::find<int>(
 		config, "n_initial_keys"
-	);
+	);*/
+	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
+
 	std::vector<workload::Request> populate_requests;
 	for (auto i = 0; i <= n_initial_keys; i++) {
 		populate_requests.emplace_back(WRITE, i, "");
@@ -199,20 +220,14 @@ join_maps(std::vector<std::unordered_map<int, time_point>> maps) {
 	return joined_map;
 }
 
-size_t count_requests(std::string &requests_path){
-    std::ifstream requests_file (requests_path);   
-	size_t count = (size_t)std::count_if(std::istreambuf_iterator<char>{requests_file}, {}, [](char c) { return c == '\n'; });
-	requests_file.close();
-	return count;
-}
-
 static void
 run(const toml_config& config)
 {
-	auto requests_path = toml::find<std::string>(
+	/*auto requests_path = toml::find<std::string>(
 		config, "requests_path"
-	);
-
+	);*/
+	std::string requests_path = params[REQUESTS_PATH];
+	
 	auto n_requests = toml::find<int>(
 		config, "n_requests"
 	);
@@ -265,14 +280,18 @@ usage(std::string prog)
 	std::cout << "Usage: " << prog << " config\n";
 }
 
+
 int
 main(int argc, char const *argv[])
 {
-
+	
 	if (argc < 2) {
 		usage(std::string(argv[0]));
 		exit(1);
 	}
+
+	params = const_cast<char**>(argv);
+
 
 	const auto config = toml::parse(argv[1]);
 
