@@ -106,19 +106,37 @@ public:
         return n_dispatched_requests_;
     }
 
+    void store_q_sizes(std::vector<std::vector<size_t>> &v){
+        std::vector<size_t> sizes;
+        for (size_t i = 0; i < n_partitions_; i++)
+        {
+            sizes.push_back(partitions_[i]->request_queue_size());
+        }
+        v.push_back(sizes);
+    }
+
     const std::vector<time_point>& repartition_timestamps() const {
         return repartition_timestamps_;
     }
 
-const std::vector<duration>& graph_copy_duration() const {
+    std::vector<std::vector<size_t>> &q_size_repartition_begin(){
+        return q_size_repartition_begin_;
+    }
+
+    std::vector<std::vector<size_t>>& q_size_repartition_end(){
+        return q_size_repartition_end_;
+    }
+
+
+    const std::vector<duration>& graph_copy_duration() const {
         return graph_copy_duration_;
     }
     const std::vector<time_point>& repartition_end_timestamps() const {
         return repartition_end_timestamps_;
     }
+    
+    void dispatch(struct client_message& request){
 
-    void schedule_and_answer(struct client_message& request) {
-        
         auto type = static_cast<request_type>(request.type);
         if (type == SYNC) {
             return;
@@ -144,17 +162,28 @@ const std::vector<duration>& graph_copy_duration() const {
                 arbitrary_partition->push_request(request);
             }
         }
-
+        
         if (repartition_method_ != model::ROUND_ROBIN) {
             graph_requests_mutex_.lock();
                 graph_requests_queue_.push(request);
             graph_requests_mutex_.unlock();
             sem_post(&graph_requests_semaphore_);
-
+        
             n_dispatched_requests_++;
+        }
+    }
+    
+    void schedule_and_answer(struct client_message& request) {
+
+        dispatch(request);
+
+        if (repartition_method_ != model::ROUND_ROBIN) {
             if (
                 n_dispatched_requests_ % repartition_interval_ == 0
             ) {
+                
+                store_q_sizes(q_size_repartition_begin_);
+
                 notify_graph(SYNC);
                 pthread_barrier_wait(&repartition_barrier_);
 
@@ -165,6 +194,8 @@ const std::vector<duration>& graph_copy_duration() const {
                 graph_copy_duration_.push_back(std::chrono::nanoseconds::zero());
 
                 sync_all_partitions();
+
+                store_q_sizes(q_size_repartition_end_);
             }
         }
     }
@@ -373,6 +404,9 @@ public:
     int repartition_interval_;
     bool first_repartition = true;
     pthread_barrier_t repartition_barrier_;
+
+    std::vector<std::vector<size_t>> q_size_repartition_begin_;
+    std::vector<std::vector<size_t>> q_size_repartition_end_;
     
 };
 

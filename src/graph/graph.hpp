@@ -129,6 +129,8 @@ public:
             auto n_neighbours = 0;
             
             for (auto& e_it: edges_weight_.at(v)) {
+
+
                 if(vertice_positions.find(e_it.first) != vertice_positions.end()){
                     auto neighbour = vertice_positions[e_it.first];
                     auto weight = e_it.second;

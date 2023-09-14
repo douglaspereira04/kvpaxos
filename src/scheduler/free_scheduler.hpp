@@ -75,8 +75,8 @@ public:
         
     }
     
-    void schedule_and_answer(struct client_message& request) {
-        
+    void dispatch(struct client_message& request){
+
         auto type = static_cast<request_type>(request.type);
         if (type == SYNC) {
             return;
@@ -102,7 +102,7 @@ public:
                 arbitrary_partition->push_request(request);
             }
         }
-
+        
         if (this->repartition_method_ != model::ROUND_ROBIN) {
             this->graph_requests_mutex_.lock();
                 this->graph_requests_queue_.push(request);
@@ -110,14 +110,24 @@ public:
             sem_post(&this->graph_requests_semaphore_);
 
             this->n_dispatched_requests_++;
+        }
+    }
+    
+    void schedule_and_answer(struct client_message& request) {
+        FreeScheduler<T>::dispatch(request);
+
+        if (this->repartition_method_ != model::ROUND_ROBIN) {
 
             if(sem_trywait(&update_semaphore_) == 0){
                 FreeScheduler<T>::change_partition_scheme();
+                Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
                 sem_post(&continue_reparting_semaphore_);
             } else if(
                 this->n_dispatched_requests_ % this->repartition_interval_ == 0
             ) {
-                store_keys_ = true; 
+                store_keys_ = true;
+
+                Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
                 Scheduler<T>::notify_graph(REPART);
             }
         }

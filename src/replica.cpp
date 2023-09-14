@@ -253,9 +253,12 @@ run(const toml_config& config)
 	std::cout << "Makespan," << makespan.count() << "\n";
 
 	auto& repartition_times = scheduler->repartition_timestamps();
-	std::cout << "Repartition,Duration,CopyTime\n";
+	std::cout << "Repartition,Duration,CopyTime,TQBeginSize,TQEndSize,QBeginEndSizes\n";
+	
 	auto copy_time_it = scheduler->graph_copy_duration().begin();
 	auto repartition_end_it = scheduler->repartition_end_timestamps().begin();
+	auto q_begin_it = scheduler->q_size_repartition_begin().begin();
+	auto q_end_it = scheduler->q_size_repartition_end().begin();
 	for (auto& repartition_time : repartition_times) {
 		double end_time = -1;
 		double copy_time = -1;
@@ -265,8 +268,31 @@ run(const toml_config& config)
 		if(repartition_end_it != scheduler->repartition_end_timestamps().end()){
 			end_time = (*repartition_end_it - start_execution_timestamp).count();
 		}
-		std::cout << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << "\n";
+		std::cout << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << ",";
 		copy_time_it++;
+
+		std::cout.flush();
+		if(q_begin_it != scheduler->q_size_repartition_begin().end() && q_end_it != scheduler->q_size_repartition_end().end()){
+			size_t sum_begin = 0;
+			size_t sum_end = 0;
+			for (int i = 0; i < scheduler->n_partitions_; i++)
+			{
+				sum_begin += q_begin_it->at(i);
+				sum_end += q_end_it->at(i);
+			}
+			std::cout << sum_begin << "," << sum_end << ",";
+			std::cout.flush();
+
+			for (size_t i = 0; i < scheduler->n_partitions_; i++)
+			{
+				std::cout << q_begin_it->at(i) << "-" << q_end_it->at(i) << ",";
+				std::cout.flush();
+			}
+			q_begin_it++;
+			q_end_it++;
+		}
+		std::cout << std::endl;
+		
 		repartition_end_it++;
 	}
 
@@ -308,6 +334,15 @@ main(int argc, char const *argv[])
 		//workload::export_requests(requests, export_path);
 
     }else{
+		/*
+		auto n_partitions = atoi(params[N_PARTITIONS]);
+		auto repartition_interval = atoi(params[REPARTITION_INTERVAL]);
+		std::string repartition_method_s = params[REPARTITION_METHOD];
+		auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
+		std::string requests_path = params[REQUESTS_PATH];
+
+		std::cout << params[0] << " - "  << n_partitions << " - " << repartition_interval << " - " << repartition_method_s << " - " << n_initial_keys << " - " << requests_path << " ; " << std::endl;
+		*/
 		#if defined(MICHAEL) || defined(FELDMAN)
 			cds::Initialize();
 			cds::gc::HP gc;

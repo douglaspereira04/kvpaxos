@@ -63,41 +63,9 @@ public:
     }
     
     void schedule_and_answer(struct client_message& request) {
-        
-        auto type = static_cast<request_type>(request.type);
-        if (type == SYNC) {
-            return;
-        }
-
-        if (type == WRITE) {
-            if (not Scheduler<T>::mapped(request.key)) {
-                FreeScheduler<T>::add_key(request.key);
-            }
-        }
-
-        auto partitions = std::move(Scheduler<T>::involved_partitions(request));
-        if (partitions.empty()) {
-            request.type = ERROR;
-            this->partitions_.at(0)->push_request(request);
-        }else{
-            auto arbitrary_partition = *begin(partitions);
-            if (partitions.size() > 1) {
-                Scheduler<T>::sync_partitions(partitions);
-                arbitrary_partition->push_request(request);
-                Scheduler<T>::sync_partitions(partitions);
-            } else {
-                arbitrary_partition->push_request(request);
-            }
-        }
+        FreeScheduler<T>::dispatch(request);
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {
-            this->graph_requests_mutex_.lock();
-                this->graph_requests_queue_.push(request);
-            this->graph_requests_mutex_.unlock();
-            sem_post(&this->graph_requests_semaphore_);
-
-            this->n_dispatched_requests_++;
-
             if(sem_trywait(&this->update_semaphore_) == 0){
                 FreeScheduler<T>::change_partition_scheme();
                 sem_post(&this->continue_reparting_semaphore_);
