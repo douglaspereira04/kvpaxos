@@ -63,7 +63,14 @@ public:
     }
     
     void schedule_and_answer(struct client_message& request) {
-        FreeScheduler<T>::dispatch(request);
+
+        auto type = static_cast<request_type>(request.type);
+        if (this->store_keys_ && type == WRITE && !Scheduler<T>::mapped(request.key)){
+            auto partition_id = this->round_robin_counter_;
+            this->pending_keys_.push_back(std::make_pair(request.key, partition_id));
+        }
+        
+        Scheduler<T>::dispatch(request);
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {
             if(sem_trywait(&this->update_semaphore_) == 0){

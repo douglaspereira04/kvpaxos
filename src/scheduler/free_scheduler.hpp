@@ -75,46 +75,14 @@ public:
         
     }
     
-    void dispatch(struct client_message& request){
-
+    void schedule_and_answer(struct client_message& request) {
         auto type = static_cast<request_type>(request.type);
-        if (type == SYNC) {
-            return;
-        }
-
-        if (type == WRITE) {
-            if (not Scheduler<T>::mapped(request.key)) {
-                FreeScheduler<T>::add_key(request.key);
-            }
-        }
-
-        auto partitions = std::move(Scheduler<T>::involved_partitions(request));
-        if (partitions.empty()) {
-            request.type = ERROR;
-            this->partitions_.at(0)->push_request(request);
-        }else{
-            auto arbitrary_partition = *begin(partitions);
-            if (partitions.size() > 1) {
-                Scheduler<T>::sync_partitions(partitions);
-                arbitrary_partition->push_request(request);
-                Scheduler<T>::sync_partitions(partitions);
-            } else {
-                arbitrary_partition->push_request(request);
-            }
+        if (this->store_keys_ && type == WRITE && !Scheduler<T>::mapped(request.key)){
+            auto partition_id = this->round_robin_counter_;
+            pending_keys_.push_back(std::make_pair(request.key, partition_id));
         }
         
-        if (this->repartition_method_ != model::ROUND_ROBIN) {
-            this->graph_requests_mutex_.lock();
-                this->graph_requests_queue_.push(request);
-            this->graph_requests_mutex_.unlock();
-            sem_post(&this->graph_requests_semaphore_);
-
-            this->n_dispatched_requests_++;
-        }
-    }
-    
-    void schedule_and_answer(struct client_message& request) {
-        FreeScheduler<T>::dispatch(request);
+        Scheduler<T>::dispatch(request);
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {
 
@@ -139,41 +107,15 @@ public:
         delete this->data_to_partition_;
         this->data_to_partition_ = updated_data_to_partition_;
         
-        for (auto pending = this->pending_keys_.begin(); pending != this->pending_keys_.end(); pending++){
+        for (auto pending = this->pending_keys_.begin(); pending != this->pending_keys_.end();){
             if(!Scheduler<T>::mapped(pending->first)){
-                FreeScheduler<T>::add_key(pending->first, pending->second);
+                this->data_to_partition_->emplace(pending->first, this->partitions_.at(pending->second));
             }
-            this->pending_keys_.erase(pending);
+            pending = this->pending_keys_.erase(pending);
         }
         
         this->data_to_partition_copy_ = *this->data_to_partition_;
         Scheduler<T>::sync_all_partitions();
-    }
-
-    void add_key(T key) {
-        auto partition_id = this->round_robin_counter_;
-        this->round_robin_counter_ = (this->round_robin_counter_+1) % this->n_partitions_;
-        add_key(key, partition_id);
-        if(store_keys_){
-            pending_keys_.push_back(std::make_pair(key, partition_id));
-        }
-
-        if (this->repartition_method_ != model::ROUND_ROBIN) {
-            struct client_message write_message;
-            write_message.type = WRITE;
-            write_message.key = key;
-            write_message.s_addr = (unsigned long) this->partitions_.at(partition_id);
-            write_message.sin_port = 1;
-
-            this->graph_requests_mutex_.lock();
-                this->graph_requests_queue_.push(write_message);
-            this->graph_requests_mutex_.unlock();
-            sem_post(&this->graph_requests_semaphore_);
-        }
-    }
-
-    void add_key(T key, int partition_id) {
-        this->data_to_partition_->emplace(key, this->partitions_.at(partition_id));
     }
 
     void update_graph_loop() {
