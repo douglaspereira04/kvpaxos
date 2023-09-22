@@ -106,8 +106,9 @@ public:
 public:
 
     void change_partition_scheme(){
-        delete this->data_to_partition_;
+        auto temp =  this->data_to_partition_;
         this->data_to_partition_ = updated_data_to_partition_;
+        updated_data_to_partition_ = temp;
         
         for (auto pending = this->pending_keys_.begin(); pending != this->pending_keys_.end();){
             if(!Scheduler<T>::mapped(pending->first)){
@@ -154,10 +155,11 @@ public:
     void reparting_loop(){
         while(true){
             sem_wait(&repart_semaphore_);
-
+            
             input_graph_mutex_.lock();
                 auto temp = repart(input_graph_);
             input_graph_mutex_.unlock();
+            delete updated_data_to_partition_;
             
             updated_data_to_partition_ = temp;
 

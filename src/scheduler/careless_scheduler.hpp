@@ -105,6 +105,7 @@ public:
 
             auto temp = FreeScheduler<T>::repart(this->input_graph_);
             
+            delete this->updated_data_to_partition_;
             this->updated_data_to_partition_ = temp;
 
             auto end_timestamp = std::chrono::system_clock::now();
