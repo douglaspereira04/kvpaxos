@@ -203,9 +203,16 @@ execute_requests(
 	std::ifstream &requests_file,
 	int print_percentage)
 {	
+	
+	std::vector<client_message> messages;
+
 	while (requests_file.peek() != EOF) {
 		workload::Request request= workload::import_cs_request(requests_file);
 		struct client_message message = to_client_message(request);
+		messages.push_back(message);
+	}
+
+	for (auto message : messages){
 		scheduler.schedule_and_answer(message);
 	}
 
