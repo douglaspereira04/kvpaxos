@@ -63,6 +63,14 @@ public:
         worker_thread_ = std::thread(&Partition<T>::thread_loop, this);
     }
 
+    size_t request_queue_size() {
+        size_t size;
+        queue_mutex_.lock();
+            size = requests_queue_.size();
+        queue_mutex_.unlock();
+        return size;
+    }
+
     void push_request(struct client_message request) {
         queue_mutex_.lock();
             requests_queue_.push(std::move(request));

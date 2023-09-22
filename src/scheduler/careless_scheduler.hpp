@@ -75,10 +75,15 @@ public:
         if (this->repartition_method_ != model::ROUND_ROBIN) {
             if(sem_trywait(&this->update_semaphore_) == 0){
                 FreeScheduler<T>::change_partition_scheme();
+
+                Scheduler<T>::store_q_sizes(this->q_size_repartition_end_);
+                
                 sem_post(&this->continue_reparting_semaphore_);
             } else if(
                 this->n_dispatched_requests_ % this->repartition_interval_ == 0
             ) {
+                Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
+
                 this->store_keys_ = true;
                 sem_post(&this->repart_semaphore_);
             }
@@ -91,8 +96,13 @@ public:
         while(true){
             sem_wait(&this->repart_semaphore_);
             
+            auto begin = std::chrono::system_clock::now();
+
             delete this->input_graph_;
             this->input_graph_ = new InputGraph<T>(this->workload_graph_);
+
+            this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
+
             auto temp = FreeScheduler<T>::repart(this->input_graph_);
             
             this->updated_data_to_partition_ = temp;
