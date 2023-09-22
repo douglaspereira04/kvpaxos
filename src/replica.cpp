@@ -250,10 +250,13 @@ run(const toml_config& config)
 	auto end_execution_timestamp = std::chrono::system_clock::now();
 
 	auto makespan = end_execution_timestamp - start_execution_timestamp;
-	std::cout << "Makespan," << makespan.count() << "\n";
+
+
+    std::ofstream ofs("details.txt", std::ofstream::out);
+	ofs << "Makespan," << makespan.count() << "\n";
 
 	auto& repartition_times = scheduler->repartition_timestamps();
-	std::cout << "Repartition,Duration,CopyTime,TQBeginSize,TQEndSize,QBeginEndSizes\n";
+	ofs << "Repartition,Duration,CopyTime,TQBeginSize,TQEndSize,QBeginEndSizes\n";
 	
 	auto copy_time_it = scheduler->graph_copy_duration().begin();
 	auto repartition_end_it = scheduler->repartition_end_timestamps().begin();
@@ -268,10 +271,10 @@ run(const toml_config& config)
 		if(repartition_end_it != scheduler->repartition_end_timestamps().end()){
 			end_time = (*repartition_end_it - start_execution_timestamp).count();
 		}
-		std::cout << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << ",";
+		ofs << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << ",";
 		copy_time_it++;
 
-		std::cout.flush();
+		ofs.flush();
 		if(q_begin_it != scheduler->q_size_repartition_begin().end() && q_end_it != scheduler->q_size_repartition_end().end()){
 			size_t sum_begin = 0;
 			size_t sum_end = 0;
@@ -280,23 +283,24 @@ run(const toml_config& config)
 				sum_begin += q_begin_it->at(i);
 				sum_end += q_end_it->at(i);
 			}
-			std::cout << sum_begin << "," << sum_end << ",";
-			std::cout.flush();
+			ofs << sum_begin << "," << sum_end << ",";
+			ofs.flush();
 
 			for (size_t i = 0; i < scheduler->n_partitions_; i++)
 			{
-				std::cout << q_begin_it->at(i) << "-" << q_end_it->at(i) << ",";
-				std::cout.flush();
+				ofs << q_begin_it->at(i) << "-" << q_end_it->at(i) << ",";
+				ofs.flush();
 			}
 			q_begin_it++;
 			q_end_it++;
 		}
-		std::cout << std::endl;
+		ofs << std::endl;
 		
 		repartition_end_it++;
 	}
 
-	std::cout << std::endl;
+	ofs << std::endl;
+    ofs.close();
 	//exit(EXIT_SUCCESS);
 }
 
