@@ -62,6 +62,7 @@ public:
             this->partitions_.emplace(i, partition);
         }
         this->data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
+        updated_data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
 
         sem_init(&this->graph_requests_semaphore_, 0, 0);
         pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
@@ -92,7 +93,9 @@ public:
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
                 
                 sem_post(&continue_reparting_semaphore_);
-            } else if(
+            }
+            
+            if(
                 this->n_dispatched_requests_ % this->repartition_interval_ == 0
             ) {
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_end_);
@@ -106,7 +109,7 @@ public:
 public:
 
     void change_partition_scheme(){
-        auto temp =  this->data_to_partition_;
+        std::unordered_map<T,kvpaxos::Partition<T>*> *temp =  this->data_to_partition_;
         this->data_to_partition_ = updated_data_to_partition_;
         updated_data_to_partition_ = temp;
         
@@ -117,7 +120,7 @@ public:
             pending = this->pending_keys_.erase(pending);
         }
         
-        this->data_to_partition_copy_ = *this->data_to_partition_;
+        //this->data_to_partition_copy_ = *this->data_to_partition_;
         Scheduler<T>::sync_all_partitions();
     }
 
@@ -142,11 +145,11 @@ public:
 
                 sem_post(&repart_semaphore_);
             } else {
-                if (request.type == WRITE and request.sin_port == 1) {
+                /*if (request.type == WRITE and request.sin_port == 1) {
                     auto partition = (Partition<T>*) request.s_addr;
 		            this->data_to_partition_copy_.emplace(request.key, partition);
 		            partition->insert_data(request.key);
-                }
+                }*/
                 Scheduler<T>::update_graph(request);
             }
         }
@@ -156,16 +159,16 @@ public:
         while(true){
             sem_wait(&repart_semaphore_);
             
+            delete updated_data_to_partition_;
+
             input_graph_mutex_.lock();
                 auto temp = repart(input_graph_);
             input_graph_mutex_.unlock();
-            delete updated_data_to_partition_;
             
             updated_data_to_partition_ = temp;
 
             auto end_timestamp = std::chrono::system_clock::now();
             this->repartition_end_timestamps_.push_back(end_timestamp);
-            this->graph_copy_duration_.push_back(std::chrono::nanoseconds::zero());
             sem_post(&update_semaphore_);
 
             sem_wait(&continue_reparting_semaphore_);

@@ -200,21 +200,15 @@ to_client_messages(
 void
 execute_requests(
 	kvpaxos::Scheduler<int>& scheduler,
-	std::ifstream &requests_file,
-	int print_percentage)
+	int print_percentage,
+	client_message* messages,
+	int n_requests)
 {	
 	
-	std::vector<client_message> messages;
-
-	while (requests_file.peek() != EOF) {
-		workload::Request request= workload::import_cs_request(requests_file);
-		struct client_message message = to_client_message(request);
-		messages.push_back(message);
+	for (int i = 0;i<n_requests; i++){
+		scheduler.schedule_and_answer(messages[i]);
 	}
 
-	for (auto message : messages){
-		scheduler.schedule_and_answer(message);
-	}
 
 }
 
@@ -240,6 +234,15 @@ run(const toml_config& config)
 	);
 	
 	std::ifstream requests_file(requests_path);
+	client_message *messages = new client_message[n_requests];
+	int i = 0;
+	while (requests_file.peek() != EOF) {
+		workload::Request request= workload::import_cs_request(requests_file);
+		messages[i] = to_client_message(request);
+		i++;
+	}
+	requests_file.close();
+
 	auto* scheduler = initialize_scheduler(n_requests, config);
 	auto throughput_thread = std::thread(
 		metrics_loop, SLEEP, n_requests, scheduler
@@ -250,11 +253,12 @@ run(const toml_config& config)
 	);
 
 	auto start_execution_timestamp = std::chrono::system_clock::now();
-	execute_requests(*scheduler, requests_file, print_percentage);
-	requests_file.close();
+	execute_requests(*scheduler, print_percentage, messages, n_requests);
 
 	throughput_thread.join();
 	auto end_execution_timestamp = std::chrono::system_clock::now();
+
+	delete[] messages;
 
 	auto makespan = end_execution_timestamp - start_execution_timestamp;
 

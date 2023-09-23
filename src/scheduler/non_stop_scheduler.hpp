@@ -49,6 +49,7 @@ public:
             this->partitions_.emplace(i, partition);
         }
         this->data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
+        this->updated_data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
 
         sem_init(&this->graph_requests_semaphore_, 0, 0);
         pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
@@ -75,7 +76,9 @@ public:
 
                 sem_post(&this->continue_reparting_semaphore_);
                 reparting_ = false;
-            } else if(
+            } 
+            
+            if(
                 !reparting_
             ) {
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);

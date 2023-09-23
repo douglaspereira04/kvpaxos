@@ -299,11 +299,11 @@ public:
             if (request.type == SYNC) {
                 pthread_barrier_wait(&repartition_barrier_);
             } else {
-                if (request.type == WRITE and request.sin_port == 1) {
+                /*if (request.type == WRITE and request.sin_port == 1) {
                     auto partition = (Partition<T>*) request.s_addr;
 		            data_to_partition_copy_.emplace(request.key, partition);
 		            partition->insert_data(request.key);
-                }
+                }*/
                 update_graph(request);
             }
         }
@@ -375,7 +375,7 @@ public:
             data_to_partition_->emplace(key, partitions_.at(partition));
         }
 
-        data_to_partition_copy_ = *data_to_partition_;
+        //data_to_partition_copy_ = *data_to_partition_;
         if (first_repartition) {
             first_repartition = false;
         }
@@ -388,7 +388,7 @@ public:
     kvstorage::Storage storage_;
     std::unordered_map<int, Partition<T>*> partitions_;
     std::unordered_map<T, Partition<T>*>* data_to_partition_;
-    std::unordered_map<T, Partition<T>*> data_to_partition_copy_;
+    //std::unordered_map<T, Partition<T>*> data_to_partition_copy_;
 
     std::thread graph_thread_;
     std::queue<struct client_message> graph_requests_queue_;

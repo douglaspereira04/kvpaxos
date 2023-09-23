@@ -49,6 +49,7 @@ public:
             this->partitions_.emplace(i, partition);
         }
         this->data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
+        this->updated_data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
 
         sem_init(&this->graph_requests_semaphore_, 0, 0);
         pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
@@ -79,7 +80,9 @@ public:
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_end_);
                 
                 sem_post(&this->continue_reparting_semaphore_);
-            } else if(
+            }
+            
+            if(
                 this->n_dispatched_requests_ % this->repartition_interval_ == 0
             ) {
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
@@ -104,7 +107,7 @@ public:
             this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
             auto temp = FreeScheduler<T>::repart(this->input_graph_);
-            
+
             delete this->updated_data_to_partition_;
             this->updated_data_to_partition_ = temp;
 
