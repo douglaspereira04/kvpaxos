@@ -42,7 +42,6 @@ public:
         this->n_partitions_ = n_partitions;
         this->repartition_interval_ = repartition_interval;
         this->repartition_method_ = repartition_method;
-        this->store_keys_ = false;
 
         for (auto i = 0; i < this->n_partitions_; i++) {
             auto* partition = new Partition<T>(i);
@@ -64,12 +63,6 @@ public:
     }
     
     void schedule_and_answer(struct client_message& request) {
-
-        auto type = static_cast<request_type>(request.type);
-        if (this->store_keys_ && type == WRITE && !Scheduler<T>::mapped(request.key)){
-            auto partition_id = this->round_robin_counter_;
-            this->pending_keys_.push_back(std::make_pair(request.key, partition_id));
-        }
         
         Scheduler<T>::dispatch(request);
 
@@ -87,7 +80,6 @@ public:
             ) {
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
 
-                this->store_keys_ = true;
                 sem_post(&this->repart_semaphore_);
             }
         }

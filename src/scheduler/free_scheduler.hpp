@@ -55,7 +55,6 @@ public:
         this->n_partitions_ = n_partitions;
         this->repartition_interval_ = repartition_interval;
         this->repartition_method_ = repartition_method;
-        store_keys_ = false;
 
         for (auto i = 0; i < this->n_partitions_; i++) {
             auto* partition = new Partition<T>(i);
@@ -77,11 +76,6 @@ public:
     }
     
     void schedule_and_answer(struct client_message& request) {
-        auto type = static_cast<request_type>(request.type);
-        if (this->store_keys_ && type == WRITE && !Scheduler<T>::mapped(request.key)){
-            auto partition_id = this->round_robin_counter_;
-            pending_keys_.push_back(std::make_pair(request.key, partition_id));
-        }
         
         Scheduler<T>::dispatch(request);
 
@@ -100,7 +94,6 @@ public:
             ) {
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_end_);
 
-                store_keys_ = true;
                 Scheduler<T>::notify_graph(REPART);
             }
         }
@@ -113,14 +106,6 @@ public:
         this->data_to_partition_ = updated_data_to_partition_;
         updated_data_to_partition_ = temp;
         
-        for (auto pending = this->pending_keys_.begin(); pending != this->pending_keys_.end();){
-            if(!Scheduler<T>::mapped(pending->first)){
-                this->data_to_partition_->emplace(pending->first, this->partitions_.at(pending->second));
-            }
-            pending = this->pending_keys_.erase(pending);
-        }
-        
-        //this->data_to_partition_copy_ = *this->data_to_partition_;
         Scheduler<T>::sync_all_partitions();
     }
 
@@ -145,11 +130,6 @@ public:
 
                 sem_post(&repart_semaphore_);
             } else {
-                /*if (request.type == WRITE and request.sin_port == 1) {
-                    auto partition = (Partition<T>*) request.s_addr;
-		            this->data_to_partition_copy_.emplace(request.key, partition);
-		            partition->insert_data(request.key);
-                }*/
                 Scheduler<T>::update_graph(request);
             }
         }
@@ -223,9 +203,6 @@ public:
     std::mutex update_mutex_;
 
     std::thread reparting_thread_;
-
-    bool store_keys_;
-    std::vector<std::pair<T, int>> pending_keys_;
     
 };
 

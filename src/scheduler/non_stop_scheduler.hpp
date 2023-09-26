@@ -42,7 +42,6 @@ public:
         this->n_partitions_ = n_partitions;
         this->repartition_interval_ = repartition_interval;
         this->repartition_method_ = repartition_method;
-        this->store_keys_ = false;
 
         for (auto i = 0; i < this->n_partitions_; i++) {
             auto* partition = new Partition<T>(i);
@@ -83,7 +82,6 @@ public:
             ) {
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
 
-                this->store_keys_ = true; 
                 Scheduler<T>::notify_graph(REPART);
                 reparting_ = true;
             }
