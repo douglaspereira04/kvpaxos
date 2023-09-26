@@ -269,19 +269,6 @@ public:
         data_to_partition_->emplace(key, partitions_.at(partition_id));
 
         round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
-
-        if (repartition_method_ != model::ROUND_ROBIN) {
-            struct client_message write_message;
-            write_message.type = WRITE;
-            write_message.key = key;
-            write_message.s_addr = (unsigned long) partitions_.at(partition_id);
-            write_message.sin_port = 1;
-
-            graph_requests_mutex_.lock();
-                graph_requests_queue_.push(write_message);
-            graph_requests_mutex_.unlock();
-            sem_post(&graph_requests_semaphore_);
-        }
     }
 
     bool mapped(T key) const {
@@ -299,11 +286,6 @@ public:
             if (request.type == SYNC) {
                 pthread_barrier_wait(&repartition_barrier_);
             } else {
-                /*if (request.type == WRITE and request.sin_port == 1) {
-                    auto partition = (Partition<T>*) request.s_addr;
-		            data_to_partition_copy_.emplace(request.key, partition);
-		            partition->insert_data(request.key);
-                }*/
                 update_graph(request);
             }
         }
@@ -323,7 +305,7 @@ public:
             }
 
             workload_graph_.increase_vertice_weight(data[i]);
-            //data_to_partition_copy_.at(data[i])->increase_weight(data[i]);
+
             for (auto j = i+1; j < data.size(); j++) {
                 if (not workload_graph_.vertice_exists(data[j])) {
                     workload_graph_.add_vertice(data[j]);
@@ -375,7 +357,6 @@ public:
             data_to_partition_->emplace(key, partitions_.at(partition));
         }
 
-        //data_to_partition_copy_ = *data_to_partition_;
         if (first_repartition) {
             first_repartition = false;
         }
@@ -388,8 +369,7 @@ public:
     kvstorage::Storage storage_;
     std::unordered_map<int, Partition<T>*> partitions_;
     std::unordered_map<T, Partition<T>*>* data_to_partition_;
-    //std::unordered_map<T, Partition<T>*> data_to_partition_copy_;
-
+    
     std::thread graph_thread_;
     std::queue<struct client_message> graph_requests_queue_;
     sem_t graph_requests_semaphore_;
