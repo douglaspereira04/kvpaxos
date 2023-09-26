@@ -267,7 +267,7 @@ run(const toml_config& config)
 	ofs << "Makespan," << makespan.count() << "\n";
 
 	auto& repartition_times = scheduler->repartition_timestamps();
-	ofs << "Repartition,Duration,CopyTime,TQBeginSize,TQEndSize,QBeginEndSizes\n";
+	ofs << "Repartition Begin,Repartition End,Copy Time,Begin Total Queues Size,End Total Queues Size,Queues Begin-End Sizes\n";
 	
 	auto copy_time_it = scheduler->graph_copy_duration().begin();
 	auto repartition_end_it = scheduler->repartition_end_timestamps().begin();
