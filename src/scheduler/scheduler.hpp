@@ -198,6 +198,8 @@ public:
                 graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
                 auto temp = partitioning(input_graph);
+                delete data_to_partition_;
+                data_to_partition_ = temp;
 
                 sync_all_partitions();
 
