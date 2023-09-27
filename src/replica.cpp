@@ -88,11 +88,10 @@ metrics_loop(int sleep_duration, int n_requests, kvpaxos::Scheduler<int>* schedu
 {
 	auto already_counted_throughput = 0;
 	auto counter = 0;
-	std::cout << "Sec,Throughput,GraphVertices,GraphEdges\n";
+	std::cout << "Sec,Throughput,Graph Vertices,Graph Edges\n";
 	while (RUNNING) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
 		auto executed_requests = scheduler->n_executed_requests();
-		//auto graph_queue_size = scheduler->graph_queue_size();
 		auto graph_vertices = scheduler->graph_vertices();
 		auto graph_edges = scheduler->graph_edges();
 		auto throughput = executed_requests - already_counted_throughput;
@@ -114,33 +113,18 @@ initialize_scheduler(
 	int n_requests,
 	const toml_config& config)
 {
-	/*
-	auto n_partitions = toml::find<int>(
-		config, "n_partitions"
-	);
-	auto repartition_method_s = toml::find<std::string>(
-		config, "repartition_method"
-	);
-	*/
 	auto n_partitions = atoi(params[N_PARTITIONS]);
 	auto repartition_interval = atoi(params[REPARTITION_INTERVAL]);
 	std::string repartition_method_s = params[REPARTITION_METHOD];
 
 	auto repartition_method = model::string_to_cut_method.at(
 		repartition_method_s
-	);/*
-	auto repartition_interval = toml::find<int>(
-		config, "repartition_interval"
-	);*/
+	);
 
 	auto* scheduler = new kvpaxos::Scheduler<int>(
 		n_requests, repartition_interval, n_partitions,
 		repartition_method
 	);
-	/*
-	auto n_initial_keys = toml::find<int>(
-		config, "n_initial_keys"
-	);*/
 	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
 
 	std::vector<workload::Request> populate_requests;
@@ -200,13 +184,11 @@ to_client_messages(
 void
 execute_requests(
 	kvpaxos::Scheduler<int>& scheduler,
-	int print_percentage,
-	client_message* messages,
-	int n_requests)
+	std::vector<client_message> *messages)
 {	
 	
-	for (int i = 0;i<n_requests; i++){
-		scheduler.schedule_and_answer(messages[i]);
+	for(auto message = messages->begin(); message != messages->end(); message++){
+		scheduler.schedule_and_answer(*message);
 	}
 
 
@@ -224,41 +206,31 @@ join_maps(std::vector<std::unordered_map<int, time_point>> maps) {
 static void
 run(const toml_config& config)
 {
-	/*auto requests_path = toml::find<std::string>(
-		config, "requests_path"
-	);*/
 	std::string requests_path = params[REQUESTS_PATH];
 	
-	auto n_requests = toml::find<int>(
-		config, "n_requests"
-	);
 	
 	std::ifstream requests_file(requests_path);
-	client_message *messages = new client_message[n_requests];
-	int i = 0;
+	std::vector<client_message> *messages = new std::vector<client_message>();
 	while (requests_file.peek() != EOF) {
 		workload::Request request= workload::import_cs_request(requests_file);
-		messages[i] = to_client_message(request);
-		i++;
+		client_message message = to_client_message(request);
+		messages->push_back(message);
 	}
 	requests_file.close();
+	int n_requests = messages->size();
 
 	auto* scheduler = initialize_scheduler(n_requests, config);
 	auto throughput_thread = std::thread(
 		metrics_loop, SLEEP, n_requests, scheduler
 	);
-
-	auto print_percentage = toml::find<int>(
-		config, "print_percentage"
-	);
-
+	
 	auto start_execution_timestamp = std::chrono::system_clock::now();
-	execute_requests(*scheduler, print_percentage, messages, n_requests);
+	execute_requests(*scheduler, messages);
 
 	throughput_thread.join();
 	auto end_execution_timestamp = std::chrono::system_clock::now();
 
-	delete[] messages;
+	delete messages;
 
 	auto makespan = end_execution_timestamp - start_execution_timestamp;
 
@@ -345,19 +317,9 @@ main(int argc, char const *argv[])
 			config, "output", "requests", "export_path"
 		);
 		workload::create_requests(argv[1]);
-		
-		//workload::export_requests(requests, export_path);
+	
 
     }else{
-		/*
-		auto n_partitions = atoi(params[N_PARTITIONS]);
-		auto repartition_interval = atoi(params[REPARTITION_INTERVAL]);
-		std::string repartition_method_s = params[REPARTITION_METHOD];
-		auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
-		std::string requests_path = params[REQUESTS_PATH];
-
-		std::cout << params[0] << " - "  << n_partitions << " - " << repartition_interval << " - " << repartition_method_s << " - " << n_initial_keys << " - " << requests_path << " ; " << std::endl;
-		*/
 		#if defined(MICHAEL) || defined(FELDMAN)
 			cds::Initialize();
 			cds::gc::HP gc;

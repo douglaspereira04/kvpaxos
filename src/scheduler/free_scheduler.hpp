@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "input_graph.hpp"
 #include "graph/graph.hpp"
 #include "graph/partitioning.h"
 #include "partition.hpp"
@@ -26,20 +27,6 @@
 
 
 namespace kvpaxos {
-
-template <typename T>
-struct InputGraph{
-    InputGraph(){}
-    InputGraph(model::Graph<T> &graph){
-        vertice_to_pos = graph.multilevel_cut_data(vertice_weight, x_edges, edges, edges_weight);
-    }
-
-    std::vector<int> vertice_weight;
-    std::vector<int> x_edges;
-    std::vector<int> edges;
-    std::vector<int> edges_weight;
-    std::unordered_map<T,int> vertice_to_pos;
-};
 
 template <typename T>
 class FreeScheduler : public Scheduler<T> {
@@ -71,7 +58,7 @@ public:
         sem_init(&schedule_semaphore_, 0, 0);
         sem_init(&update_semaphore_, 0, 0);
         sem_init(&continue_reparting_semaphore_, 0, 0);
-        reparting_thread_ = std::thread(&FreeScheduler<T>::reparting_loop, this);
+        reparting_thread_ = std::thread(&FreeScheduler<T>::partitioning_loop, this);
         
     }
     
@@ -135,7 +122,7 @@ public:
         }
     }
 
-    void reparting_loop(){
+    void partitioning_loop(){
         while(true){
             sem_wait(&repart_semaphore_);
             

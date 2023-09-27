@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "input_graph.hpp"
 #include "graph/graph.hpp"
 #include "graph/partitioning.h"
 #include "partition.hpp"
@@ -191,7 +192,6 @@ public:
 
                 auto end_timestamp = std::chrono::system_clock::now();
                 repartition_end_timestamps_.push_back(end_timestamp);
-                graph_copy_duration_.push_back(std::chrono::nanoseconds::zero());
 
                 sync_all_partitions();
 
@@ -320,23 +320,19 @@ public:
     }
 
     void repartition_data() {
-        auto start_timestamp = std::chrono::system_clock::now();
-        repartition_timestamps_.emplace_back(start_timestamp);
+        repartition_timestamps_.emplace_back(std::chrono::system_clock::now());
 
-        std::vector<int> vertice_weight;
-        std::vector<int> x_edges;
-        std::vector<int> edges;
-        std::vector<int> edges_weight;
+        auto begin = std::chrono::system_clock::now();
+        auto graph = new InputGraph<T>(this->workload_graph_);
+        this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
-        std::unordered_map<T,int> vertice_to_pos =
-            workload_graph_.multilevel_cut_data(vertice_weight, x_edges, edges, edges_weight);
 
         auto partition_scheme = std::move(
             model::multilevel_cut(
-                vertice_weight, 
-                x_edges, 
-                edges, 
-                edges_weight,
+                graph->vertice_weight, 
+                graph->x_edges, 
+                graph->edges, 
+                graph->edges_weight,
                 partitions_.size(), 
                 repartition_method_
             )
@@ -345,7 +341,7 @@ public:
         delete data_to_partition_;
         data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
         
-        for (auto& it : vertice_to_pos) {
+        for (auto& it : graph->vertice_to_pos) {
             T key = it.first;
             int position = it.second;
             //position indicates the position of the key in partition scheme

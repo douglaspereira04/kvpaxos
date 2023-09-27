@@ -58,7 +58,7 @@ public:
         sem_init(&this->schedule_semaphore_, 0, 0);
         sem_init(&this->update_semaphore_, 0, 0);
         sem_init(&this->continue_reparting_semaphore_, 0, 0);
-        this->reparting_thread_ = std::thread(&CarelessScheduler<T>::reparting_loop, this);
+        this->reparting_thread_ = std::thread(&CarelessScheduler<T>::partitioning_loop, this);
         
     }
     
@@ -87,7 +87,7 @@ public:
 
 public:
 
-    void reparting_loop(){
+    void partitioning_loop(){
         while(true){
             sem_wait(&this->repart_semaphore_);
             
