@@ -129,54 +129,16 @@ public:
             delete updated_data_to_partition_;
 
             input_graph_mutex_.lock();
-                auto temp = partitioning(input_graph_);
+                auto temp = Scheduler<T>::partitioning(input_graph_);
             input_graph_mutex_.unlock();
             
             updated_data_to_partition_ = temp;
-
-            auto end_timestamp = std::chrono::system_clock::now();
-            this->repartition_end_timestamps_.push_back(end_timestamp);
             sem_post(&update_semaphore_);
 
             sem_wait(&continue_reparting_semaphore_);
         }
     }
 
-    std::unordered_map<T, Partition<T>*>* partitioning(struct InputGraph<T>* graph) {
-        auto start_timestamp = std::chrono::system_clock::now();
-        this->repartition_timestamps_.emplace_back(start_timestamp);
-
-        auto partition_scheme = std::move(
-            model::multilevel_cut(
-                graph->vertice_weight, 
-                graph->x_edges, 
-                graph->edges, 
-                graph->edges_weight,
-                this->partitions_.size(), 
-                this->repartition_method_
-            )
-        );
-
-        auto data_to_partition = new std::unordered_map<T, Partition<T>*>();
-        
-        for (auto& it : graph->vertice_to_pos) {
-            T key = it.first;
-            int position = it.second;
-            //position indicates the position of the key in partition scheme
-            int partition = partition_scheme[position];  
-            if (partition >= this->n_partitions_) {
-                printf("ERROR: partition was %d!\n", partition);
-                fflush(stdout);
-            }
-            data_to_partition->emplace(key, this->partitions_.at(partition));
-        }
-        
-        if (this->first_repartition) {
-            this->first_repartition = false;
-        }
-        
-        return data_to_partition;
-    }
 public:
     std::unordered_map<T, Partition<T>*>* updated_data_to_partition_;
     InputGraph<T> *input_graph_ = new InputGraph<T>();

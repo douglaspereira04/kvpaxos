@@ -188,10 +188,11 @@ public:
                 notify_graph(SYNC);
                 pthread_barrier_wait(&repartition_barrier_);
 
-                partitioning();
+                auto begin = std::chrono::system_clock::now();
+                auto input_graph = new InputGraph<T>(workload_graph_);
+                graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
-                auto end_timestamp = std::chrono::system_clock::now();
-                repartition_end_timestamps_.push_back(end_timestamp);
+                auto temp = partitioning(input_graph);
 
                 sync_all_partitions();
 
@@ -319,13 +320,10 @@ public:
         }
     }
 
-    void partitioning() {
-        repartition_timestamps_.emplace_back(std::chrono::system_clock::now());
 
-        auto begin = std::chrono::system_clock::now();
-        auto graph = new InputGraph<T>(this->workload_graph_);
-        this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
-
+    std::unordered_map<T, Partition<T>*>* partitioning(struct InputGraph<T>* graph) {
+        auto start_timestamp = std::chrono::system_clock::now();
+        repartition_timestamps_.emplace_back(start_timestamp);
 
         auto partition_scheme = std::move(
             model::multilevel_cut(
@@ -337,9 +335,11 @@ public:
                 repartition_method_
             )
         );
+        
+        auto end_timestamp = std::chrono::system_clock::now();
+        repartition_end_timestamps_.push_back(end_timestamp);
 
-        delete data_to_partition_;
-        data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
+        auto data_to_partition = new std::unordered_map<T, Partition<T>*>();
         
         for (auto& it : graph->vertice_to_pos) {
             T key = it.first;
@@ -350,12 +350,14 @@ public:
                 printf("ERROR: partition was %d!\n", partition);
                 fflush(stdout);
             }
-            data_to_partition_->emplace(key, partitions_.at(partition));
+            data_to_partition->emplace(key, partitions_.at(partition));
         }
-
+        
         if (first_repartition) {
             first_repartition = false;
         }
+        
+        return data_to_partition;
     }
 
     int n_partitions_;
@@ -383,6 +385,7 @@ public:
 
     std::vector<std::vector<size_t>> q_size_repartition_begin_;
     std::vector<std::vector<size_t>> q_size_repartition_end_;
+
     
 };
 
