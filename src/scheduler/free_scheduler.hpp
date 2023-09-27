@@ -129,7 +129,7 @@ public:
             delete updated_data_to_partition_;
 
             input_graph_mutex_.lock();
-                auto temp = repart(input_graph_);
+                auto temp = partitioning(input_graph_);
             input_graph_mutex_.unlock();
             
             updated_data_to_partition_ = temp;
@@ -142,7 +142,7 @@ public:
         }
     }
 
-    std::unordered_map<T, Partition<T>*>* repart(struct InputGraph<T>* graph) {
+    std::unordered_map<T, Partition<T>*>* partitioning(struct InputGraph<T>* graph) {
         auto start_timestamp = std::chrono::system_clock::now();
         this->repartition_timestamps_.emplace_back(start_timestamp);
 

@@ -98,7 +98,7 @@ public:
 
             this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
-            auto temp = FreeScheduler<T>::repart(this->input_graph_);
+            auto temp = FreeScheduler<T>::partitioning(this->input_graph_);
 
             delete this->updated_data_to_partition_;
             this->updated_data_to_partition_ = temp;

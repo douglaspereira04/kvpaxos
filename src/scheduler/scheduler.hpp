@@ -188,7 +188,7 @@ public:
                 notify_graph(SYNC);
                 pthread_barrier_wait(&repartition_barrier_);
 
-                repartition_data();
+                partitioning();
 
                 auto end_timestamp = std::chrono::system_clock::now();
                 repartition_end_timestamps_.push_back(end_timestamp);
@@ -319,7 +319,7 @@ public:
         }
     }
 
-    void repartition_data() {
+    void partitioning() {
         repartition_timestamps_.emplace_back(std::chrono::system_clock::now());
 
         auto begin = std::chrono::system_clock::now();
