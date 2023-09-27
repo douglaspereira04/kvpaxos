@@ -239,25 +239,31 @@ run(const toml_config& config)
 	ofs << "Makespan," << makespan.count() << "\n";
 
 	auto& repartition_times = scheduler->repartition_timestamps();
-	ofs << "Repartition Begin,Repartition End,Copy Time,Begin Total Queues Size,End Total Queues Size,Queues Begin-End Sizes\n";
+	ofs << "Repartition Begin,Repartition End,Copy Time,Reconstruction Time,Begin Total Queues Size,End Total Queues Size,Queues Begin-End Sizes\n";
 	
 	auto copy_time_it = scheduler->graph_copy_duration().begin();
+	auto reconstruction_it = scheduler->reconstruction_durations().begin();
 	auto repartition_end_it = scheduler->repartition_end_timestamps().begin();
 	auto q_begin_it = scheduler->q_size_repartition_begin().begin();
 	auto q_end_it = scheduler->q_size_repartition_end().begin();
 	for (auto& repartition_time : repartition_times) {
 		double end_time = -1;
 		double copy_time = -1;
+		double reconstruction_time = -1;
 		if(copy_time_it != scheduler->graph_copy_duration().end()){
 			copy_time = (*copy_time_it).count();
 		}
+		copy_time_it++;
+		if(reconstruction_it != scheduler->reconstruction_durations().end()){
+			reconstruction_time = (*reconstruction_it).count();
+		}
+		reconstruction_it++;
 		if(repartition_end_it != scheduler->repartition_end_timestamps().end()){
 			end_time = (*repartition_end_it - start_execution_timestamp).count();
 		}
-		ofs << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << ",";
-		copy_time_it++;
+		repartition_end_it++;
+		ofs << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << ","<< reconstruction_time/pow(10,9) << ",";
 
-		ofs.flush();
 		if(q_begin_it != scheduler->q_size_repartition_begin().end() && q_end_it != scheduler->q_size_repartition_end().end()){
 			size_t sum_begin = 0;
 			size_t sum_end = 0;
@@ -267,22 +273,20 @@ run(const toml_config& config)
 				sum_end += q_end_it->at(i);
 			}
 			ofs << sum_begin << "," << sum_end << ",";
-			ofs.flush();
 
 			for (size_t i = 0; i < scheduler->n_partitions_; i++)
 			{
 				ofs << q_begin_it->at(i) << "-" << q_end_it->at(i) << ",";
-				ofs.flush();
 			}
 			q_begin_it++;
 			q_end_it++;
 		}
 		ofs << std::endl;
 		
-		repartition_end_it++;
 	}
 
 	ofs << std::endl;
+	ofs.flush();
     ofs.close();
 	//exit(EXIT_SUCCESS);
 }

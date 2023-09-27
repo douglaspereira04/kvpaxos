@@ -132,6 +132,11 @@ public:
     const std::vector<duration>& graph_copy_duration() const {
         return graph_copy_duration_;
     }
+
+    const std::vector<duration>& reconstruction_durations() const {
+        return reconstruction_duration_;
+    }
+
     const std::vector<time_point>& repartition_end_timestamps() const {
         return repartition_end_timestamps_;
     }
@@ -339,6 +344,8 @@ public:
         auto end_timestamp = std::chrono::system_clock::now();
         repartition_end_timestamps_.push_back(end_timestamp);
 
+
+        auto reconstruction_begin = std::chrono::system_clock::now();
         auto data_to_partition = new std::unordered_map<T, Partition<T>*>();
         
         for (auto& it : graph->vertice_to_pos) {
@@ -352,6 +359,8 @@ public:
             }
             data_to_partition->emplace(key, partitions_.at(partition));
         }
+
+        reconstruction_duration_.push_back(std::chrono::system_clock::now() - reconstruction_begin);
         
         if (first_repartition) {
             first_repartition = false;
@@ -385,6 +394,8 @@ public:
 
     std::vector<std::vector<size_t>> q_size_repartition_begin_;
     std::vector<std::vector<size_t>> q_size_repartition_end_;
+
+    std::vector<duration> reconstruction_duration_;
 
     
 };
