@@ -71,7 +71,7 @@ public:
             if(sem_trywait(&update_semaphore_) == 0){
                 FreeScheduler<T>::change_partition_scheme();
                 
-                Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
+                Scheduler<T>::store_q_sizes(this->q_size_repartition_end_);
                 
                 sem_post(&continue_reparting_semaphore_);
             }
@@ -79,7 +79,8 @@ public:
             if(
                 this->n_dispatched_requests_ % this->repartition_interval_ == 0
             ) {
-                Scheduler<T>::store_q_sizes(this->q_size_repartition_end_);
+                this->repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
+                Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
 
                 Scheduler<T>::notify_graph(REPART);
             }

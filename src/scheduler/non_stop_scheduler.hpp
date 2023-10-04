@@ -60,7 +60,7 @@ public:
         sem_init(&this->continue_reparting_semaphore_, 0, 0);
         this->reparting_thread_ = std::thread(&FreeScheduler<T>::partitioning_loop, this);
         reparting_ = false;
-        
+
     }
     
     void schedule_and_answer(struct client_message& request) {
@@ -80,6 +80,7 @@ public:
             if(
                 !reparting_
             ) {
+                this->repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
 
                 Scheduler<T>::notify_graph(REPART);
@@ -91,7 +92,7 @@ public:
 public:
 
     bool reparting_;
-
+    
 };
 
 };

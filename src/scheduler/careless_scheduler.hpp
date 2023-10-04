@@ -78,6 +78,7 @@ public:
             if(
                 this->n_dispatched_requests_ % this->repartition_interval_ == 0
             ) {
+                this->repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
 
                 sem_post(&this->repart_semaphore_);

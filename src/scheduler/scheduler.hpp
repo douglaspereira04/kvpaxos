@@ -141,6 +141,10 @@ public:
         return repartition_end_timestamps_;
     }
     
+    const std::vector<time_point>& repartition_notify_timestamp() const {
+        return repartition_notify_timestamp_;
+    }
+    
     void dispatch(struct client_message& request){
 
         auto type = static_cast<request_type>(request.type);
@@ -188,6 +192,7 @@ public:
                 n_dispatched_requests_ % repartition_interval_ == 0
             ) {
                 
+                repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
                 store_q_sizes(q_size_repartition_begin_);
 
                 notify_graph(SYNC);
@@ -398,6 +403,7 @@ public:
     std::vector<std::vector<size_t>> q_size_repartition_end_;
 
     std::vector<duration> reconstruction_duration_;
+    std::vector<time_point> repartition_notify_timestamp_;
 
     
 };

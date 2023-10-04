@@ -239,17 +239,23 @@ run(const toml_config& config)
 	ofs << "Makespan," << makespan.count() << "\n";
 
 	auto& repartition_times = scheduler->repartition_timestamps();
-	ofs << "Repartition Begin,Repartition End,Copy Time,Reconstruction Time,Begin Total Queues Size,End Total Queues Size,Queues Begin-End Sizes\n";
+	ofs << "Scheduler Repartition Time,Repartition Begin,Repartition End,Copy Time,Reconstruction Time,Begin Total Queues Size,End Total Queues Size,Queues Begin-End Sizes\n";
 	
 	auto copy_time_it = scheduler->graph_copy_duration().begin();
 	auto reconstruction_it = scheduler->reconstruction_durations().begin();
 	auto repartition_end_it = scheduler->repartition_end_timestamps().begin();
 	auto q_begin_it = scheduler->q_size_repartition_begin().begin();
 	auto q_end_it = scheduler->q_size_repartition_end().begin();
+	auto repartition_notify_it = scheduler->repartition_notify_timestamp().begin();
 	for (auto& repartition_time : repartition_times) {
 		double end_time = -1;
 		double copy_time = -1;
 		double reconstruction_time = -1;
+		double repartition_notify_time = -1;
+		if(repartition_notify_it != scheduler->repartition_notify_timestamp().end()){
+			repartition_notify_time = (*repartition_notify_it - start_execution_timestamp).count();
+		}
+		repartition_notify_it++;
 		if(copy_time_it != scheduler->graph_copy_duration().end()){
 			copy_time = (*copy_time_it).count();
 		}
@@ -262,7 +268,7 @@ run(const toml_config& config)
 			end_time = (*repartition_end_it - start_execution_timestamp).count();
 		}
 		repartition_end_it++;
-		ofs << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << ","<< reconstruction_time/pow(10,9) << ",";
+		ofs << repartition_notify_time/pow(10,9) << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << ","<< reconstruction_time/pow(10,9) << ",";
 
 		if(q_begin_it != scheduler->q_size_repartition_begin().end() && q_end_it != scheduler->q_size_repartition_end().end()){
 			size_t sum_begin = 0;
