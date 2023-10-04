@@ -7,6 +7,7 @@
 #include <netinet/tcp.h>
 #include <pthread.h>
 #include <queue>
+#include <deque>
 #include <semaphore.h>
 #include <shared_mutex>
 #include <string>
@@ -102,20 +103,20 @@ public:
             sem_wait(&this->graph_requests_semaphore_);
             this->graph_requests_mutex_.lock();
                 auto request = std::move(this->graph_requests_queue_.front());
-                this->graph_requests_queue_.pop();
+                this->graph_requests_queue_.pop_front();
             this->graph_requests_mutex_.unlock();
             
             if (request.type == SYNC) {
                 pthread_barrier_wait(&this->repartition_barrier_);
             }  else if (request.type == REPART) {
 
-                auto begin = std::chrono::system_clock::now();
                 input_graph_mutex_.lock();
+                    auto begin = std::chrono::system_clock::now();
                     delete input_graph_;
                     input_graph_ = new InputGraph<T>(this->workload_graph_);
+                    this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
                 input_graph_mutex_.unlock();
-                this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
-
+                
                 sem_post(&repart_semaphore_);
             } else {
                 Scheduler<T>::update_graph(request);

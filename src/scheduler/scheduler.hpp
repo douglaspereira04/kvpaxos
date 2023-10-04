@@ -7,6 +7,7 @@
 #include <netinet/tcp.h>
 #include <pthread.h>
 #include <queue>
+#include <deque>
 #include <semaphore.h>
 #include <shared_mutex>
 #include <string>
@@ -175,7 +176,7 @@ public:
         
         if (repartition_method_ != model::ROUND_ROBIN) {
             graph_requests_mutex_.lock();
-                graph_requests_queue_.push(request);
+                graph_requests_queue_.push_back(request);
             graph_requests_mutex_.unlock();
             sem_post(&graph_requests_semaphore_);
         
@@ -219,7 +220,7 @@ public:
         sync_message.type = type;
 
         graph_requests_mutex_.lock();
-            graph_requests_queue_.push(sync_message);
+            graph_requests_queue_.push_back(sync_message);
         graph_requests_mutex_.unlock();
         sem_post(&graph_requests_semaphore_);
     }
@@ -293,7 +294,7 @@ public:
             sem_wait(&graph_requests_semaphore_);
             graph_requests_mutex_.lock();
                 auto request = std::move(graph_requests_queue_.front());
-                graph_requests_queue_.pop();
+                graph_requests_queue_.pop_front();
             graph_requests_mutex_.unlock();
 
             if (request.type == SYNC) {
@@ -385,7 +386,7 @@ public:
     std::unordered_map<T, Partition<T>*>* data_to_partition_;
     
     std::thread graph_thread_;
-    std::queue<struct client_message> graph_requests_queue_;
+    std::deque<struct client_message> graph_requests_queue_;
     sem_t graph_requests_semaphore_;
     std::mutex graph_requests_mutex_;
 
