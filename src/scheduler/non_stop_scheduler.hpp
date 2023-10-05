@@ -82,27 +82,12 @@ public:
                 this->repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
 
-                NonStopScheduler<T>::notify_graph(REPART);
+                Scheduler<T>::notify_graph(REPART);
                 reparting_ = true;
             }
         }
     }
-
-    void notify_graph(request_type type){
-        struct client_message sync_message;
-        sync_message.type = type;
-
-        this->graph_requests_mutex_.lock();
-            if(type == REPART){
-                this->graph_requests_queue_.push_front(sync_message);
-            }else{
-                this->graph_requests_queue_.push_back(sync_message);
-            }
-        this->graph_requests_mutex_.unlock();
-
-        sem_post(&this->graph_requests_semaphore_);
-    }
-
+    
 public:
 
     bool reparting_;

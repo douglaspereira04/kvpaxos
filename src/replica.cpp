@@ -227,6 +227,8 @@ run(const toml_config& config)
 	auto start_execution_timestamp = std::chrono::system_clock::now();
 	execute_requests(*scheduler, messages);
 
+	auto end_scheduling = std::chrono::system_clock::now();
+
 	throughput_thread.join();
 	auto end_execution_timestamp = std::chrono::system_clock::now();
 
@@ -236,7 +238,9 @@ run(const toml_config& config)
 
 
     std::ofstream ofs("details.txt", std::ofstream::out);
+	ofs << "Scheduling End," << (end_scheduling - start_execution_timestamp).count() << "\n";
 	ofs << "Makespan," << makespan.count() << "\n";
+	
 
 	auto& repartition_times = scheduler->repartition_timestamps();
 	ofs << "Scheduler Repartition Time,Repartition Begin,Repartition End,Copy Time,Reconstruction Time,Begin Total Queues Size,End Total Queues Size,Queues Begin-End Sizes\n";
