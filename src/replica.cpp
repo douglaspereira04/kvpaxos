@@ -237,7 +237,7 @@ run(const toml_config& config)
 	auto makespan = end_execution_timestamp - start_execution_timestamp;
 
 
-    std::ofstream ofs("details.txt", std::ofstream::out);
+    std::ofstream ofs("details.csv", std::ofstream::out);
 	ofs << "Scheduling End," << (end_scheduling - start_execution_timestamp).count() << "\n";
 	ofs << "Makespan," << makespan.count() << "\n";
 	
