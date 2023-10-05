@@ -54,12 +54,9 @@ public:
         pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
         this->graph_thread_ = std::thread(&Scheduler<T>::update_graph_loop, this);
         
-        sem_init(&this->repart_semaphore_, 0, 0);
         sem_init(&this->schedule_semaphore_, 0, 0);
         sem_init(&this->update_semaphore_, 0, 0);
         sem_init(&this->continue_reparting_semaphore_, 0, 0);
-        this->reparting_thread_ = std::thread(&CarelessScheduler<T>::partitioning_loop, this);
-        
     }
     
     void schedule_and_answer(struct client_message& request) {
@@ -80,38 +77,11 @@ public:
             ) {
                 this->repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
-
-                sem_post(&this->repart_semaphore_);
             }
         }
     }
 
 public:
-
-    void partitioning_loop(){
-        while(true){
-            sem_wait(&this->repart_semaphore_);
-            
-            auto begin = std::chrono::system_clock::now();
-
-            delete this->input_graph_;
-            this->input_graph_ = new InputGraph<T>(this->workload_graph_);
-
-            this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
-
-            auto temp = Scheduler<T>::partitioning(this->input_graph_);
-
-            delete this->updated_data_to_partition_;
-            this->updated_data_to_partition_ = temp;
-
-            auto end_timestamp = std::chrono::system_clock::now();
-            this->repartition_end_timestamps_.push_back(end_timestamp);
-            this->graph_copy_duration_.push_back(std::chrono::nanoseconds::zero());
-            sem_post(&this->update_semaphore_);
-
-            sem_wait(&this->continue_reparting_semaphore_);
-        }
-    }
 
 };
 

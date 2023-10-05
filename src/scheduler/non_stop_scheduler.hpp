@@ -56,11 +56,9 @@ public:
         pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
         this->graph_thread_ = std::thread(&FreeScheduler<T>::update_graph_loop, this);
         
-        sem_init(&this->repart_semaphore_, 0, 0);
         sem_init(&this->schedule_semaphore_, 0, 0);
         sem_init(&this->update_semaphore_, 0, 0);
         sem_init(&this->continue_reparting_semaphore_, 0, 0);
-        this->reparting_thread_ = std::thread(&FreeScheduler<T>::partitioning_loop, this);
         reparting_ = false;
 
     }

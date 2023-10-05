@@ -55,11 +55,9 @@ public:
         pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
         this->graph_thread_ = std::thread(&FreeScheduler<T>::update_graph_loop, this);
         
-        sem_init(&repart_semaphore_, 0, 0);
         sem_init(&schedule_semaphore_, 0, 0);
         sem_init(&update_semaphore_, 0, 0);
         sem_init(&continue_reparting_semaphore_, 0, 0);
-        reparting_thread_ = std::thread(&FreeScheduler<T>::partitioning_loop, this);
         
     }
     
@@ -109,51 +107,29 @@ public:
             if (request.type == SYNC) {
                 pthread_barrier_wait(&this->repartition_barrier_);
             }  else if (request.type == REPART) {
-
-                input_graph_mutex_.lock();
                     auto begin = std::chrono::system_clock::now();
-                    delete input_graph_;
-                    input_graph_ = new InputGraph<T>(this->workload_graph_);
+                    InputGraph<T> *input_graph_ = new InputGraph<T>(this->workload_graph_);
                     this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
-                input_graph_mutex_.unlock();
                 
-                sem_post(&repart_semaphore_);
+                    delete updated_data_to_partition_;
+                    updated_data_to_partition_ = Scheduler<T>::partitioning(input_graph_);
+                    
+                    sem_post(&update_semaphore_);
+                    sem_wait(&continue_reparting_semaphore_);
             } else {
                 Scheduler<T>::update_graph(request);
             }
         }
     }
 
-    void partitioning_loop(){
-        while(true){
-            sem_wait(&repart_semaphore_);
-            
-            delete updated_data_to_partition_;
-
-            input_graph_mutex_.lock();
-                auto temp = Scheduler<T>::partitioning(input_graph_);
-            input_graph_mutex_.unlock();
-            
-            updated_data_to_partition_ = temp;
-            sem_post(&update_semaphore_);
-
-            sem_wait(&continue_reparting_semaphore_);
-        }
-    }
-
 public:
     std::unordered_map<T, Partition<T>*>* updated_data_to_partition_;
-    InputGraph<T> *input_graph_ = new InputGraph<T>();
 
-    sem_t repart_semaphore_;
     sem_t schedule_semaphore_;
     sem_t update_semaphore_;
     sem_t continue_reparting_semaphore_;
 
-    std::mutex input_graph_mutex_;
     std::mutex update_mutex_;
-
-    std::thread reparting_thread_;
     
 };
 
