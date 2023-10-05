@@ -62,6 +62,9 @@
 #elif defined(NON_STOP)
 	#include "scheduler/non_stop_scheduler.hpp"
 	#define Scheduler NonStopScheduler
+#elif defined(NON_STOP_JUMP)
+	#include "scheduler/non_stop_jump_scheduler.hpp"
+	#define Scheduler NonStopJumpScheduler
 #else
 	#include "scheduler/scheduler.hpp"
 #endif

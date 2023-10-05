@@ -1,5 +1,5 @@
-#ifndef _KVPAXOS_NON_STOP_SCHEDULER_H_
-#define _KVPAXOS_NON_STOP_SCHEDULER_H_
+#ifndef _KVPAXOS_NON_STOP_JUMP_SCHEDULER_H_
+#define _KVPAXOS_NON_STOP_JUMP_SCHEDULER_H_
 
 
 #include <condition_variable>
@@ -25,18 +25,18 @@
 #include "types/types.h"
 #include "scheduler.hpp"
 #include "free_scheduler.hpp"
+#include "non_stop_scheduler.hpp"
 
 
 namespace kvpaxos {
 
 
 template <typename T>
-class NonStopScheduler : public FreeScheduler<T> {
+class NonStopJumpScheduler : public NonStopScheduler<T> {
 
 public:
 
-    NonStopScheduler() {}
-    NonStopScheduler(int n_requests,
+    NonStopJumpScheduler(int n_requests,
                 int repartition_interval,
                 int n_partitions,
                 model::CutMethod repartition_method
@@ -61,7 +61,7 @@ public:
         sem_init(&this->update_semaphore_, 0, 0);
         sem_init(&this->continue_reparting_semaphore_, 0, 0);
         this->reparting_thread_ = std::thread(&FreeScheduler<T>::partitioning_loop, this);
-        reparting_ = false;
+        this->reparting_ = false;
 
     }
     
@@ -76,22 +76,32 @@ public:
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_end_);
 
                 sem_post(&this->continue_reparting_semaphore_);
-                reparting_ = false;
+                this->reparting_ = false;
             } 
             
-            if(!reparting_) {
+            if(!this->reparting_) {
                 this->repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
                 Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
 
-                Scheduler<T>::notify_graph(REPART);
-                reparting_ = true;
+                NonStopJumpScheduler<T>::notify_graph(REPART);
+                this->reparting_ = true;
             }
         }
     }
-    
-public:
 
-    bool reparting_;
+    void notify_graph(request_type type){
+        struct client_message sync_message;
+        sync_message.type = type;
+
+        this->graph_requests_mutex_.lock();
+            if(type == REPART){
+                this->graph_requests_queue_.push_front(sync_message);
+            }else{
+                this->graph_requests_queue_.push_back(sync_message);
+            }
+        this->graph_requests_mutex_.unlock();
+        sem_post(&this->graph_requests_semaphore_);
+    }
     
 };
 
