@@ -246,7 +246,7 @@ run(const toml_config& config)
 	
 
 	auto& repartition_times = scheduler->repartition_timestamps();
-	ofs << "Scheduler Repartition Time,Repartition Begin,Repartition End,Copy Time,Reconstruction Time,Begin Total Queues Size,End Total Queues Size,Queues Begin-End Sizes\n";
+	ofs << "Scheduler Repartition Time,Repartition Begin,Repartition End,Copy Time,Reconstruction Time,Begin Graph Queue Size,Graph Updates,Begin Total Queues Size,End Total Queues Size,Queues Begin-End Sizes\n";
 	
 	auto copy_time_it = scheduler->graph_copy_duration().begin();
 	auto reconstruction_it = scheduler->reconstruction_durations().begin();
@@ -254,19 +254,31 @@ run(const toml_config& config)
 	auto q_begin_it = scheduler->q_size_repartition_begin().begin();
 	auto q_end_it = scheduler->q_size_repartition_end().begin();
 	auto repartition_notify_it = scheduler->repartition_notify_timestamp().begin();
+	auto graph_q_size_it = scheduler->graph_queue_sizes().begin();
+	auto graph_updates_it = scheduler->graph_updates().begin();
 	for (auto& repartition_time : repartition_times) {
 		double end_time = -1;
 		double copy_time = -1;
 		double reconstruction_time = -1;
 		double repartition_notify_time = -1;
+		size_t graph_q_size = -1;
+		size_t graph_updates = -1;
 		if(repartition_notify_it != scheduler->repartition_notify_timestamp().end()){
 			repartition_notify_time = (*repartition_notify_it - start_execution_timestamp).count();
 		}
 		repartition_notify_it++;
+		if(graph_q_size_it != scheduler->graph_queue_sizes().end()){
+			graph_q_size = (*graph_q_size_it);
+		}
+		graph_q_size_it++;
 		if(copy_time_it != scheduler->graph_copy_duration().end()){
 			copy_time = (*copy_time_it).count();
 		}
 		copy_time_it++;
+		if(graph_updates_it != scheduler->graph_updates().end()){
+			graph_updates = (*graph_updates_it);
+		}
+		graph_updates_it++;
 		if(reconstruction_it != scheduler->reconstruction_durations().end()){
 			reconstruction_time = (*reconstruction_it).count();
 		}
@@ -275,7 +287,7 @@ run(const toml_config& config)
 			end_time = (*repartition_end_it - start_execution_timestamp).count();
 		}
 		repartition_end_it++;
-		ofs << repartition_notify_time/pow(10,9) << "," << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << ","<< reconstruction_time/pow(10,9) << ",";
+		ofs << repartition_notify_time/pow(10,9) << "," << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << ","<< reconstruction_time/pow(10,9) << "," << graph_q_size << "," << graph_updates <<",";
 
 		if(q_begin_it != scheduler->q_size_repartition_begin().end() && q_end_it != scheduler->q_size_repartition_end().end()){
 			size_t sum_begin = 0;

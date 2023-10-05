@@ -80,12 +80,12 @@ public:
         return n_executed_requests;
     }
     
-    int graph_queue_size(){
-        graph_requests_mutex_.lock();
-        int size = graph_requests_queue_.size();
-
-        graph_requests_mutex_.unlock();
-        return size;
+    std::vector<size_t> &graph_queue_sizes(){
+        return graph_queue_sizes_;
+    }
+    
+    std::vector<size_t> &graph_updates(){
+        return graph_updates_;
     }
 
     int graph_vertices(){
@@ -196,8 +196,14 @@ public:
                 repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
                 store_q_sizes(q_size_repartition_begin_);
 
+
                 notify_graph(SYNC);
                 pthread_barrier_wait(&repartition_barrier_);
+                
+                graph_updates_.push_back(updates_);
+                updates_ = 0;
+                auto graph_queue_size = graph_requests_queue_.size();
+                graph_queue_sizes_.push_back(graph_queue_size);
 
                 auto begin = std::chrono::system_clock::now();
                 auto input_graph = new InputGraph<T>(workload_graph_);
@@ -292,6 +298,7 @@ public:
     void update_graph_loop() {
         while(true) {
             sem_wait(&graph_requests_semaphore_);
+
             graph_requests_mutex_.lock();
                 auto request = std::move(graph_requests_queue_.front());
                 graph_requests_queue_.pop_front();
@@ -302,6 +309,8 @@ public:
             } else {
                 update_graph(request);
             }
+            
+            updates_++;
         }
     }
 
@@ -405,8 +414,11 @@ public:
 
     std::vector<duration> reconstruction_duration_;
     std::vector<time_point> repartition_notify_timestamp_;
+    std::vector<size_t> graph_queue_sizes_;
 
-    
+    size_t updates_ = 0;
+    std::vector<size_t> graph_updates_;
+
 };
 
 };

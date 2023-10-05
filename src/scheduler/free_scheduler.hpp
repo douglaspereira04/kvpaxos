@@ -107,18 +107,27 @@ public:
             if (request.type == SYNC) {
                 pthread_barrier_wait(&this->repartition_barrier_);
             }  else if (request.type == REPART) {
-                    auto begin = std::chrono::system_clock::now();
-                    InputGraph<T> *input_graph_ = new InputGraph<T>(this->workload_graph_);
-                    this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
+
+                this->graph_updates_.push_back(this->updates_);
+                this->updates_ = 0;
+
+                auto graph_queue_size = this->graph_requests_queue_.size();
+                this->graph_queue_sizes_.push_back(graph_queue_size);
+
+                auto begin = std::chrono::system_clock::now();
+                InputGraph<T> *input_graph_ = new InputGraph<T>(this->workload_graph_);
+                this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
+            
+                delete updated_data_to_partition_;
+                updated_data_to_partition_ = Scheduler<T>::partitioning(input_graph_);
                 
-                    delete updated_data_to_partition_;
-                    updated_data_to_partition_ = Scheduler<T>::partitioning(input_graph_);
-                    
-                    sem_post(&update_semaphore_);
-                    sem_wait(&continue_reparting_semaphore_);
+                sem_post(&update_semaphore_);
+                sem_wait(&continue_reparting_semaphore_);
             } else {
                 Scheduler<T>::update_graph(request);
             }
+            
+            this->updates_++;
         }
     }
 
