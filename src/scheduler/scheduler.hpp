@@ -206,10 +206,10 @@ public:
                 graph_queue_sizes_.push_back(graph_queue_size);
 
                 auto begin = std::chrono::system_clock::now();
-                auto input_graph = new InputGraph<T>(workload_graph_);
+                InputGraph<T> input_graph(workload_graph_);
                 graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
-                auto temp = partitioning(input_graph);
+                auto temp = partitioning(&input_graph);
                 delete data_to_partition_;
                 data_to_partition_ = temp;
 
