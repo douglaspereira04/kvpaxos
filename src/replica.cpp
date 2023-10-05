@@ -272,7 +272,7 @@ run(const toml_config& config)
 			end_time = (*repartition_end_it - start_execution_timestamp).count();
 		}
 		repartition_end_it++;
-		ofs << repartition_notify_time/pow(10,9) << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << ","<< reconstruction_time/pow(10,9) << ",";
+		ofs << repartition_notify_time/pow(10,9) << "," << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9) << ","<< reconstruction_time/pow(10,9) << ",";
 
 		if(q_begin_it != scheduler->q_size_repartition_begin().end() && q_end_it != scheduler->q_size_repartition_end().end()){
 			size_t sum_begin = 0;
