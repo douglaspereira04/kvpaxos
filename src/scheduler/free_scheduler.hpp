@@ -110,6 +110,12 @@ public:
                 pthread_barrier_wait(&this->repartition_barrier_);
             }  else if (request.type == REPART) {
 
+                this->graph_updates_.push_back(this->updates_);
+                this->updates_ = 0;
+
+                auto graph_queue_size = this->graph_requests_queue_.size();
+                this->graph_queue_sizes_.push_back(graph_queue_size);
+
                 input_graph_mutex_.lock();
                     auto begin = std::chrono::system_clock::now();
                     delete input_graph_;
@@ -121,6 +127,8 @@ public:
             } else {
                 Scheduler<T>::update_graph(request);
             }
+            
+            this->updates_++;
         }
     }
 
