@@ -130,12 +130,12 @@ initialize_scheduler(
 	);
 	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
 
-	std::vector<workload::Request> populate_requests;
 	for (auto i = 0; i <= n_initial_keys; i++) {
-		populate_requests.emplace_back(WRITE, i, "");
+		struct client_message client_message;
+		client_message.key = i;
+		scheduler->process_populate_request(client_message);
 	}
-
-	scheduler->process_populate_requests(populate_requests);
+	scheduler->wait_populate();
 
 	scheduler->run();
 	return scheduler;

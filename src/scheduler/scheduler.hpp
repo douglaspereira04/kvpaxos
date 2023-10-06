@@ -58,11 +58,22 @@ public:
         delete data_to_partition_;
     }
 
-    void process_populate_requests(const std::vector<workload::Request>& requests) {
-        for (auto& request : requests) {
-            add_key(request.key());
+    void process_populate_request(struct client_message& request) {
+        add_key(request.key);
+
+        if (repartition_method_ != model::ROUND_ROBIN) {
+            graph_requests_mutex_.lock();
+                graph_requests_queue_.push_back(request);
+            graph_requests_mutex_.unlock();
+            sem_post(&graph_requests_semaphore_);
         }
-        Partition<T>::populate_storage(requests);
+
+        Partition<T>::populate_storage(request);
+    }
+
+    void wait_populate(){
+        notify_graph(SYNC);
+        pthread_barrier_wait(&repartition_barrier_);
     }
 
     void run() {
