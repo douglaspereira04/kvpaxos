@@ -58,6 +58,12 @@ public:
         }
     }
 
+    static void populate_storage(struct client_message& request) {
+        auto key = request.key;
+        std::string request_args = "";
+        storage_.write(key, request_args);
+    }
+
     void start_worker_thread() {
         sem_init(&semaphore_, 0, 0);
         worker_thread_ = std::thread(&Partition<T>::thread_loop, this);
