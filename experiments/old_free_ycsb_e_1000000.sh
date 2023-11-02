@@ -1,7 +1,7 @@
 #!/bin/bash
 methods=(METIS)
-partitions=(8 4 2)
-versions=(old free)
+partitions=(8 2)
+versions=(free)
 workloads=(ycsb_e)
 n_initial_keys=(1000000)
 repartition_intervals=(100000 500000 1000000)
