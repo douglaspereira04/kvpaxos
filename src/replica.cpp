@@ -259,6 +259,9 @@ run(const toml_config& config)
 		if(repartition_notify_it != scheduler->repartition_notify_timestamp().end()){
 			repartition_notify_time = (*repartition_notify_it - start_execution_timestamp).count();
 		}
+		if(copy_time_it != scheduler->graph_copy_duration().end()){
+			copy_time = (*copy_time_it).count();
+		}
 		copy_time_it++;
 		if(repartition_end_it != scheduler->repartition_end_timestamps().end()){
 			end_time = (*repartition_end_it - start_execution_timestamp).count();
@@ -273,7 +276,7 @@ run(const toml_config& config)
 	ofs << std::endl;
 	ofs.flush();
     ofs.close();
-	//exit(EXIT_SUCCESS);
+	exit(EXIT_SUCCESS);
 }
 
 static void
