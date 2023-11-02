@@ -73,15 +73,12 @@ public:
             if(sem_trywait(&this->update_semaphore_) == 0){
                 FreeScheduler<T>::change_partition_scheme();
 
-                Scheduler<T>::store_q_sizes(this->q_size_repartition_end_);
-
                 sem_post(&this->continue_reparting_semaphore_);
                 this->reparting_ = false;
             } 
             
             if(!this->reparting_) {
                 this->repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
-                Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
 
                 NonStopJumpScheduler<T>::notify_graph(REPART);
                 this->reparting_ = true;

@@ -90,14 +90,6 @@ public:
         }
         return n_executed_requests;
     }
-    
-    std::vector<size_t> &graph_queue_sizes(){
-        return graph_queue_sizes_;
-    }
-    
-    std::vector<size_t> &graph_updates(){
-        return graph_updates_;
-    }
 
     int graph_vertices(){
         graph_requests_mutex_.lock();
@@ -119,34 +111,12 @@ public:
         return n_dispatched_requests_;
     }
 
-    void store_q_sizes(std::vector<std::vector<size_t>> &v){
-        std::vector<size_t> sizes;
-        for (size_t i = 0; i < n_partitions_; i++)
-        {
-            sizes.push_back(partitions_[i]->request_queue_size());
-        }
-        v.push_back(sizes);
-    }
-
     const std::vector<time_point>& repartition_timestamps() const {
         return repartition_timestamps_;
     }
 
-    std::vector<std::vector<size_t>> &q_size_repartition_begin(){
-        return q_size_repartition_begin_;
-    }
-
-    std::vector<std::vector<size_t>>& q_size_repartition_end(){
-        return q_size_repartition_end_;
-    }
-
-
     const std::vector<duration>& graph_copy_duration() const {
         return graph_copy_duration_;
-    }
-
-    const std::vector<duration>& reconstruction_durations() const {
-        return reconstruction_duration_;
     }
 
     const std::vector<time_point>& repartition_end_timestamps() const {
@@ -203,18 +173,10 @@ public:
             if (
                 n_dispatched_requests_ % repartition_interval_ == 0
             ) {
-                
                 repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
-                store_q_sizes(q_size_repartition_begin_);
-
 
                 notify_graph(SYNC);
                 pthread_barrier_wait(&repartition_barrier_);
-                
-                graph_updates_.push_back(updates_);
-                updates_ = 0;
-                auto graph_queue_size = graph_requests_queue_.size();
-                graph_queue_sizes_.push_back(graph_queue_size);
 
                 auto begin = std::chrono::system_clock::now();
                 auto input_graph = new InputGraph<T>(workload_graph_);
@@ -225,8 +187,6 @@ public:
                 data_to_partition_ = temp;
 
                 sync_all_partitions();
-
-                store_q_sizes(q_size_repartition_end_);
             }
         }
     }
@@ -320,8 +280,6 @@ public:
             } else {
                 update_graph(request);
             }
-            
-            updates_++;
         }
     }
 
@@ -373,7 +331,6 @@ public:
         repartition_end_timestamps_.push_back(end_timestamp);
 
 
-        auto reconstruction_begin = std::chrono::system_clock::now();
         auto data_to_partition = new std::unordered_map<T, Partition<T>*>();
         
         for (auto& it : graph->vertice_to_pos) {
@@ -388,8 +345,6 @@ public:
             data_to_partition->emplace(key, partitions_.at(partition));
         }
 
-        reconstruction_duration_.push_back(std::chrono::system_clock::now() - reconstruction_begin);
-        
         if (first_repartition) {
             first_repartition = false;
         }
@@ -420,15 +375,7 @@ public:
     bool first_repartition = true;
     pthread_barrier_t repartition_barrier_;
 
-    std::vector<std::vector<size_t>> q_size_repartition_begin_;
-    std::vector<std::vector<size_t>> q_size_repartition_end_;
-
-    std::vector<duration> reconstruction_duration_;
     std::vector<time_point> repartition_notify_timestamp_;
-    std::vector<size_t> graph_queue_sizes_;
-
-    size_t updates_ = 0;
-    std::vector<size_t> graph_updates_;
 
 };
 

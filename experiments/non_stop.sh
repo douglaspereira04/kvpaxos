@@ -1,5 +1,5 @@
 #!/bin/bash
-methods=(KAHIP)
+methods=(METIS)
 partitions=(8 4 2)
 versions=(non_stop non_stop_jump)
 workloads=(ycsb_a ycsb_d ycsb_e)

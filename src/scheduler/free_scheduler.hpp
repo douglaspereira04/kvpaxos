@@ -71,17 +71,13 @@ public:
 
             if(sem_trywait(&update_semaphore_) == 0){
                 FreeScheduler<T>::change_partition_scheme();
-                
-                Scheduler<T>::store_q_sizes(this->q_size_repartition_end_);
-                
+
                 sem_post(&continue_reparting_semaphore_);
             }
-            
             if(
                 this->n_dispatched_requests_ % this->repartition_interval_ == 0
             ) {
                 this->repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
-                Scheduler<T>::store_q_sizes(this->q_size_repartition_begin_);
 
                 Scheduler<T>::notify_graph(REPART);
             }
@@ -110,12 +106,6 @@ public:
                 pthread_barrier_wait(&this->repartition_barrier_);
             }  else if (request.type == REPART) {
 
-                this->graph_updates_.push_back(this->updates_);
-                this->updates_ = 0;
-
-                auto graph_queue_size = this->graph_requests_queue_.size();
-                this->graph_queue_sizes_.push_back(graph_queue_size);
-
                 input_graph_mutex_.lock();
                     auto begin = std::chrono::system_clock::now();
                     delete input_graph_;
@@ -127,8 +117,6 @@ public:
             } else {
                 Scheduler<T>::update_graph(request);
             }
-            
-            this->updates_++;
         }
     }
 

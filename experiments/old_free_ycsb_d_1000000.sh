@@ -1,10 +1,10 @@
 #!/bin/bash
-methods=(KAHIP)
+methods=(METIS)
 partitions=(8 4 2)
 versions=(old free)
 workloads=(ycsb_d)
 n_initial_keys=(1000000)
-repartition_intervals=(100000 500000 1000000 5000000 10000000)
+repartition_intervals=(100000 500000 1000000)
 reps=1
 
 for w in "${workloads[@]}"; do
