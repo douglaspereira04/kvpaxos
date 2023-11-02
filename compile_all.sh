@@ -1,13 +1,10 @@
 #!/bin/bash
 
-./compile.sh TBB OLD OLD_GRAPH
+./compile.sh FELDMAN OLD OLD_GRAPH
 mv ./build/bin/replica ./build/bin/old
 
-./compile.sh TBB FREE OLD_GRAPH
+./compile.sh FELDMAN FREE OLD_GRAPH
 mv ./build/bin/replica ./build/bin/free
 
-./compile.sh TBB NON_STOP OLD_GRAPH
+./compile.sh FELDMAN NON_STOP OLD_GRAPH
 mv ./build/bin/replica ./build/bin/non_stop
-
-./compile.sh TBB NON_STOP_JUMP OLD_GRAPH
-mv ./build/bin/replica ./build/bin/non_stop_jump

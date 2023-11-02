@@ -20,6 +20,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <tbb/concurrent_queue.h>
 
 #include "graph/graph.hpp"
 #include "request/request.hpp"
@@ -69,18 +70,8 @@ public:
         worker_thread_ = std::thread(&Partition<T>::thread_loop, this);
     }
 
-    size_t request_queue_size() {
-        size_t size;
-        queue_mutex_.lock();
-            size = requests_queue_.size();
-        queue_mutex_.unlock();
-        return size;
-    }
-
     void push_request(struct client_message request) {
-        queue_mutex_.lock();
-            requests_queue_.push(std::move(request));
-        queue_mutex_.unlock();
+        requests_queue_.push(std::move(request));
         sem_post(&semaphore_);
     }
 
@@ -152,11 +143,8 @@ private:
             if (not executing_) {
                 return;
             }
-
-            queue_mutex_.lock();
-                auto request = std::move(requests_queue_.front());
-                requests_queue_.pop();
-            queue_mutex_.unlock();
+            client_message request; 
+            requests_queue_.try_pop(request);
 
             auto type = static_cast<request_type>(request.type);
             auto key = request.key;
@@ -228,7 +216,7 @@ private:
     bool executing_;
     std::thread worker_thread_;
     sem_t semaphore_;
-    std::queue<struct client_message> requests_queue_;
+    tbb::concurrent_queue<struct client_message> requests_queue_;
     std::mutex queue_mutex_;
 
     int total_weight_ = 0;

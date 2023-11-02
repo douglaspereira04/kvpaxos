@@ -43,9 +43,9 @@ public:
     
 private:
 #if defined(MICHAEL)
-    storage_t storage_ = storage_t(2048,1);
+    storage_t storage_ = storage_t(1048576,1);
 #elif defined(FELDMAN)
-    storage_t storage_ = storage_t(8,8);
+    storage_t storage_ = storage_t(16,8);
 #elif defined(TBB)
     storage_t storage_ = storage_t();
 #else

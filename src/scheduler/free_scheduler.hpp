@@ -97,10 +97,8 @@ public:
     void update_graph_loop() {
         while(true) {
             sem_wait(&this->graph_requests_semaphore_);
-            this->graph_requests_mutex_.lock();
-                auto request = std::move(this->graph_requests_queue_.front());
-                this->graph_requests_queue_.pop_front();
-            this->graph_requests_mutex_.unlock();
+            client_message request;
+            this->graph_requests_queue_.try_pop(request);
             
             if (request.type == SYNC) {
                 pthread_barrier_wait(&this->repartition_barrier_);

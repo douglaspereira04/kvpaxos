@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <tbb/concurrent_queue.h>
 
 #include "input_graph.hpp"
 #include "graph/graph.hpp"
@@ -62,9 +63,7 @@ public:
         add_key(request.key);
 
         if (repartition_method_ != model::ROUND_ROBIN) {
-            graph_requests_mutex_.lock();
-                graph_requests_queue_.push_back(request);
-            graph_requests_mutex_.unlock();
+            graph_requests_queue_.push(request);
             sem_post(&graph_requests_semaphore_);
         }
 
@@ -92,18 +91,12 @@ public:
     }
 
     int graph_vertices(){
-        graph_requests_mutex_.lock();
         int size = workload_graph_.n_vertex();
-
-        graph_requests_mutex_.unlock();
         return size;
     }
 
     int graph_edges(){
-        graph_requests_mutex_.lock();
         int size = workload_graph_.n_edges();
-
-        graph_requests_mutex_.unlock();
         return size;
     }
 
@@ -156,9 +149,7 @@ public:
         }
         
         if (repartition_method_ != model::ROUND_ROBIN) {
-            graph_requests_mutex_.lock();
-                graph_requests_queue_.push_back(request);
-            graph_requests_mutex_.unlock();
+            graph_requests_queue_.push(request);
             sem_post(&graph_requests_semaphore_);
         
             n_dispatched_requests_++;
@@ -196,9 +187,7 @@ public:
         struct client_message sync_message;
         sync_message.type = type;
 
-        graph_requests_mutex_.lock();
-            graph_requests_queue_.push_back(sync_message);
-        graph_requests_mutex_.unlock();
+        graph_requests_queue_.push(sync_message);
         sem_post(&graph_requests_semaphore_);
     }
 
@@ -269,11 +258,8 @@ public:
     void update_graph_loop() {
         while(true) {
             sem_wait(&graph_requests_semaphore_);
-
-            graph_requests_mutex_.lock();
-                auto request = std::move(graph_requests_queue_.front());
-                graph_requests_queue_.pop_front();
-            graph_requests_mutex_.unlock();
+            client_message request;
+            graph_requests_queue_.try_pop(request);
 
             if (request.type == SYNC) {
                 pthread_barrier_wait(&repartition_barrier_);
@@ -356,14 +342,12 @@ public:
     int round_robin_counter_ = 0;
     int sync_counter_ = 0;
     int n_dispatched_requests_ = 0;
-    kvstorage::Storage storage_;
     std::unordered_map<int, Partition<T>*> partitions_;
     std::unordered_map<T, Partition<T>*>* data_to_partition_;
     
     std::thread graph_thread_;
-    std::deque<struct client_message> graph_requests_queue_;
+    tbb::concurrent_queue<struct client_message> graph_requests_queue_;
     sem_t graph_requests_semaphore_;
-    std::mutex graph_requests_mutex_;
 
     std::vector<time_point> repartition_timestamps_;
     std::vector<duration> graph_copy_duration_;
