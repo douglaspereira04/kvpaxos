@@ -4,7 +4,7 @@ partitions=(8 2)
 versions=(free)
 workloads=(ycsb_d)
 n_initial_keys=(1000000)
-repartition_intervals=(100000 500000 1000000)
+repartition_intervals=(100000 500000 1000000 5000000 10000000)
 reps=1
 
 for w in "${workloads[@]}"; do
@@ -29,6 +29,7 @@ for i in $(seq $reps); do
 							if [ ! -f "output/${w}/${m}/${initial}_${deltap}_${v}_${p}_${i}.csv" ]; then
 								./${v} configs/config.toml ${p} ${initial} ${deltap} ${m} ${w}_${initial}_requests.txt > output/${w}/${m}/${initial}_${deltap}_${v}_${p}_${i}.csv
 								mv details.csv output/${w}/${m}/details_${initial}_${deltap}_${v}_${p}_${i}.csv
+								cp -r output /users/douglasp/nonblocking/
 							fi
 						done;
 					done;
