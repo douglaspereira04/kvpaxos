@@ -1,6 +1,6 @@
 #!/bin/bash
 methods=(METIS)
-partitions=(8 2)
+partitions=(8)
 versions=(old)
 workloads=(ycsb_e)
 n_initial_keys=(1000000)
