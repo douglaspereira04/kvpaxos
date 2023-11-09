@@ -259,6 +259,7 @@ run(const toml_config& config)
 		if(repartition_notify_it != scheduler->repartition_notify_timestamp().end()){
 			repartition_notify_time = (*repartition_notify_it - start_execution_timestamp).count();
 		}
+		repartition_notify_time++;
 		if(copy_time_it != scheduler->graph_copy_duration().end()){
 			copy_time = (*copy_time_it).count();
 		}
