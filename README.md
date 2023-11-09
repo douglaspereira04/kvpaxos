@@ -11,7 +11,7 @@ The experiments where executed in Ubuntu 22.04 64 bits. To make sure you have al
 apt install make cmake libtbb-dev libmsgpack-dev libevent-dev mpich pip libboost-all-dev git -y
 pip install conan==1.59
 ```
-Also, install LibCDS 2.3.3 from [](https://github.com/khizmax/libcds.git), and make sure Conan executable path is present in PATH environment variable.
+Also, install LibCDS 2.3.3 from [here](https://github.com/khizmax/libcds.git), and make sure Conan executable path is present in PATH environment variable.
 
 To compile, run compile_all.sh script.
 After that, scripts for each experiment can be executed in build/bin foulder
