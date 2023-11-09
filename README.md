@@ -4,8 +4,17 @@ KVPaxos is a key-value distributed storage system that uses Paxos and Parallel S
 
 KVPaxos is a prototype and so it does not cover many corner and common cases, it should not be used as it is in a real deploy context, but can be used as a starting point to other projects.
 
-
 ## Build
+
+The experiments where executed in Ubuntu 22.04 64 bits. To make sure you have all dependencies needed, run:
+```
+apt install make cmake libtbb-dev libmsgpack-dev libevent-dev mpich pip libboost-all-dev git -y
+pip install conan==1.59
+```
+Also, install LibCDS 2.3.3 from [](https://github.com/khizmax/libcds.git), and make sure Conan executable path is present in PATH environment variable.
+
+To compile, run compile_all.sh script.
+After that, scripts for each experiment can be executed in build/bin foulder
 
 CMake is used to build the project, along with Conan to control dependecies. Conan downloads the following dependencies:
 
@@ -17,80 +26,10 @@ Dependencies not present in Conan are added as submodules, so make sure to recur
 
 Conan only controls dependecies that are directly used by KVPaxos, dependecies used by submodules need to be installed separately. The submodules and their dependecies are:
 
-* LibPaxos
-    * LibEvent 2+
-* KaHIP
-    * Scons
-    * Argtable
-    * OpenMPI
-* METIS
-    * No external dependencies to download.
-
-Help would be appreciated in order to make Conan include those packages and link them to the submodules, preferably without making changes directly to submodules :).
-
 ## Usage
 
-Inside the build folder, a folder `bin` will have the two executables, the replica and the client. The replica is started as follows:
+In build/bin execute one of the scripts. The script generates the workload and executes the tests of a given implementation under a given workload.
 
-```
-    ./replica id path_to_config
-```
+## Output
 
-The arguments are:
-* id - Replica's id.
-* path_to_config - Path to toml configuration file. It must specify the path to paxo's configuration file, path to requests (it can be an empty string), repartition method and repartition interval.
-
-The client is started as follows:
-
-```
-    ./client reply_port path_to_config [-v]
-```
-
-The arguments are:
-* reply_port - Port in which the client will listen to replies from the replica.
-* path_to_config - Path to toml configuration file. It must specify the path to paxo's configuration file, path to requests, id of the proposer the client should connect to, and the percentage of request to have their answer printed.
-* -v - Print full information of all recieved answers.
-
-A single configuration file can be used to both client and replica, and it looks like this:
-
-```
-    paxos_config = "../paxos.conf"
-    requests_path = "../../requests.toml"
-    repartition_method = "KAHIP"
-    repartition_interval = 1000
-    proposer_id = 0
-    print_percentage = 10
-```
-
-Paths can be absolute or relative to the directory you're calling the code from.
-
-A paxos configuration file specifies Paxos characteristics, such as number of replicas and their addresses. An exemple of a configuration file can be found on the LibPaxos project, [here](https://github.com/gabrieltron/libpaxos/blob/master/paxos.conf).
-
-A request's file is a file that specifies the requests to be sent from the client to the replica. They are toml files separated in two lists, load requests and requests. Client will wait the answer of all load requests, that populates de storage, before sending the other requests. The file format is as follows the exemple:
-
-```
-load_requests = [
-["1", "0", ""],
-["1", "1", ""],
-["1", "2", ""],
-["1", "3", ""],
-["1", "4", ""],
-]
-requests = [
-["0", "2", ""],
-["1", "0", ""],
-["2", "0", "3"],
-["2", "0", "3"],
-["2", "0", "3"],
-]
-```
-The first field is the operation, they can be:
-* 0 - READ;
-* 1 - WRITE;
-* 2 - SCAN;
-
-The second field is the key where the operation will be performed, and the third is used to pass args, such as scan length.
-
-### Output
-The client will output message's delay, if `-v` is used, in a CSV format, where the first column is EPOCH and the second is the delay.
-The replica will output throughput, always in a CSV format, where the first column is EPOCH and the second is the delay.
+The build/bin/output directory will contain the results of the experiments, divided in subfolders. Each experiment creates two CSV files, one containing throughput information along the execution, and other, prefixed with "details_", containg information about the scheduler and partitioner.

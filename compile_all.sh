@@ -11,3 +11,5 @@ mv ./build/bin/replica ./build/bin/non_stop
 
 ./compile.sh TBB NON_STOP_JUMP OLD_GRAPH
 mv ./build/bin/replica ./build/bin/non_stop_jump
+
+cp -r experiments/* build/bin/
