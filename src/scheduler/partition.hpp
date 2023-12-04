@@ -29,7 +29,7 @@
 
 namespace kvpaxos {
 
-template <typename T>
+template <typename T, size_t Capacity = 0>
 class Partition {
 public:
     Partition(int id)
@@ -66,7 +66,10 @@ public:
 
     void start_worker_thread() {
         sem_init(&semaphore_, 0, 0);
-        worker_thread_ = std::thread(&Partition<T>::thread_loop, this);
+        if constexpr(Capacity > 0){
+            sem_init(&remaining_space_, 0, Capacity);
+        }
+        worker_thread_ = std::thread(&Partition<T, Capacity>::thread_loop, this);
     }
 
     size_t request_queue_size() {
@@ -78,6 +81,9 @@ public:
     }
 
     void push_request(struct client_message request) {
+        if constexpr(Capacity > 0){
+            sem_wait(&remaining_space_);
+        }
         queue_mutex_.lock();
             requests_queue_.push(std::move(request));
         queue_mutex_.unlock();
@@ -157,6 +163,9 @@ private:
                 auto request = std::move(requests_queue_.front());
                 requests_queue_.pop();
             queue_mutex_.unlock();
+            if constexpr(Capacity > 0){
+                sem_post(&remaining_space_);
+            }
 
             auto type = static_cast<request_type>(request.type);
             auto key = request.key;
@@ -233,10 +242,12 @@ private:
 
     int total_weight_ = 0;
     std::unordered_map<T, int> weight_;
+
+    sem_t remaining_space_;
 };
 
-template<typename T>
-kvstorage::Storage Partition<T>::storage_;
+template<typename T, size_t Capacity>
+kvstorage::Storage Partition<T, Capacity>::storage_;
 
 }
 

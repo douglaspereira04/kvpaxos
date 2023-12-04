@@ -28,7 +28,7 @@
 
 namespace kvpaxos {
 
-template <typename T>
+template <typename T, size_t WorkerCapacity = 0>
 class Scheduler {
 public:
     Scheduler(){}
@@ -41,14 +41,14 @@ public:
         repartition_method_{repartition_method}
     {
         for (auto i = 0; i < n_partitions_; i++) {
-            auto* partition = new Partition<T>(i);
+            auto* partition = new Partition<T, WorkerCapacity>(i);
             partitions_.emplace(i, partition);
         }
-        data_to_partition_ = new std::unordered_map<T, Partition<T>*>();
+        data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
         sem_init(&graph_requests_semaphore_, 0, 0);
         pthread_barrier_init(&repartition_barrier_, NULL, 2);
-        graph_thread_ = std::thread(&Scheduler<T>::update_graph_loop, this);
+        graph_thread_ = std::thread(&Scheduler<T, WorkerCapacity>::update_graph_loop, this);
     }
 
     ~Scheduler() {
@@ -68,7 +68,7 @@ public:
             sem_post(&graph_requests_semaphore_);
         }
 
-        Partition<T>::populate_storage(request);
+        Partition<T, WorkerCapacity>::populate_storage(request);
     }
 
     void wait_populate(){
@@ -161,13 +161,13 @@ public:
             graph_requests_mutex_.unlock();
             sem_post(&graph_requests_semaphore_);
         
-            n_dispatched_requests_++;
         }
     }
     
     void schedule_and_answer(struct client_message& request) {
 
         dispatch(request);
+        n_dispatched_requests_++;
 
         if (repartition_method_ != model::ROUND_ROBIN) {
             if (
@@ -202,10 +202,10 @@ public:
         sem_post(&graph_requests_semaphore_);
     }
 
-    std::unordered_set<Partition<T>*> involved_partitions(
+    std::unordered_set<Partition<T, WorkerCapacity>*> involved_partitions(
         const struct client_message& request)
     {
-        std::unordered_set<Partition<T>*> partitions;
+        std::unordered_set<Partition<T, WorkerCapacity>*> partitions;
         auto type = static_cast<request_type>(request.type);
 
         auto range = 1;
@@ -215,7 +215,7 @@ public:
 
         for (auto i = 0; i < range; i++) {
             if (not mapped(request.key + i)) {
-                return std::unordered_set<Partition<T>*>();
+                return std::unordered_set<Partition<T,WorkerCapacity>*>();
             }
 
             partitions.insert(data_to_partition_->at(request.key + i));
@@ -238,7 +238,7 @@ public:
         return sync_message;
     }
 
-    void sync_partitions(const std::unordered_set<Partition<T>*>& partitions) {
+    void sync_partitions(const std::unordered_set<Partition<T, WorkerCapacity>*>& partitions) {
         auto sync_message = std::move(
             create_sync_request(partitions.size())
         );
@@ -248,7 +248,7 @@ public:
     }
 
     void sync_all_partitions() {
-        std::unordered_set<Partition<T>*> partitions;
+        std::unordered_set<Partition<T, WorkerCapacity>*> partitions;
         for (auto i = 0; i < partitions_.size(); i++) {
             partitions.insert(partitions_.at(i));
         }
@@ -285,34 +285,33 @@ public:
 
     void update_graph(const client_message& message) {
         std::vector<int> data{message.key};
+        size_t data_size = 1;
         if (message.type == SCAN) {
-            for (auto i = 1; i < std::stoi(message.args); i++) {
-                data.emplace_back(message.key+i);
-            }
+            data_size == std::stoi(message.args);
         }
 
-        for (auto i = 0; i < data.size(); i++) {
-            if (not workload_graph_.vertice_exists(data[i])) {
-                workload_graph_.add_vertice(data[i]);
+        for (auto i = 0; i < data_size; i++) {
+            if (not workload_graph_.vertice_exists(message.key+i)) {
+                workload_graph_.add_vertice(message.key+i);
             }
 
-            workload_graph_.increase_vertice_weight(data[i]);
+            workload_graph_.increase_vertice_weight(message.key+i);
 
-            for (auto j = i+1; j < data.size(); j++) {
-                if (not workload_graph_.vertice_exists(data[j])) {
-                    workload_graph_.add_vertice(data[j]);
+            for (auto j = i+1; j < data_size; j++) {
+                if (not workload_graph_.vertice_exists(message.key+j)) {
+                    workload_graph_.add_vertice(message.key+j);
                 }
-                if (not workload_graph_.are_connected(data[i], data[j])) {
-                    workload_graph_.add_edge(data[i], data[j]);
+                if (not workload_graph_.are_connected(message.key+i, message.key+j)) {
+                    workload_graph_.add_edge(message.key+i, message.key+j);
                 }
 
-                workload_graph_.increase_edge_weight(data[i], data[j]);
+                workload_graph_.increase_edge_weight(message.key+i, message.key+j);
             }
         }
     }
 
 
-    std::unordered_map<T, Partition<T>*>* partitioning(struct InputGraph<T>* graph) {
+    std::unordered_map<T, Partition<T, WorkerCapacity>*>* partitioning(struct InputGraph<T>* graph) {
         auto start_timestamp = std::chrono::system_clock::now();
         repartition_timestamps_.emplace_back(start_timestamp);
 
@@ -331,7 +330,7 @@ public:
         repartition_end_timestamps_.push_back(end_timestamp);
 
 
-        auto data_to_partition = new std::unordered_map<T, Partition<T>*>();
+        auto data_to_partition = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
         
         for (auto& it : graph->vertice_to_pos) {
             T key = it.first;
@@ -357,8 +356,8 @@ public:
     int sync_counter_ = 0;
     int n_dispatched_requests_ = 0;
     kvstorage::Storage storage_;
-    std::unordered_map<int, Partition<T>*> partitions_;
-    std::unordered_map<T, Partition<T>*>* data_to_partition_;
+    std::unordered_map<int, Partition<T, WorkerCapacity>*> partitions_;
+    std::unordered_map<T, Partition<T, WorkerCapacity>*>* data_to_partition_;
     
     std::thread graph_thread_;
     std::deque<struct client_message> graph_requests_queue_;

@@ -155,7 +155,24 @@ public:
 
     void vertice_weight(T data, int weight) {vertex_weight_[data] = weight;}
 
-    void edge_weight(T from, T to, int weight) {vertex_weight_[from][to] = weight;}
+    void edge_weight(T from, T to, int weight) {
+        edges_weight_[from][to] = weight;
+        edges_weight_[to][from] = weight;
+
+    }
+
+    void remove_vertice(T data) {vertex_weight_.erase(data);}
+    void remove_edge(T from, T to) {
+        edges_weight_[from].erase(to);
+        edges_weight_[to].erase(from);
+        if(edges_weight_[from].size() == 0){
+            edges_weight_.erase(from);
+        }
+        if(edges_weight_[to].size() == 0){
+            edges_weight_.erase(to);
+        }
+    }
+
 
 private:
     vertex_weight_t vertex_weight_;

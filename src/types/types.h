@@ -45,7 +45,8 @@ enum request_type
 	SYNC,
 	ERROR,
 	REPART,
-	UPDATE
+	UPDATE,
+	DUMMY
 };
 
 #endif

@@ -55,18 +55,19 @@
 
 #if defined(FREE)
 	#include "scheduler/free_scheduler.hpp"
-	#define Scheduler FreeScheduler
-#elif defined(CARELESS)
-	#include "scheduler/careless_scheduler.hpp"
-	#define Scheduler CarelessScheduler
+	typedef kvpaxos::FreeScheduler<int> Scheduler;
 #elif defined(NON_STOP)
 	#include "scheduler/non_stop_scheduler.hpp"
-	#define Scheduler NonStopScheduler
-#elif defined(NON_STOP_JUMP)
-	#include "scheduler/non_stop_jump_scheduler.hpp"
-	#define Scheduler NonStopJumpScheduler
+	typedef kvpaxos::NonStopScheduler<int> Scheduler;
+#elif defined(NON_STOP_WINDOWED)
+	#include "scheduler/non_stop_windowed_scheduler.hpp"
+	typedef kvpaxos::NonStopWindowedScheduler<int, 10000> Scheduler;
+#elif defined(NON_STOP_WINDOWED_BOUNDED)
+	#include "scheduler/non_stop_windowed_scheduler.hpp"
+	typedef kvpaxos::NonStopWindowedScheduler<int, 10000, 5000> Scheduler;
 #else
 	#include "scheduler/scheduler.hpp"
+	typedef kvpaxos::Scheduler<int> Scheduler;
 #endif
 
 
@@ -87,7 +88,7 @@ int REQUESTS_PATH = 6;
 char* *params;
 
 void
-metrics_loop(int sleep_duration, int n_requests, kvpaxos::Scheduler<int>* scheduler)
+metrics_loop(int sleep_duration, int n_requests, Scheduler* scheduler)
 {
 	auto already_counted_throughput = 0;
 	auto counter = 0;
@@ -111,7 +112,7 @@ metrics_loop(int sleep_duration, int n_requests, kvpaxos::Scheduler<int>* schedu
 	}
 }
 
-static kvpaxos::Scheduler<int>*
+static Scheduler*
 initialize_scheduler(
 	int n_requests,
 	const toml_config& config)
@@ -124,7 +125,7 @@ initialize_scheduler(
 		repartition_method_s
 	);
 
-	auto* scheduler = new kvpaxos::Scheduler<int>(
+	auto* scheduler = new Scheduler(
 		n_requests, repartition_interval, n_partitions,
 		repartition_method
 	);
@@ -186,7 +187,7 @@ to_client_messages(
 
 void
 execute_requests(
-	kvpaxos::Scheduler<int>& scheduler,
+	Scheduler& scheduler,
 	std::vector<client_message> *messages)
 {	
 	
