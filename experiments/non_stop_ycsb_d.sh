@@ -1,10 +1,10 @@
 #!/bin/bash
 methods=(METIS)
 partitions=(8)
-versions=(free)
+versions=(non_stop)
 workloads=(ycsb_d)
 n_initial_keys=(1000000)
-repartition_intervals=(100000 10000000)
+repartition_intervals=(0)
 reps=1
 
 for w in "${workloads[@]}"; do
