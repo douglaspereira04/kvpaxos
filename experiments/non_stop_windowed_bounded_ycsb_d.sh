@@ -19,7 +19,7 @@ done;
 for i in $(seq $reps); do
 	echo rep ${i}
 	for initial in "${n_initial_keys[@]}"; do
-		for p in "${partitions[@]}"; do00000 500000 1000000
+		for p in "${partitions[@]}"; do
 			for deltap in "${repartition_intervals[@]}"; do
 				for m in "${methods[@]}"; do
 					for w in "${workloads[@]}"; do

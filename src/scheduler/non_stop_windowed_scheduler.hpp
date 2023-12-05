@@ -84,7 +84,10 @@ public:
                 this->graph_requests_queue_.pop_front();
             this->graph_requests_mutex_.unlock();
 
-            if(request.type != DUMMY){
+            
+            if (request.type == SYNC) {
+                pthread_barrier_wait(&this->repartition_barrier_);
+            } else {
                 Scheduler<T, WorkerCapacity>::update_graph(request);
                 this->graph_deletion_queue_.push_back(request);
 
@@ -92,7 +95,7 @@ public:
                 this->graph_deletion_queue_.pop_front();
                 NonStopWindowedScheduler<T, TL, WorkerCapacity>::expire(expired_request);
             }
-
+            
             if(!this->reparting_) {
                 this->reparting_ = true;
                 FreeScheduler<T, WorkerCapacity>::order_partitioning();
@@ -105,24 +108,26 @@ public:
 
 
     void expire(const client_message& message) {
-        std::vector<int> data{message.key};
-        size_t data_size = 1;
-        if (message.type == SCAN) {
-            data_size == std::stoi(message.args);
-        }
-
-        for (auto i = 0; i < data_size; i++) {
-            this->workload_graph_.increase_vertice_weight(message.key+i, -1);
-
-            if (this->workload_graph_.vertice_weight(message.key+i) == 0) {
-                this->workload_graph_.remove_vertice(message.key+i);
+        if(message.type != DUMMY){
+            std::vector<int> data{message.key};
+            size_t data_size = 1;
+            if (message.type == SCAN) {
+                data_size == std::stoi(message.args);
             }
 
-            for (auto j = i+1; j < data_size; j++) {
+            for (auto i = 0; i < data_size; i++) {
+                this->workload_graph_.increase_vertice_weight(message.key+i, -1);
 
-                this->workload_graph_.increase_edge_weight(message.key+i, message.key+j, -1);
-                if(this->workload_graph_.edge_weight(message.key+i, message.key+j) == 0){
-                    this->workload_graph_.remove_edge(message.key+i, message.key+j);
+                if (this->workload_graph_.vertice_weight(message.key+i) == 0) {
+                    this->workload_graph_.remove_vertice(message.key+i);
+                }
+
+                for (auto j = i+1; j < data_size; j++) {
+
+                    this->workload_graph_.increase_edge_weight(message.key+i, message.key+j, -1);
+                    if(this->workload_graph_.edge_weight(message.key+i, message.key+j) == 0){
+                        this->workload_graph_.remove_edge(message.key+i, message.key+j);
+                    }
                 }
             }
         }
