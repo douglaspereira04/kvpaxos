@@ -1,0 +1,16 @@
+	***Cannot bisect a graph with 0 vertices!
+	***You are trying to partition a graph into too many parts!
+	***Cannot bisect a graph with 0 vertices!
+	***You are trying to partition a graph into too many parts!
+Sec,Throughput,Graph Vertices,Graph Edges
+0,461883,7516,0
+1,735729,7399,0
+2,396130,7368,0
+3,395982,7493,0
+4,379196,7462,0
+5,395343,7391,0
+6,419563,7555,0
+7,469769,7430,0
+8,561423,7470,0
+9,542560,7529,0
+10,242422,7520,0
