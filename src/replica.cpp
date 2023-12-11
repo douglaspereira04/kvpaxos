@@ -55,19 +55,13 @@
 
 #if defined(FREE)
 	#include "scheduler/free_scheduler.hpp"
-	typedef kvpaxos::FreeScheduler<int> Scheduler;
+	typedef kvpaxos::FreeScheduler<int, 0, 0> Scheduler;
 #elif defined(NON_STOP)
 	#include "scheduler/non_stop_scheduler.hpp"
-	typedef kvpaxos::NonStopScheduler<int> Scheduler;
-#elif defined(NON_STOP_WINDOWED)
-	#include "scheduler/non_stop_windowed_scheduler.hpp"
-	typedef kvpaxos::NonStopWindowedScheduler<int, 10000> Scheduler;
-#elif defined(NON_STOP_WINDOWED_BOUNDED)
-	#include "scheduler/non_stop_windowed_scheduler.hpp"
-	typedef kvpaxos::NonStopWindowedScheduler<int, 10000, 5000> Scheduler;
+	typedef kvpaxos::NonStopScheduler<int, 0, 0> Scheduler;
 #else
 	#include "scheduler/scheduler.hpp"
-	typedef kvpaxos::Scheduler<int> Scheduler;
+	typedef kvpaxos::Scheduler<int, 0, 0> Scheduler;
 #endif
 
 
@@ -136,7 +130,6 @@ initialize_scheduler(
 		client_message.key = i;
 		scheduler->process_populate_request(client_message);
 	}
-	scheduler->wait_populate();
 
 	scheduler->run();
 	return scheduler;

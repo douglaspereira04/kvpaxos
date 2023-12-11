@@ -28,7 +28,7 @@
 
 namespace kvpaxos {
 
-template <typename T, size_t WorkerCapacity = 0>
+template <typename T, size_t TL = 0, size_t WorkerCapacity = 0>
 class Scheduler {
 public:
     Scheduler(){}
@@ -48,7 +48,17 @@ public:
 
         sem_init(&graph_requests_semaphore_, 0, 0);
         pthread_barrier_init(&repartition_barrier_, NULL, 2);
-        graph_thread_ = std::thread(&Scheduler<T, WorkerCapacity>::update_graph_loop, this);
+        graph_thread_ = std::thread(&Scheduler<T, TL, WorkerCapacity>::update_graph_loop, this);
+
+        client_message dummy;
+        dummy.type = DUMMY;
+
+        if constexpr(TL > 0){
+            for (size_t i = 0; i < TL; i++)
+            {
+                graph_deletion_queue_.push_back(dummy);
+            }
+        }
     }
 
     ~Scheduler() {
@@ -62,18 +72,18 @@ public:
         add_key(request.key);
 
         if (repartition_method_ != model::ROUND_ROBIN) {
-            graph_requests_mutex_.lock();
-                graph_requests_queue_.push_back(request);
-            graph_requests_mutex_.unlock();
-            sem_post(&graph_requests_semaphore_);
+            update_graph(request);
+
+            if constexpr(TL > 0){
+                graph_deletion_queue_.push_back(request);
+
+                auto expired_request = std::move(graph_deletion_queue_.front());
+                graph_deletion_queue_.pop_front();
+                Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
+            }
         }
 
         Partition<T, WorkerCapacity>::populate_storage(request);
-    }
-
-    void wait_populate(){
-        notify_graph(SYNC);
-        pthread_barrier_wait(&repartition_barrier_);
     }
 
     void run() {
@@ -267,6 +277,7 @@ public:
     }
 
     void update_graph_loop() {
+
         while(true) {
             sem_wait(&graph_requests_semaphore_);
 
@@ -279,12 +290,19 @@ public:
                 pthread_barrier_wait(&repartition_barrier_);
             } else {
                 update_graph(request);
+
+                if constexpr(TL > 0){
+                    graph_deletion_queue_.push_back(request);
+
+                    auto expired_request = std::move(graph_deletion_queue_.front());
+                    graph_deletion_queue_.pop_front();
+                    Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
+                }
             }
         }
     }
 
     void update_graph(const client_message& message) {
-        std::vector<int> data{message.key};
         size_t data_size = 1;
         if (message.type == SCAN) {
             data_size == std::stoi(message.args);
@@ -306,6 +324,31 @@ public:
                 }
 
                 workload_graph_.increase_edge_weight(message.key+i, message.key+j);
+            }
+        }
+    }
+
+    void expire(const client_message& message) {
+        if(message.type != DUMMY){
+            size_t data_size = 1;
+            if (message.type == SCAN) {
+                data_size == std::stoi(message.args);
+            }
+
+            for (auto i = 0; i < data_size; i++) {
+                this->workload_graph_.increase_vertice_weight(message.key+i, -1);
+
+                if (this->workload_graph_.vertice_weight(message.key+i) == 0) {
+                    this->workload_graph_.remove_vertice(message.key+i);
+                }
+
+                for (auto j = i+1; j < data_size; j++) {
+
+                    this->workload_graph_.increase_edge_weight(message.key+i, message.key+j, -1);
+                    if(this->workload_graph_.edge_weight(message.key+i, message.key+j) == 0){
+                        this->workload_graph_.remove_edge(message.key+i, message.key+j);
+                    }
+                }
             }
         }
     }
@@ -375,6 +418,7 @@ public:
     pthread_barrier_t repartition_barrier_;
 
     std::vector<time_point> repartition_notify_timestamp_;
+    std::deque<struct client_message> graph_deletion_queue_;
 
 };
 

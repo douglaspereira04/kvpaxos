@@ -29,8 +29,8 @@
 
 namespace kvpaxos {
 
-template <typename T, size_t WorkerCapacity = 0>
-class FreeScheduler : public Scheduler<T, WorkerCapacity> {
+template <typename T, size_t TL = 0, size_t WorkerCapacity = 0>
+class FreeScheduler : public Scheduler<T, TL, WorkerCapacity> {
 
 public:
 
@@ -53,24 +53,34 @@ public:
 
         sem_init(&this->graph_requests_semaphore_, 0, 0);
         pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
-        this->graph_thread_ = std::thread(&FreeScheduler<T, WorkerCapacity>::update_graph_loop, this);
+        this->graph_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity>::update_graph_loop, this);
         
         sem_init(&repart_semaphore_, 0, 0);
         sem_init(&schedule_semaphore_, 0, 0);
         sem_init(&update_semaphore_, 0, 0);
         sem_init(&updated_semaphore_, 0, 0);
-        reparting_thread_ = std::thread(&FreeScheduler<T, WorkerCapacity>::partitioning_loop, this);
+        reparting_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity>::partitioning_loop, this);
+
+        client_message dummy;
+        dummy.type = DUMMY;
+
+        if constexpr(TL > 0){
+            for (size_t i = 0; i < TL; i++)
+            {
+                this->graph_deletion_queue_.push_back(dummy);
+            }
+        }
         
     }
     
     void schedule_and_answer(struct client_message& request) {
         
-        Scheduler<T, WorkerCapacity>::dispatch(request);
+        Scheduler<T, TL, WorkerCapacity>::dispatch(request);
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {
 
             if(sem_trywait(&update_semaphore_) == 0){
-                FreeScheduler<T, WorkerCapacity>::change_partition_scheme();
+                FreeScheduler<T, TL, WorkerCapacity>::change_partition_scheme();
                 sem_post(&updated_semaphore_);
             }
         }
@@ -83,7 +93,7 @@ public:
         this->data_to_partition_ = updated_data_to_partition_;
         updated_data_to_partition_ = temp;
         
-        Scheduler<T, WorkerCapacity>::sync_all_partitions();
+        Scheduler<T, TL, WorkerCapacity>::sync_all_partitions();
     }
 
     void order_partitioning(){
@@ -106,11 +116,16 @@ public:
                 this->graph_requests_queue_.pop_front();
             this->graph_requests_mutex_.unlock();
             
-            if (request.type == SYNC) {
-                pthread_barrier_wait(&this->repartition_barrier_);
-            } else {
-                Scheduler<T, WorkerCapacity>::update_graph(request);
+            Scheduler<T, TL, WorkerCapacity>::update_graph(request);
+
+            if constexpr(TL > 0){
+                this->graph_deletion_queue_.push_back(request);
+
+                auto expired_request = std::move(this->graph_deletion_queue_.front());
+                this->graph_deletion_queue_.pop_front();
+                Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
             }
+
             this->n_dispatched_requests_++;
 
             if( this->n_dispatched_requests_ % this->repartition_interval_ == 0 ) {
@@ -126,7 +141,7 @@ public:
             delete updated_data_to_partition_;
 
             input_graph_mutex_.lock();
-                auto temp = Scheduler<T, WorkerCapacity>::partitioning(input_graph_);
+                auto temp = Scheduler<T, TL, WorkerCapacity>::partitioning(input_graph_);
             input_graph_mutex_.unlock();
             
             updated_data_to_partition_ = temp;
