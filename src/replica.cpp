@@ -55,13 +55,13 @@
 
 #if defined(FREE)
 	#include "scheduler/free_scheduler.hpp"
-	typedef kvpaxos::FreeScheduler<int, 0, 0> Scheduler;
+	typedef kvpaxos::FreeScheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
 #elif defined(NON_STOP)
 	#include "scheduler/non_stop_scheduler.hpp"
-	typedef kvpaxos::NonStopScheduler<int, 0, 0> Scheduler;
+	typedef kvpaxos::NonStopScheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
 #else
 	#include "scheduler/scheduler.hpp"
-	typedef kvpaxos::Scheduler<int, 0, 0> Scheduler;
+	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
 #endif
 
 
@@ -290,6 +290,7 @@ main(int argc, char const *argv[])
 		exit(1);
 	}
 
+
 	params = const_cast<char**>(argv);
 
 
@@ -314,6 +315,5 @@ main(int argc, char const *argv[])
 		#endif
 		run(config);
 	}
-
 	
 }

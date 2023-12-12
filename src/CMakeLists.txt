@@ -35,6 +35,9 @@ ELSE()
     target_compile_definitions(replica PUBLIC OLD)
 ENDIF()
 
+add_definitions( -DTRACK_LENGTH=${TRACK_LENGTH} )
+add_definitions( -DQ_SIZE=${Q_SIZE} )
+
 IF(${GRAPH} STREQUAL "TBB_GRAPH")
     message ("TBB Graph")
     target_compile_definitions(replica PUBLIC TBB_GRAPH)

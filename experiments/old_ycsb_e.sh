@@ -4,7 +4,9 @@ partitions=(8)
 versions=(old)
 workloads=(ycsb_e)
 n_initial_keys=(1000000)
-repartition_intervals=(100000 1000000)
+repartition_intervals=(100000 10000000)
+track_length=(0 10 1000 100000)
+q_size=(0 10 1000 100000)
 reps=1
 
 for w in "${workloads[@]}"; do
@@ -24,13 +26,17 @@ for i in $(seq $reps); do
 				for m in "${methods[@]}"; do
 					for w in "${workloads[@]}"; do
 						for v in "${versions[@]}"; do
-							mkdir -p output/${w}/${m}
-							echo ${w}_${m}_${initial}_${deltap}_${v}_${p}_${i}
-							if [ ! -f "output/${w}/${m}/${initial}_${deltap}_${v}_${p}_${i}.csv" ]; then
-								./${v} configs/config.toml ${p} ${initial} ${deltap} ${m} ${w}_${initial}_requests.txt > output/${w}/${m}/${initial}_${deltap}_${v}_${p}_${i}.csv
-								mv details.csv output/${w}/${m}/details_${initial}_${deltap}_${v}_${p}_${i}.csv
-								cp -r output /users/douglasp/dez/
-							fi
+							for track_length_ in "${track_length[@]}"; do
+								for q_size_ in "${q_size[@]}"; do
+									mkdir -p output/${w}/${m}
+									echo ${w}_${m}_${initial}_${deltap}_${v}_${p}_${i}_${track_length_}_${q_size_}
+									if [ ! -f "output/${w}/${m}/${track_length_}_${q_size_}_${initial}_${deltap}_${v}_${p}_${i}.csv" ]; then
+										./${v}_${track_length_}_${q_size_} configs/config.toml ${p} ${initial} ${deltap} ${m} ${w}_${initial}_requests.txt > output/${w}/${m}/${track_length_}_${q_size_}_${initial}_${deltap}_${v}_${p}_${i}.csv
+										mv details.csv output/${w}/${m}/details_${track_length_}_${q_size_}_${initial}_${deltap}_${v}_${p}_${i}.csv
+										cp -r output /users/douglasp/dez_2/
+									fi
+								done;
+							done;
 						done;
 					done;
 				done;
