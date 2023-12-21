@@ -4,15 +4,15 @@ partitions=(8)
 versions=(old)
 workloads=(ycsb_d)
 n_initial_keys=(1000000)
-repartition_intervals=(100000 10000000)
-track_length=(0 10 1000 100000)
-q_size=(0 10 1000 100000)
+repartition_intervals=(10000 10000000)
+track_length=(0 1000 100000)
+q_size=(0 1000 100000)
 reps=1
 
 for w in "${workloads[@]}"; do
 	for initial in "${n_initial_keys[@]}"; do
 		if [ ! -f "${w}_${initial}_requests.txt" ]; then
-			./old workloads/${w}_${initial}.toml
+			./${versions[0]}_${track_length[0]}_${q_size[0]} workloads/${w}_${initial}.toml
 			mv requests.txt ${w}_${initial}_requests.txt
 		fi
 	done;
