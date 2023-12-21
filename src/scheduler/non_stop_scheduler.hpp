@@ -42,6 +42,11 @@ public:
                 int n_partitions,
                 model::CutMethod repartition_method
     ) {
+        this->error_count_ = 0;
+        this->round_robin_counter_ = 0;
+        this->sync_counter_ = 0;
+        this->n_dispatched_requests_ = 0;
+        
         this->n_partitions_ = n_partitions;
         this->repartition_interval_ = repartition_interval;
         this->repartition_method_ = repartition_method;
@@ -53,20 +58,17 @@ public:
         this->data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
         this->updated_data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
+        reparting_.store(false, std::memory_order_relaxed);
+        update_.store(false, std::memory_order_relaxed);
+
         sem_init(&this->graph_requests_semaphore_, 0, 0);
-        pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
         this->graph_thread_ = std::thread(&NonStopScheduler<T, TL, WorkerCapacity>::update_graph_loop, this);
-        
+
         sem_init(&this->repart_semaphore_, 0, 0);
-        sem_init(&this->schedule_semaphore_, 0, 0);
-        sem_init(&this->update_semaphore_, 0, 0);
-        sem_init(&this->updated_semaphore_, 0, 0);
         this->reparting_thread_ = std::thread(&NonStopScheduler<T, TL, WorkerCapacity>::partitioning_loop, this);
-        reparting_ = false;
 
         client_message dummy;
         dummy.type = DUMMY;
-
         if constexpr(TL > 0){
             for (size_t i = 0; i < TL; i++)
             {
@@ -75,20 +77,22 @@ public:
         }
 
     }
-    
+
     void schedule_and_answer(struct client_message& request) {
-         Scheduler<T, TL, WorkerCapacity>::dispatch(request);
+        FreeScheduler<T, TL, WorkerCapacity>::dispatch(request);
+        this->n_dispatched_requests_++;
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {
 
-            if(sem_trywait(&this->update_semaphore_) == 0){
+            if(update_ == true){
                 FreeScheduler<T, TL, WorkerCapacity>::change_partition_scheme();
-                reparting_ = false;
+                this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
+
+                update_.store(false, std::memory_order_seq_cst);
+                reparting_.store(false, std::memory_order_seq_cst);
             }
         }
     }
-
-
 
     void update_graph_loop() {
         while(true) {
@@ -108,32 +112,41 @@ public:
                 Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
             }
 
-            if(!reparting_) {
-                reparting_ = true;
-                FreeScheduler<T, TL, WorkerCapacity>::order_partitioning();
+            if(reparting_.load(std::memory_order_seq_cst) == false) {
+                reparting_.store(true, std::memory_order_seq_cst);
+                NonStopScheduler<T, TL, WorkerCapacity>::order_partitioning();
             } 
 
         }
     }
 
+    void order_partitioning(){
+        auto begin = std::chrono::system_clock::now();
+        this->input_graph_ = new InputGraph<T>(this->workload_graph_);
+        this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
+
+        this->repartition_request_timestamp_.push_back(std::chrono::system_clock::now());
+        sem_post(&this->repart_semaphore_);
+    }
+
     void partitioning_loop(){
         while(true){
             sem_wait(&this->repart_semaphore_);
-            
+
             delete this->updated_data_to_partition_;
 
-            this->input_graph_mutex_.lock();
-                auto temp = Scheduler<T, TL, WorkerCapacity>::partitioning(this->input_graph_);
-            this->input_graph_mutex_.unlock();
-            
+            auto temp = Scheduler<T, TL, WorkerCapacity>::partitioning(this->input_graph_);
+            delete this->input_graph_;
+
             this->updated_data_to_partition_ = temp;
-            sem_post(&this->update_semaphore_);
+            update_.store(true, std::memory_order_seq_cst);
         }
     }
 
 public:
 
     std::atomic_bool reparting_;
+    std::atomic_bool update_;
 
 };
 

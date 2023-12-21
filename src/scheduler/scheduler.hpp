@@ -24,6 +24,7 @@
 #include "request/request.hpp"
 #include "storage/storage.h"
 #include "types/types.h"
+#include <iostream>
 
 
 namespace kvpaxos {
@@ -40,6 +41,12 @@ public:
         repartition_interval_{repartition_interval},
         repartition_method_{repartition_method}
     {
+
+        error_count_ = 0;
+        round_robin_counter_ = 0;
+        sync_counter_ = 0;
+        n_dispatched_requests_ = 0;
+
         for (auto i = 0; i < n_partitions_; i++) {
             auto* partition = new Partition<T, WorkerCapacity>(i);
             partitions_.emplace(i, partition);
@@ -50,6 +57,7 @@ public:
         pthread_barrier_init(&repartition_barrier_, NULL, 2);
         graph_thread_ = std::thread(&Scheduler<T, TL, WorkerCapacity>::update_graph_loop, this);
 
+
         client_message dummy;
         dummy.type = DUMMY;
 
@@ -59,6 +67,7 @@ public:
                 graph_deletion_queue_.push_back(dummy);
             }
         }
+
     }
 
     ~Scheduler() {
@@ -69,16 +78,21 @@ public:
     }
 
     void process_populate_request(struct client_message& request) {
-        add_key(request.key);
 
+        if constexpr(TL > 0){
+            store_key(request.key);
+        } else{
+            map_key(request.key);
+        }
+        
         if (repartition_method_ != model::ROUND_ROBIN) {
             update_graph(request);
 
             if constexpr(TL > 0){
-                graph_deletion_queue_.push_back(request);
+                this->graph_deletion_queue_.push_back(request);
 
-                auto expired_request = std::move(graph_deletion_queue_.front());
-                graph_deletion_queue_.pop_front();
+                auto expired_request = std::move(this->graph_deletion_queue_.front());
+                this->graph_deletion_queue_.pop_front();
                 Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
             }
         }
@@ -101,24 +115,29 @@ public:
         return n_executed_requests;
     }
 
-    int graph_vertices(){
-        graph_requests_mutex_.lock();
-        int size = workload_graph_.n_vertex();
-
-        graph_requests_mutex_.unlock();
-        return size;
+    std::vector<size_t> in_queue_amount() {
+        std::vector<size_t> in_queue;
+        for (auto& kv: partitions_) {
+            auto* partition = kv.second;
+            in_queue.push_back(partition->request_queue_size());
+        }
+        return in_queue;
     }
 
-    int graph_edges(){
-        graph_requests_mutex_.lock();
-        int size = workload_graph_.n_edges();
+    size_t graph_vertices(){
+        return workload_graph_.n_vertex();
+    }
 
-        graph_requests_mutex_.unlock();
-        return size;
+    size_t graph_edges(){
+        return workload_graph_.n_edges();
     }
 
     int n_dispatched_requests(){
         return n_dispatched_requests_;
+    }
+
+    int error_count(){
+        return error_count_;
     }
 
     const std::vector<time_point>& repartition_timestamps() const {
@@ -133,27 +152,39 @@ public:
         return repartition_end_timestamps_;
     }
     
-    const std::vector<time_point>& repartition_notify_timestamp() const {
-        return repartition_notify_timestamp_;
+    const std::vector<time_point>& repartition_apply_timestamp() const {
+        return repartition_apply_timestamp_;
+    }
+
+    const std::vector<time_point>& repartition_request_timestamp() const {
+        return repartition_request_timestamp_;
+    }
+
+    const std::vector<duration>& reconstruction_duration() const {
+        return reconstruction_duration_;
     }
     
     void dispatch(struct client_message& request){
 
         auto type = static_cast<request_type>(request.type);
-        if (type == SYNC) {
-            return;
-        }
 
         if (type == WRITE) {
-            if (not mapped(request.key)) {
-                add_key(request.key);
+            if constexpr( TL > 0 ){
+                if (!stored(request.key)) {
+                    store_key(request.key);
+                }
+            } else {
+                if (!mapped(request.key)) {
+                    map_key(request.key);
+                }
             }
         }
 
+
         auto partitions = std::move(involved_partitions(request));
         if (partitions.empty()) {
-            request.type = ERROR;
-            partitions_.at(0)->push_request(request);
+            partitions_.at((error_count_+1) % n_partitions_)->push_request(request);
+            error_count_++;
         }else{
             auto arbitrary_partition = *begin(partitions);
             if (partitions.size() > 1) {
@@ -164,16 +195,16 @@ public:
                 arbitrary_partition->push_request(request);
             }
         }
-        
+
         if (repartition_method_ != model::ROUND_ROBIN) {
             graph_requests_mutex_.lock();
                 graph_requests_queue_.push_back(request);
             graph_requests_mutex_.unlock();
             sem_post(&graph_requests_semaphore_);
-        
+
         }
     }
-    
+
     void schedule_and_answer(struct client_message& request) {
 
         dispatch(request);
@@ -183,20 +214,23 @@ public:
             if (
                 n_dispatched_requests_ % repartition_interval_ == 0
             ) {
-                repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
+                repartition_request_timestamp_.push_back(std::chrono::system_clock::now());
 
                 notify_graph(SYNC);
                 pthread_barrier_wait(&repartition_barrier_);
 
                 auto begin = std::chrono::system_clock::now();
-                auto input_graph = new InputGraph<T>(workload_graph_);
+                auto input_graph = InputGraph<T>(workload_graph_);
                 graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
-                auto temp = partitioning(input_graph);
+                auto temp = partitioning(&input_graph);
+
                 delete data_to_partition_;
                 data_to_partition_ = temp;
 
                 sync_all_partitions();
+
+                repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
             }
         }
     }
@@ -222,13 +256,35 @@ public:
         if (type == SCAN) {
             range = std::stoi(request.args);
         }
+        
+        if constexpr(TL>0){
 
-        for (auto i = 0; i < range; i++) {
-            if (not mapped(request.key + i)) {
-                return std::unordered_set<Partition<T,WorkerCapacity>*>();
+            bool new_mapping = false;
+            for (auto i = 0; i < range; i++) {
+                if (!stored(request.key + i)) {
+                    return std::unordered_set<Partition<T,WorkerCapacity>*>();
+                }
+
+                if(!Scheduler<T, TL, WorkerCapacity>::mapped(request.key + i)){
+                    map_key(request.key + i, round_robin_counter_);
+                    new_mapping = true;
+                } else {
+                    partitions.insert(data_to_partition_->at(request.key + i));
+                }
             }
 
-            partitions.insert(data_to_partition_->at(request.key + i));
+            if(new_mapping){
+                partitions.insert(partitions_.at(round_robin_counter_));
+                round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
+            }
+
+        } else {
+            for (auto i = 0; i < range; i++) {
+                if (!mapped(request.key + i)) {
+                    return std::unordered_set<Partition<T,WorkerCapacity>*>();
+                }
+                partitions.insert(data_to_partition_->at(request.key + i));
+            }
         }
 
         return partitions;
@@ -265,15 +321,27 @@ public:
         sync_partitions(partitions);
     }
 
-    void add_key(T key) {
+    void map_key(T key) {
         auto partition_id = round_robin_counter_;
         data_to_partition_->emplace(key, partitions_.at(partition_id));
 
         round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
     }
 
+    void map_key(T key, int partition_id) {
+        data_to_partition_->emplace(key, partitions_.at(partition_id));
+    }
+
     bool mapped(T key) const {
         return data_to_partition_->find(key) != data_to_partition_->end();
+    }
+
+    bool stored(T key) const {
+        return stored_.find(key) != stored_.end();
+    }
+
+    void store_key(T key) {
+        stored_.emplace(key);
     }
 
     void update_graph_loop() {
@@ -290,14 +358,6 @@ public:
                 pthread_barrier_wait(&repartition_barrier_);
             } else {
                 update_graph(request);
-
-                if constexpr(TL > 0){
-                    graph_deletion_queue_.push_back(request);
-
-                    auto expired_request = std::move(graph_deletion_queue_.front());
-                    graph_deletion_queue_.pop_front();
-                    Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
-                }
             }
         }
     }
@@ -305,58 +365,44 @@ public:
     void update_graph(const client_message& message) {
         size_t data_size = 1;
         if (message.type == SCAN) {
-            data_size == std::stoi(message.args);
+            data_size = std::stoi(message.args);
         }
 
         for (auto i = 0; i < data_size; i++) {
-            if (not workload_graph_.vertice_exists(message.key+i)) {
-                workload_graph_.add_vertice(message.key+i);
-            }
-
-            workload_graph_.increase_vertice_weight(message.key+i);
+            workload_graph_.add_vertice(message.key+i);
+            workload_graph_.increment_vertice_weight(message.key+i, 1);
 
             for (auto j = i+1; j < data_size; j++) {
-                if (not workload_graph_.vertice_exists(message.key+j)) {
-                    workload_graph_.add_vertice(message.key+j);
-                }
-                if (not workload_graph_.are_connected(message.key+i, message.key+j)) {
-                    workload_graph_.add_edge(message.key+i, message.key+j);
-                }
-
-                workload_graph_.increase_edge_weight(message.key+i, message.key+j);
+                workload_graph_.add_vertice(message.key+j);
+                workload_graph_.add_edge(message.key+i, message.key+j);
+                workload_graph_.increment_edge_weight(message.key+i, message.key+j, 1);
             }
         }
     }
 
     void expire(const client_message& message) {
         if(message.type != DUMMY){
-            size_t data_size = 1;
+            int data_size = 1;
             if (message.type == SCAN) {
-                data_size == std::stoi(message.args);
+                data_size = std::stoi(message.args);
             }
 
-            for (auto i = 0; i < data_size; i++) {
-                this->workload_graph_.increase_vertice_weight(message.key+i, -1);
-
-                if (this->workload_graph_.vertice_weight(message.key+i) == 0) {
-                    this->workload_graph_.remove_vertice(message.key+i);
+            for (int i = data_size-1; i >= 0; i--) {
+                for (int j = data_size-1; j >= i+1; j--) {
+                    workload_graph_.increment_edge_weight(message.key+i, message.key+j, -1);
+                    workload_graph_.remove_weightless_edge(message.key+i, message.key+j);
+                    workload_graph_.remove_weightless_vertice(message.key+j);
                 }
-
-                for (auto j = i+1; j < data_size; j++) {
-
-                    this->workload_graph_.increase_edge_weight(message.key+i, message.key+j, -1);
-                    if(this->workload_graph_.edge_weight(message.key+i, message.key+j) == 0){
-                        this->workload_graph_.remove_edge(message.key+i, message.key+j);
-                    }
-                }
+                workload_graph_.increment_vertice_weight(message.key+i, -1);
+                workload_graph_.remove_weightless_vertice(message.key+i);
             }
+
         }
     }
 
 
     std::unordered_map<T, Partition<T, WorkerCapacity>*>* partitioning(struct InputGraph<T>* graph) {
-        auto start_timestamp = std::chrono::system_clock::now();
-        repartition_timestamps_.emplace_back(start_timestamp);
+        repartition_timestamps_.push_back(std::chrono::system_clock::now());
 
         auto partition_scheme = std::move(
             model::multilevel_cut(
@@ -368,13 +414,12 @@ public:
                 repartition_method_
             )
         );
-        
-        auto end_timestamp = std::chrono::system_clock::now();
-        repartition_end_timestamps_.push_back(end_timestamp);
 
+        repartition_end_timestamps_.push_back(std::chrono::system_clock::now());
 
+        auto reconstruction_begin = std::chrono::system_clock::now();
         auto data_to_partition = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
-        
+
         for (auto& it : graph->vertice_to_pos) {
             T key = it.first;
             int position = it.second;
@@ -386,11 +431,8 @@ public:
             }
             data_to_partition->emplace(key, partitions_.at(partition));
         }
+        reconstruction_duration_.push_back(std::chrono::system_clock::now() - reconstruction_begin);
 
-        if (first_repartition) {
-            first_repartition = false;
-        }
-        
         return data_to_partition;
     }
 
@@ -401,24 +443,30 @@ public:
     kvstorage::Storage storage_;
     std::unordered_map<int, Partition<T, WorkerCapacity>*> partitions_;
     std::unordered_map<T, Partition<T, WorkerCapacity>*>* data_to_partition_;
-    
+    std::unordered_set<T> stored_;
+
     std::thread graph_thread_;
-    std::deque<struct client_message> graph_requests_queue_;
     sem_t graph_requests_semaphore_;
     std::mutex graph_requests_mutex_;
+    std::deque<struct client_message> graph_requests_queue_;
+    std::deque<struct client_message> graph_deletion_queue_;
+
+    model::Graph<T> workload_graph_;
+    model::CutMethod repartition_method_;
+    pthread_barrier_t repartition_barrier_;
+    int repartition_interval_;
+
 
     std::vector<time_point> repartition_timestamps_;
     std::vector<duration> graph_copy_duration_;
     std::vector<time_point> repartition_end_timestamps_;
+    std::vector<time_point> repartition_request_timestamp_;
+    std::vector<time_point> repartition_apply_timestamp_;
+    std::vector<duration> reconstruction_duration_;
 
-    model::Graph<T> workload_graph_;
-    model::CutMethod repartition_method_;
-    int repartition_interval_;
-    bool first_repartition = true;
-    pthread_barrier_t repartition_barrier_;
+    std::vector<std::vector<size_t>> in_queue_amount_;
 
-    std::vector<time_point> repartition_notify_timestamp_;
-    std::deque<struct client_message> graph_deletion_queue_;
+    size_t error_count_ = 0;
 
 };
 

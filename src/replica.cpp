@@ -61,7 +61,7 @@
 	typedef kvpaxos::NonStopScheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
 #else
 	#include "scheduler/scheduler.hpp"
-	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
+	typedef kvpaxos::Scheduler<int, Q_SIZE> Scheduler;
 #endif
 
 
@@ -86,17 +86,33 @@ metrics_loop(int sleep_duration, int n_requests, Scheduler* scheduler)
 {
 	auto already_counted_throughput = 0;
 	auto counter = 0;
-	std::cout << "Sec,Throughput,Graph Vertices,Graph Edges\n";
+	std::cout << "Sec,Throughput,Graph Vertices,Graph Edges";
+	int n_partitions =  atoi(params[N_PARTITIONS]);
+	for (int i = 0; i < n_partitions; i++)
+	{
+		std::cout << ", In Queue " << i;
+	}
+	std::cout << ", In Queue Total" << std::endl;
+	
 	while (RUNNING) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
 		auto executed_requests = scheduler->n_executed_requests();
 		auto graph_vertices = scheduler->graph_vertices();
 		auto graph_edges = scheduler->graph_edges();
+		auto in_queue = scheduler->in_queue_amount();
 		auto throughput = executed_requests - already_counted_throughput;
 		std::cout << counter << ",";
 		std::cout << throughput << ",";
 		std::cout << graph_vertices << ",";
-		std::cout << graph_edges << "\n";
+		std::cout << graph_edges << ",";
+		size_t total = 0;
+		for (int i = 0; i < n_partitions; i++)
+		{
+			total += in_queue[i];
+			std::cout << in_queue[i] << ", ";
+		}
+		std::cout << total << std::endl;
+		
 		already_counted_throughput += throughput;
 		counter++;
 
@@ -235,34 +251,53 @@ run(const toml_config& config)
 
 
     std::ofstream ofs("details.csv", std::ofstream::out);
-	ofs << "Scheduling End," << (end_scheduling - start_execution_timestamp).count() << "\n";
-	ofs << "Makespan," << makespan.count() << "\n";
+	ofs << "Scheduling End," << (end_scheduling - start_execution_timestamp).count()/pow(10,9) << "\n";
+	ofs << "Makespan," << makespan.count()/pow(10,9) << "\n";
+	ofs << "Error Count," << scheduler->error_count() << "\n";
 	
 
 	auto& repartition_times = scheduler->repartition_timestamps();
-	ofs << "Schedule Repartition Time,Repartition Begin,Repartition End,Copy Duration\n";
+	ofs << "Repartition Request, Graph Copy Duration, Repartition Begin, Repartition End, Reconstruction Duration, Apply Time" << std::endl;
 	
 	auto copy_time_it = scheduler->graph_copy_duration().begin();
 	auto repartition_end_it = scheduler->repartition_end_timestamps().begin();
-	auto repartition_notify_it = scheduler->repartition_notify_timestamp().begin();
+	auto repartition_request_it = scheduler->repartition_request_timestamp().begin();
+	auto repartition_apply_it = scheduler->repartition_apply_timestamp().begin();
+	auto reconstruction_it = scheduler->reconstruction_duration().begin();
 	for (auto& repartition_time : repartition_times) {
 		double end_time = -1;
 		double copy_time = -1;
-		double repartition_notify_time = -1;
-		size_t graph_q_size = -1;
-		if(repartition_notify_it != scheduler->repartition_notify_timestamp().end()){
-			repartition_notify_time = (*repartition_notify_it - start_execution_timestamp).count();
+		double repartition_request_time = -1;
+		double repartition_apply_time = -1;
+		double reconstruction_duration = -1;
+		double repartition_begin_time = (repartition_time - start_execution_timestamp).count()/pow(10,9);
+
+		if(repartition_request_it != scheduler->repartition_request_timestamp().end()){
+			repartition_request_time = (*repartition_request_it - start_execution_timestamp).count()/pow(10,9);
 		}
-		repartition_notify_it++;
+		repartition_request_it++;
+
+		if(repartition_apply_it != scheduler->repartition_apply_timestamp().end()){
+			repartition_apply_time = (*repartition_apply_it - start_execution_timestamp).count()/pow(10,9);
+		}
+		repartition_apply_it++;
+
 		if(copy_time_it != scheduler->graph_copy_duration().end()){
-			copy_time = (*copy_time_it).count();
+			copy_time = (*copy_time_it).count()/pow(10,9);
 		}
 		copy_time_it++;
+
 		if(repartition_end_it != scheduler->repartition_end_timestamps().end()){
-			end_time = (*repartition_end_it - start_execution_timestamp).count();
+			end_time = (*repartition_end_it - start_execution_timestamp).count()/pow(10,9);
 		}
 		repartition_end_it++;
-		ofs << repartition_notify_time/pow(10,9) << "," << (repartition_time - start_execution_timestamp).count()/pow(10,9) << "," << end_time/pow(10,9) << ","<< copy_time/pow(10,9);
+
+		if(reconstruction_it != scheduler->reconstruction_duration().end()){
+			reconstruction_duration = (*reconstruction_it).count()/pow(10,9);
+		}
+		reconstruction_it++;
+		
+		ofs << repartition_request_time << ","<< copy_time << "," << repartition_begin_time << "," << end_time << ","<< reconstruction_duration << ","<< repartition_apply_time;
 
 		ofs << std::endl;
 		

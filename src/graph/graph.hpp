@@ -36,33 +36,46 @@ public:
         total_edges_weight_ = g.total_edges_weight_;
     }
 
-    void add_vertice(T data, int weight = 0) {
-        vertex_weight_[data] = weight;
-        edges_weight_[data] = vertex_weight_t();
+
+    void add_vertice(T data) {
+        if(vertex_weight_.find(data) == vertex_weight_.end()){
+            vertex_weight_[data] = 0;
+            edges_weight_[data] = vertex_weight_t();
+        }
+    }
+
+    void increment_vertice_weight(T data, int weight) {
+        vertex_weight_[data] += weight;
         total_vertex_weight_ += weight;
     }
 
-    void add_edge(T from, T to, int weight = 0) {
+    void remove_weightless_vertice(T vertice) {
+        if(vertex_weight_[vertice] == 0){
+            vertex_weight_.erase(vertice);
+            edges_weight_.erase(vertice);
+        }
+    }
+
+    void add_edge(T from, T to) {
         if (edges_weight_[from].find(to) == edges_weight_[from].end()) {
             edges_weight_[from][to] = 0;
             edges_weight_[to][from] = 0;
             n_edges_++;
         }
-
-        edges_weight_[from][to] = weight;
-        edges_weight_[to][from] = weight;
-        total_edges_weight_ += weight;
     }
 
-    void increase_vertice_weight(T vertice, int value = 1) {
-        vertex_weight_[vertice] += value;
-        total_vertex_weight_ += value;
-    }
-
-    void increase_edge_weight(T from, T to, int value = 1) {
+    void increment_edge_weight(T from, T to, int value) {
         edges_weight_[from][to] += value;
         edges_weight_[to][from] += value;
         total_edges_weight_ += value;
+    }
+
+    void remove_weightless_edge(T from, T to){
+        if(edges_weight_[from][to] == 0){
+            n_edges_--;
+            edges_weight_[to].erase(from);
+            edges_weight_[from].erase(to);
+        }
     }
 
     bool vertice_exists(T vertice) const {
@@ -127,9 +140,8 @@ public:
         for (auto& v : sorted_vertex) {
             auto last_edge_index = x_edges.back();
             auto n_neighbours = 0;
-            
-            for (auto& e_it: edges_weight_.at(v)) {
 
+            for (auto& e_it: edges_weight_.at(v)) {
 
                 if(vertice_positions.find(e_it.first) != vertice_positions.end()){
                     auto neighbour = vertice_positions[e_it.first];
@@ -145,32 +157,24 @@ public:
         return vertice_positions;
     }
 
-    std::size_t n_vertex() const {return vertex_weight_.size();}
-    std::size_t n_edges() const {return n_edges_;}
+    size_t n_vertex() const {return vertex_weight_.size();}
+    size_t n_edges() const {return n_edges_;}
     int total_vertex_weight() const {return total_vertex_weight_;}
     int total_edges_weight() const {return total_edges_weight_;}
     int vertice_weight(T vertice) const {return vertex_weight_.at(vertice);}
     int edge_weight(T from, T to) const {return edges_weight_.at(from).at(to);}
-    
 
-    void vertice_weight(T data, int weight) {vertex_weight_[data] = weight;}
+
+    void vertice_weight(T data, int weight) {
+        total_vertex_weight_ = total_vertex_weight_ - vertex_weight_[data] + weight;
+        vertex_weight_[data] = weight;
+    }
 
     void edge_weight(T from, T to, int weight) {
+        total_edges_weight_ = total_edges_weight_ - edges_weight_[from][to] + weight;
         edges_weight_[from][to] = weight;
         edges_weight_[to][from] = weight;
 
-    }
-
-    void remove_vertice(T data) {vertex_weight_.erase(data);}
-    void remove_edge(T from, T to) {
-        edges_weight_[from].erase(to);
-        edges_weight_[to].erase(from);
-        if(edges_weight_[from].size() == 0){
-            edges_weight_.erase(from);
-        }
-        if(edges_weight_[to].size() == 0){
-            edges_weight_.erase(to);
-        }
     }
 
 

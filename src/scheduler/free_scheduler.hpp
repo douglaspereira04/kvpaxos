@@ -40,6 +40,11 @@ public:
                 int n_partitions,
                 model::CutMethod repartition_method
     ) {
+        this->error_count_ = 0;
+        this->round_robin_counter_ = 0;
+        this->sync_counter_ = 0;
+        this->n_dispatched_requests_ = 0;
+        
         this->n_partitions_ = n_partitions;
         this->repartition_interval_ = repartition_interval;
         this->repartition_method_ = repartition_method;
@@ -52,11 +57,9 @@ public:
         updated_data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
         sem_init(&this->graph_requests_semaphore_, 0, 0);
-        pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
         this->graph_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity>::update_graph_loop, this);
         
         sem_init(&repart_semaphore_, 0, 0);
-        sem_init(&schedule_semaphore_, 0, 0);
         sem_init(&update_semaphore_, 0, 0);
         sem_init(&updated_semaphore_, 0, 0);
         reparting_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity>::partitioning_loop, this);
@@ -70,17 +73,109 @@ public:
                 this->graph_deletion_queue_.push_back(dummy);
             }
         }
-        
+
     }
-    
+
+    void process_populate_request(struct client_message& request) {
+        Scheduler<T, TL, WorkerCapacity>::store_key(request.key);
+
+        if (this->repartition_method_ != model::ROUND_ROBIN) {
+            Scheduler<T, TL, WorkerCapacity>::update_graph(request);
+
+            if constexpr(TL > 0){
+                this->graph_deletion_queue_.push_back(request);
+
+                auto expired_request = std::move(this->graph_deletion_queue_.front());
+                this->graph_deletion_queue_.pop_front();
+                Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
+            }
+        }
+
+        Partition<T, WorkerCapacity>::populate_storage(request);
+    }
+
+
+
+
+    std::unordered_set<Partition<T, WorkerCapacity>*> involved_partitions(
+        const struct client_message& request)
+    {
+        std::unordered_set<Partition<T, WorkerCapacity>*> partitions;
+        auto type = static_cast<request_type>(request.type);
+
+        auto range = 1;
+        if (type == SCAN) {
+            range = std::stoi(request.args);
+        }
+
+        bool new_mapping = false;
+        for (auto i = 0; i < range; i++) {
+            if (!Scheduler<T, TL, WorkerCapacity>::stored(request.key + i)) {
+                return std::unordered_set<Partition<T,WorkerCapacity>*>();
+            }
+
+            if(!Scheduler<T, TL, WorkerCapacity>::mapped(request.key + i)){
+                Scheduler<T, TL, WorkerCapacity>::map_key(request.key + i, this->round_robin_counter_);
+                new_mapping = true;
+            }else{
+                partitions.insert(this->data_to_partition_->at(request.key + i));
+            }
+        }
+
+        if(new_mapping){
+            partitions.insert(this->partitions_.at(this->round_robin_counter_));
+            this->round_robin_counter_ = (this->round_robin_counter_+1) % this->n_partitions_;
+        }
+
+        return partitions;
+    }
+
+    void dispatch(struct client_message& request){
+
+        auto type = static_cast<request_type>(request.type);
+
+        if (type == WRITE) {
+            if (!Scheduler<T, TL, WorkerCapacity>::stored(request.key)) {
+                Scheduler<T, TL, WorkerCapacity>::store_key(request.key);
+            }
+        }
+
+
+        auto partitions = std::move(FreeScheduler<T, TL, WorkerCapacity>::involved_partitions(request));
+        if (partitions.empty()) {
+            this->partitions_.at((this->error_count_+1) % this->n_partitions_)->push_request(request);
+            this->error_count_++;
+        }else{
+            auto arbitrary_partition = *begin(partitions);
+            if (partitions.size() > 1) {
+                Scheduler<T, TL, WorkerCapacity>::sync_partitions(partitions);
+                arbitrary_partition->push_request(request);
+                Scheduler<T, TL, WorkerCapacity>::sync_partitions(partitions);
+            } else {
+                arbitrary_partition->push_request(request);
+            }
+        }
+
+        if (this->repartition_method_ != model::ROUND_ROBIN) {
+            this->graph_requests_mutex_.lock();
+                this->graph_requests_queue_.push_back(request);
+            this->graph_requests_mutex_.unlock();
+            sem_post(&this->graph_requests_semaphore_);
+
+        }
+    }
+
     void schedule_and_answer(struct client_message& request) {
-        
-        Scheduler<T, TL, WorkerCapacity>::dispatch(request);
+
+        FreeScheduler<T, TL, WorkerCapacity>::dispatch(request);
+        this->n_dispatched_requests_++;
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {
 
             if(sem_trywait(&update_semaphore_) == 0){
                 FreeScheduler<T, TL, WorkerCapacity>::change_partition_scheme();
+
+                this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
                 sem_post(&updated_semaphore_);
             }
         }
@@ -92,19 +187,18 @@ public:
         std::unordered_map<T,kvpaxos::Partition<T, WorkerCapacity>*> *temp =  this->data_to_partition_;
         this->data_to_partition_ = updated_data_to_partition_;
         updated_data_to_partition_ = temp;
-        
+
         Scheduler<T, TL, WorkerCapacity>::sync_all_partitions();
     }
 
     void order_partitioning(){
+        auto begin = std::chrono::system_clock::now();
         input_graph_mutex_.lock();
-            auto begin = std::chrono::system_clock::now();
-            delete input_graph_;
             input_graph_ = new InputGraph<T>(this->workload_graph_);
-            this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
         input_graph_mutex_.unlock();
+        this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
-        this->repartition_notify_timestamp_.push_back(std::chrono::system_clock::now());
+        this->repartition_request_timestamp_.push_back(std::chrono::system_clock::now());
         sem_post(&repart_semaphore_);
     }
 
@@ -115,7 +209,7 @@ public:
                 auto request = std::move(this->graph_requests_queue_.front());
                 this->graph_requests_queue_.pop_front();
             this->graph_requests_mutex_.unlock();
-            
+
             Scheduler<T, TL, WorkerCapacity>::update_graph(request);
 
             if constexpr(TL > 0){
@@ -126,10 +220,10 @@ public:
                 Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
             }
 
-            this->n_dispatched_requests_++;
+            n_processed_requests++;
 
-            if( this->n_dispatched_requests_ % this->repartition_interval_ == 0 ) {
-                order_partitioning();
+            if( n_processed_requests % this->repartition_interval_ == 0 ) {
+                FreeScheduler<T, TL, WorkerCapacity>::order_partitioning();
             }
         }
     }
@@ -137,13 +231,14 @@ public:
     void partitioning_loop(){
         while(true){
             sem_wait(&repart_semaphore_);
-            
+
             delete updated_data_to_partition_;
 
             input_graph_mutex_.lock();
                 auto temp = Scheduler<T, TL, WorkerCapacity>::partitioning(input_graph_);
+                delete input_graph_;
             input_graph_mutex_.unlock();
-            
+
             updated_data_to_partition_ = temp;
             sem_post(&update_semaphore_);
 
@@ -152,19 +247,20 @@ public:
     }
 
 public:
+
     std::unordered_map<T, Partition<T, WorkerCapacity>*>* updated_data_to_partition_;
-    InputGraph<T> *input_graph_ = new InputGraph<T>();
+    InputGraph<T> *input_graph_;
+
+    int n_processed_requests = 0;
 
     sem_t repart_semaphore_;
-    sem_t schedule_semaphore_;
     sem_t update_semaphore_;
     sem_t updated_semaphore_;
 
     std::mutex input_graph_mutex_;
-    std::mutex update_mutex_;
 
     std::thread reparting_thread_;
-    
+
 };
 
 };

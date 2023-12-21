@@ -44,7 +44,6 @@ enum request_type
 	SCAN,
 	SYNC,
 	ERROR,
-	REPART,
 	UPDATE,
 	DUMMY
 };

@@ -73,11 +73,7 @@ public:
     }
 
     size_t request_queue_size() {
-        size_t size;
-        queue_mutex_.lock();
-            size = requests_queue_.size();
-        queue_mutex_.unlock();
-        return size;
+        return requests_queue_.size();
     }
 
     void push_request(struct client_message request) {
