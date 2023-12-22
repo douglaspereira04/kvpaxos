@@ -61,7 +61,7 @@
 	typedef kvpaxos::NonStopScheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
 #else
 	#include "scheduler/scheduler.hpp"
-	typedef kvpaxos::Scheduler<int, Q_SIZE> Scheduler;
+	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
 #endif
 
 

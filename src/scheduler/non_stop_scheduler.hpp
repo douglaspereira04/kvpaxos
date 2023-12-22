@@ -113,8 +113,10 @@ public:
             }
 
             if(reparting_.load(std::memory_order_seq_cst) == false) {
-                reparting_.store(true, std::memory_order_seq_cst);
-                NonStopScheduler<T, TL, WorkerCapacity>::order_partitioning();
+                if(this->workload_graph_.n_vertex() > 0){
+                    reparting_.store(true, std::memory_order_seq_cst);
+                    NonStopScheduler<T, TL, WorkerCapacity>::order_partitioning();
+                }
             } 
 
         }

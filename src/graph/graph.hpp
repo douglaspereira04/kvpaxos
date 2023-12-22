@@ -125,7 +125,7 @@ public:
         std::vector<int> &x_edges, 
         std::vector<int> &edges, 
         std::vector<int> &edges_weight){
-            
+
         std::unordered_map<T, int> vertice_positions;
         std::vector<T> sorted_vertex = this->sorted_vertex();
 

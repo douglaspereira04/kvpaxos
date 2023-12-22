@@ -89,10 +89,10 @@ public:
             update_graph(request);
 
             if constexpr(TL > 0){
-                this->graph_deletion_queue_.push_back(request);
+                graph_deletion_queue_.push_back(request);
 
-                auto expired_request = std::move(this->graph_deletion_queue_.front());
-                this->graph_deletion_queue_.pop_front();
+                auto expired_request = std::move(graph_deletion_queue_.front());
+                graph_deletion_queue_.pop_front();
                 Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
             }
         }
@@ -358,6 +358,14 @@ public:
                 pthread_barrier_wait(&repartition_barrier_);
             } else {
                 update_graph(request);
+
+                if constexpr(TL > 0){
+                    graph_deletion_queue_.push_back(request);
+
+                    auto expired_request = std::move(graph_deletion_queue_.front());
+                    graph_deletion_queue_.pop_front();
+                    Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
+                }
             }
         }
     }
@@ -396,7 +404,6 @@ public:
                 workload_graph_.increment_vertice_weight(message.key+i, -1);
                 workload_graph_.remove_weightless_vertice(message.key+i);
             }
-
         }
     }
 
