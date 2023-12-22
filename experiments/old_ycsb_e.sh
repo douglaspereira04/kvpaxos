@@ -4,10 +4,10 @@ partitions=(8)
 versions=(old)
 workloads=(ycsb_e)
 n_initial_keys=(1000000)
-deltap=(1000 10000 10000000)
-track_length=(1000 10000 0)
-q_size=(0 0 0)
-scenarios=3
+deltap=(1000000 100 1000 10000 100000)
+track_length=(0 100 1000 10000 100000)
+q_size=(0 0 0 0 0)
+scenarios=4
 reps=1
 
 for w in "${workloads[@]}"; do
@@ -23,7 +23,7 @@ for i in $(seq $reps); do
 	echo rep ${i}
 	for initial in "${n_initial_keys[@]}"; do
 		for p in "${partitions[@]}"; do
-			for s in $(seq $scenarios); do
+			for s in $(seq 0 $scenarios); do
 				for m in "${methods[@]}"; do
 					for w in "${workloads[@]}"; do
 						for v in "${versions[@]}"; do

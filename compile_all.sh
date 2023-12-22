@@ -1,7 +1,7 @@
 #!/bin/bash
 
 track_length=(0 100 1000 10000 100000)
-q_size=(0 1000 10000 100000)
+q_size=(0)
 
 
 for track_length_ in "${track_length[@]}"; do

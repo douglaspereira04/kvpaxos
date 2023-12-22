@@ -5,8 +5,6 @@ include(cmake/base.cmake)
 include(cmake/project_options.cmake)
 include(cmake/conan.cmake)
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3") 
-
 set(STORAGE "DEFAULT" CACHE STRING "FELDMAN, MICHAEL, TBB")
 set(SCHEDULER "OLD" CACHE STRING "OLD, FREE, NON_STOP")
 set(GRAPH "OLD_GRAPH" CACHE STRING "OLD_GRAPH, TBB_GRAPH")
