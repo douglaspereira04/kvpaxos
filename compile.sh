@@ -6,4 +6,4 @@ cd ../../
 mkdir build
 cd build
 cmake .. -DSTORAGE=$1 -DSCHEDULER=$2 -DGRAPH=$3 -DTRACK_LENGTH=$4 -DQ_SIZE=$5
-make -j6
+make -j16
