@@ -42,11 +42,10 @@ public:
                 int n_partitions,
                 model::CutMethod repartition_method
     ) {
-        this->error_count_ = 0;
         this->round_robin_counter_ = 0;
         this->sync_counter_ = 0;
         this->n_dispatched_requests_ = 0;
-        
+
         this->n_partitions_ = n_partitions;
         this->repartition_interval_ = repartition_interval;
         this->repartition_method_ = repartition_method;
@@ -79,7 +78,7 @@ public:
     }
 
     void schedule_and_answer(struct client_message& request) {
-        FreeScheduler<T, TL, WorkerCapacity>::dispatch(request);
+        Scheduler<T, TL, WorkerCapacity>::dispatch(request);
         this->n_dispatched_requests_++;
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {

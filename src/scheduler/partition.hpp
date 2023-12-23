@@ -76,6 +76,10 @@ public:
         return requests_queue_.size();
     }
 
+    size_t error_count() {
+        return error_count_;
+    }
+
     void push_request(struct client_message request) {
         if constexpr(Capacity > 0){
             sem_wait(&remaining_space_);
@@ -186,8 +190,14 @@ private:
             case SCAN:
             {
                 auto length = std::stoi(request_args);
-                auto values = std::move(storage_.scan(key, length));
-
+                std::vector<std::string> values;
+                try{
+                    values = std::move(storage_.scan(key, length));
+                } catch (...){
+                    error_count_++;
+                    answer = "ERROR";
+                    break;
+                }
 
                 std::ostringstream oss;
                 std::copy(values.begin(), values.end(), std::ostream_iterator<std::string>(oss, ","));
@@ -240,6 +250,8 @@ private:
     std::unordered_map<T, int> weight_;
 
     sem_t remaining_space_;
+
+    size_t error_count_ = 0;
 };
 
 template<typename T, size_t Capacity>

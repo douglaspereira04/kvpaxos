@@ -61,3 +61,9 @@ target_link_libraries(
             types
             scheduler
 )
+
+target_compile_options(
+    replica
+        PRIVATE
+            -O3
+)

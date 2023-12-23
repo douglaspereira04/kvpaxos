@@ -40,7 +40,6 @@ public:
                 int n_partitions,
                 model::CutMethod repartition_method
     ) {
-        this->error_count_ = 0;
         this->round_robin_counter_ = 0;
         this->sync_counter_ = 0;
         this->n_dispatched_requests_ = 0;
@@ -76,98 +75,9 @@ public:
 
     }
 
-    void process_populate_request(struct client_message& request) {
-        Scheduler<T, TL, WorkerCapacity>::store_key(request.key);
-
-        if (this->repartition_method_ != model::ROUND_ROBIN) {
-            Scheduler<T, TL, WorkerCapacity>::update_graph(request);
-
-            if constexpr(TL > 0){
-                this->graph_deletion_queue_.push_back(request);
-
-                auto expired_request = std::move(this->graph_deletion_queue_.front());
-                this->graph_deletion_queue_.pop_front();
-                Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
-            }
-        }
-
-        Partition<T, WorkerCapacity>::populate_storage(request);
-    }
-
-
-
-
-    std::unordered_set<Partition<T, WorkerCapacity>*> involved_partitions(
-        const struct client_message& request)
-    {
-        std::unordered_set<Partition<T, WorkerCapacity>*> partitions;
-        auto type = static_cast<request_type>(request.type);
-
-        auto range = 1;
-        if (type == SCAN) {
-            range = std::stoi(request.args);
-        }
-
-        bool new_mapping = false;
-        for (auto i = 0; i < range; i++) {
-            if (!Scheduler<T, TL, WorkerCapacity>::stored(request.key + i)) {
-                return std::unordered_set<Partition<T,WorkerCapacity>*>();
-            }
-
-            if(!Scheduler<T, TL, WorkerCapacity>::mapped(request.key + i)){
-                Scheduler<T, TL, WorkerCapacity>::map_key(request.key + i, this->round_robin_counter_);
-                new_mapping = true;
-            }else{
-                partitions.insert(this->data_to_partition_->at(request.key + i));
-            }
-        }
-
-        if(new_mapping){
-            partitions.insert(this->partitions_.at(this->round_robin_counter_));
-            this->round_robin_counter_ = (this->round_robin_counter_+1) % this->n_partitions_;
-        }
-
-        return partitions;
-    }
-
-    void dispatch(struct client_message& request){
-
-        auto type = static_cast<request_type>(request.type);
-
-        if (type == WRITE) {
-            if (!Scheduler<T, TL, WorkerCapacity>::stored(request.key)) {
-                Scheduler<T, TL, WorkerCapacity>::store_key(request.key);
-            }
-        }
-
-
-        auto partitions = std::move(FreeScheduler<T, TL, WorkerCapacity>::involved_partitions(request));
-        if (partitions.empty()) {
-            this->partitions_.at((this->error_count_+1) % this->n_partitions_)->push_request(request);
-            this->error_count_++;
-        }else{
-            auto arbitrary_partition = *begin(partitions);
-            if (partitions.size() > 1) {
-                Scheduler<T, TL, WorkerCapacity>::sync_partitions(partitions);
-                arbitrary_partition->push_request(request);
-                Scheduler<T, TL, WorkerCapacity>::sync_partitions(partitions);
-            } else {
-                arbitrary_partition->push_request(request);
-            }
-        }
-
-        if (this->repartition_method_ != model::ROUND_ROBIN) {
-            this->graph_requests_mutex_.lock();
-                this->graph_requests_queue_.push_back(request);
-            this->graph_requests_mutex_.unlock();
-            sem_post(&this->graph_requests_semaphore_);
-
-        }
-    }
-
     void schedule_and_answer(struct client_message& request) {
 
-        FreeScheduler<T, TL, WorkerCapacity>::dispatch(request);
+        Scheduler<T, TL, WorkerCapacity>::dispatch(request);
         this->n_dispatched_requests_++;
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {
@@ -219,7 +129,6 @@ public:
                 this->graph_deletion_queue_.pop_front();
                 Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
             }
-
             n_processed_requests++;
 
             if( n_processed_requests % this->repartition_interval_ == 0 ) {

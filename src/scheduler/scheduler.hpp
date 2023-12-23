@@ -42,7 +42,6 @@ public:
         repartition_method_{repartition_method}
     {
 
-        error_count_ = 0;
         round_robin_counter_ = 0;
         sync_counter_ = 0;
         n_dispatched_requests_ = 0;
@@ -79,12 +78,9 @@ public:
 
     void process_populate_request(struct client_message& request) {
 
-        if constexpr(TL > 0){
-            store_key(request.key);
-        } else{
-            map_key(request.key);
-        }
-        
+        map_key(request.key);
+        Partition<T, WorkerCapacity>::populate_storage(request);
+
         if (repartition_method_ != model::ROUND_ROBIN) {
             update_graph(request);
 
@@ -96,8 +92,6 @@ public:
                 Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
             }
         }
-
-        Partition<T, WorkerCapacity>::populate_storage(request);
     }
 
     void run() {
@@ -137,7 +131,12 @@ public:
     }
 
     int error_count(){
-        return error_count_;
+        int count = 0;
+        for (auto& kv: partitions_) {
+            auto* partition = kv.second;
+            count += partition->error_count();
+        }
+        return count;
     }
 
     const std::vector<time_point>& repartition_timestamps() const {
@@ -151,7 +150,7 @@ public:
     const std::vector<time_point>& repartition_end_timestamps() const {
         return repartition_end_timestamps_;
     }
-    
+
     const std::vector<time_point>& repartition_apply_timestamp() const {
         return repartition_apply_timestamp_;
     }
@@ -163,37 +162,17 @@ public:
     const std::vector<duration>& reconstruction_duration() const {
         return reconstruction_duration_;
     }
-    
+
     void dispatch(struct client_message& request){
 
-        auto type = static_cast<request_type>(request.type);
-
-        if (type == WRITE) {
-            if constexpr( TL > 0 ){
-                if (!stored(request.key)) {
-                    store_key(request.key);
-                }
-            } else {
-                if (!mapped(request.key)) {
-                    map_key(request.key);
-                }
-            }
-        }
-
-
         auto partitions = std::move(involved_partitions(request));
-        if (partitions.empty()) {
-            partitions_.at((error_count_+1) % n_partitions_)->push_request(request);
-            error_count_++;
-        }else{
-            auto arbitrary_partition = *begin(partitions);
-            if (partitions.size() > 1) {
-                sync_partitions(partitions);
-                arbitrary_partition->push_request(request);
-                sync_partitions(partitions);
-            } else {
-                arbitrary_partition->push_request(request);
-            }
+        auto arbitrary_partition = *begin(partitions);
+        if (partitions.size() > 1) {
+            sync_partitions(partitions);
+            arbitrary_partition->push_request(request);
+            sync_partitions(partitions);
+        } else {
+            arbitrary_partition->push_request(request);
         }
 
         if (repartition_method_ != model::ROUND_ROBIN) {
@@ -256,35 +235,22 @@ public:
         if (type == SCAN) {
             range = std::stoi(request.args);
         }
-        
-        if constexpr(TL>0){
 
-            bool new_mapping = false;
-            for (auto i = 0; i < range; i++) {
-                if (!stored(request.key + i)) {
-                    return std::unordered_set<Partition<T,WorkerCapacity>*>();
-                }
 
-                if(!Scheduler<T, TL, WorkerCapacity>::mapped(request.key + i)){
-                    map_key(request.key + i, round_robin_counter_);
-                    new_mapping = true;
-                } else {
-                    partitions.insert(data_to_partition_->at(request.key + i));
-                }
-            }
+        bool new_mapping = false;
+        for (auto i = 0; i < range; i++) {
 
-            if(new_mapping){
-                partitions.insert(partitions_.at(round_robin_counter_));
-                round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
-            }
-
-        } else {
-            for (auto i = 0; i < range; i++) {
-                if (!mapped(request.key + i)) {
-                    return std::unordered_set<Partition<T,WorkerCapacity>*>();
-                }
+            if(!Scheduler<T, TL, WorkerCapacity>::mapped(request.key + i)){
+                map_key(request.key + i, round_robin_counter_);
+                new_mapping = true;
+            } else {
                 partitions.insert(data_to_partition_->at(request.key + i));
             }
+        }
+
+        if(new_mapping){
+            partitions.insert(partitions_.at(round_robin_counter_));
+            round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
         }
 
         return partitions;
@@ -334,14 +300,6 @@ public:
 
     bool mapped(T key) const {
         return data_to_partition_->find(key) != data_to_partition_->end();
-    }
-
-    bool stored(T key) const {
-        return stored_.find(key) != stored_.end();
-    }
-
-    void store_key(T key) {
-        stored_.emplace(key);
     }
 
     void update_graph_loop() {
@@ -450,7 +408,6 @@ public:
     kvstorage::Storage storage_;
     std::unordered_map<int, Partition<T, WorkerCapacity>*> partitions_;
     std::unordered_map<T, Partition<T, WorkerCapacity>*>* data_to_partition_;
-    std::unordered_set<T> stored_;
 
     std::thread graph_thread_;
     sem_t graph_requests_semaphore_;
@@ -472,8 +429,6 @@ public:
     std::vector<duration> reconstruction_duration_;
 
     std::vector<std::vector<size_t>> in_queue_amount_;
-
-    size_t error_count_ = 0;
 
 };
 

@@ -13,19 +13,20 @@ std::string template_value(VALUE_SIZE, '*');
 
 
 std::string Storage::read(int key) {
-    try {
-        std::string val;
+    std::string val;
 
 #if defined(MICHAEL) || defined(FELDMAN)
-		GuardedPointer gp(storage_.get(key));
-        if(gp){
-            val = gp->second;
-        }
+    GuardedPointer gp(storage_.get(key));
+    if(gp){
+        val = gp->second;
+    }
 #elif defined(TBB)
-        val = storage_.at(key);
+    val = storage_.at(key);
 #else 
-        val = storage_.at(key);
+    val = storage_.at(key);
 #endif
+    try {
+
         return decompress(val);
 
     } catch(...) {
