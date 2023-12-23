@@ -4,10 +4,10 @@ partitions=(8)
 versions=(old)
 workloads=(ycsb_e)
 n_initial_keys=(1000000)
-deltap=(1000000 100 1000 10000 100000)
-track_length=(0 100 1000 10000 100000)
-q_size=(0 0 0 0 0)
-scenarios=4
+deltap=(10000 100000 1000000 100 1000 10000 100000)
+track_length=(0 0 0 100 1000 10000 100000)
+q_size=(0 0 0 0 0 0 0)
+scenarios=6
 reps=1
 
 for w in "${workloads[@]}"; do
