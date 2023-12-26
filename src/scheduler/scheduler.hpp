@@ -202,7 +202,7 @@ public:
                 auto input_graph = InputGraph<T>(workload_graph_);
                 graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
-                auto temp = partitioning(&input_graph);
+                auto temp = partitioning(input_graph);
 
                 delete data_to_partition_;
                 data_to_partition_ = temp;
@@ -366,15 +366,15 @@ public:
     }
 
 
-    std::unordered_map<T, Partition<T, WorkerCapacity>*>* partitioning(struct InputGraph<T>* graph) {
+    std::unordered_map<T, Partition<T, WorkerCapacity>*>* partitioning(InputGraph<T> &graph) {
         repartition_timestamps_.push_back(std::chrono::system_clock::now());
 
         auto partition_scheme = std::move(
             model::multilevel_cut(
-                graph->vertice_weight, 
-                graph->x_edges, 
-                graph->edges, 
-                graph->edges_weight,
+                graph.vertice_weight, 
+                graph.x_edges, 
+                graph.edges, 
+                graph.edges_weight,
                 partitions_.size(), 
                 repartition_method_
             )
@@ -385,7 +385,7 @@ public:
         auto reconstruction_begin = std::chrono::system_clock::now();
         auto data_to_partition = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
-        for (auto& it : graph->vertice_to_pos) {
+        for (auto& it : graph.vertice_to_pos) {
             T key = it.first;
             int position = it.second;
             //position indicates the position of the key in partition scheme

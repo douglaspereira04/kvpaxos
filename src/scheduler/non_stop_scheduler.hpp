@@ -57,8 +57,8 @@ public:
         this->data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
         this->updated_data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
-        reparting_.store(false, std::memory_order_relaxed);
-        update_.store(false, std::memory_order_relaxed);
+        reparting_.store(false, std::memory_order_seq_cst);
+        update_.store(false, std::memory_order_seq_cst);
 
         sem_init(&this->graph_requests_semaphore_, 0, 0);
         this->graph_thread_ = std::thread(&NonStopScheduler<T, TL, WorkerCapacity>::update_graph_loop, this);
@@ -83,12 +83,12 @@ public:
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {
 
-            if(update_ == true){
+            if(update_.load(std::memory_order_acquire) == true){
                 FreeScheduler<T, TL, WorkerCapacity>::change_partition_scheme();
                 this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
 
-                update_.store(false, std::memory_order_seq_cst);
-                reparting_.store(false, std::memory_order_seq_cst);
+                update_.store(false, std::memory_order_release);
+                reparting_.store(false, std::memory_order_release);
             }
         }
     }
@@ -111,9 +111,9 @@ public:
                 Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
             }
 
-            if(reparting_.load(std::memory_order_seq_cst) == false) {
+            if(reparting_.load(std::memory_order_acquire) == false) {
                 if(this->workload_graph_.n_vertex() > 0){
-                    reparting_.store(true, std::memory_order_seq_cst);
+                    reparting_.store(true, std::memory_order_release);
                     NonStopScheduler<T, TL, WorkerCapacity>::order_partitioning();
                 }
             } 
@@ -123,7 +123,7 @@ public:
 
     void order_partitioning(){
         auto begin = std::chrono::system_clock::now();
-        this->input_graph_ = new InputGraph<T>(this->workload_graph_);
+        this->input_graph_ = InputGraph<T>(this->workload_graph_);
         this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
         this->repartition_request_timestamp_.push_back(std::chrono::system_clock::now());
@@ -137,10 +137,9 @@ public:
             delete this->updated_data_to_partition_;
 
             auto temp = Scheduler<T, TL, WorkerCapacity>::partitioning(this->input_graph_);
-            delete this->input_graph_;
 
             this->updated_data_to_partition_ = temp;
-            update_.store(true, std::memory_order_seq_cst);
+            update_.store(true, std::memory_order_release);
         }
     }
 

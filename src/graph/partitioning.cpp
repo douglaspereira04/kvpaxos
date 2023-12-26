@@ -43,11 +43,11 @@ std::vector<int> multilevel_cut(
             NULL, options, &objval, vertex_partitions.data()
         );
     } else {
-        double imbalance = 0.2;  // equal to METIS default imbalance
+        double imbalance = 0.03;//default kaffpa imbalance
         kaffpa(
             &n_vertex, vertice_weight.data(), x_edges.data(),
             edges_weight.data(), edges.data(), &n_partitions,
-            &imbalance, true, -1, STRONG, &objval,
+            &imbalance, true, -1, ECO, &objval,
             vertex_partitions.data()
         );
     }

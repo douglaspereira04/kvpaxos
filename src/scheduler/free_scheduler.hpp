@@ -104,7 +104,7 @@ public:
     void order_partitioning(){
         auto begin = std::chrono::system_clock::now();
         input_graph_mutex_.lock();
-            input_graph_ = new InputGraph<T>(this->workload_graph_);
+            input_graph_ = InputGraph<T>(this->workload_graph_);
         input_graph_mutex_.unlock();
         this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
@@ -145,7 +145,6 @@ public:
 
             input_graph_mutex_.lock();
                 auto temp = Scheduler<T, TL, WorkerCapacity>::partitioning(input_graph_);
-                delete input_graph_;
             input_graph_mutex_.unlock();
 
             updated_data_to_partition_ = temp;
@@ -158,7 +157,7 @@ public:
 public:
 
     std::unordered_map<T, Partition<T, WorkerCapacity>*>* updated_data_to_partition_;
-    InputGraph<T> *input_graph_;
+    InputGraph<T> input_graph_;
 
     int n_processed_requests = 0;
 
