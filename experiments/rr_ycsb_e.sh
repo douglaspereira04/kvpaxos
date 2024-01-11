@@ -1,10 +1,10 @@
 #!/bin/bash
-methods=(METIS KAHIP)
-partitions=(8 16)
-versions=(non_stop)
-workloads=(ycsb_d)
+methods=(ROUND_ROBIN)
+partitions=(1 8 16)
+versions=(old)
+workloads=(ycsb_e)
 n_initial_keys=(1000000)
-deltap=(0)
+deltap=(500000000)
 track_length=(0)
 q_size=(0)
 scenarios=0

@@ -11,7 +11,7 @@ workload.scan_proportion = 0.0
 workload.insert_proportion = 0.05
 
 workload.min_scan_length = 2
-workload.max_scan_length = 4
+workload.max_scan_length = 8
 
 # export
 export = true
