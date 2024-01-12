@@ -1,6 +1,7 @@
 #!/bin/bash
+# ./non_stop_0_0 configs/config.toml 4 1000000 0 METIS ycsb_d_1000000_requests.txt
 methods=(METIS KAHIP)
-partitions=(8 16)
+partitions=(8)
 versions=(non_stop)
 workloads=(ycsb_d)
 n_initial_keys=(1000000)
@@ -32,7 +33,7 @@ for i in $(seq $reps); do
 							if [ ! -f "output/${w}/${m}/${track_length[s]}_${q_size[s]}_${initial}_${deltap[s]}_${v}_${p}_${i}.csv" ]; then
 								./${v}_${track_length[s]}_${q_size[s]} configs/config.toml ${p} ${initial} ${deltap[s]} ${m} ${w}_${initial}_requests.txt > output/${w}/${m}/${track_length[s]}_${q_size[s]}_${initial}_${deltap[s]}_${v}_${p}_${i}.csv
 								mv details.csv output/${w}/${m}/details_${track_length[s]}_${q_size[s]}_${initial}_${deltap[s]}_${v}_${p}_${i}.csv
-								cp -r output /users/douglasp/dez_22/
+								cp -r output /users/douglasp/jan_12/
 							fi
 						done;
 					done;

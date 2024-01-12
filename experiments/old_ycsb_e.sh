@@ -1,6 +1,6 @@
 #!/bin/bash
 methods=(METIS KAHIP)
-partitions=(8 16)
+partitions=(8)
 versions=(old)
 workloads=(ycsb_e)
 n_initial_keys=(1000000)
@@ -32,7 +32,7 @@ for i in $(seq $reps); do
 							if [ ! -f "output/${w}/${m}/${track_length[s]}_${q_size[s]}_${initial}_${deltap[s]}_${v}_${p}_${i}.csv" ]; then
 								./${v}_${track_length[s]}_${q_size[s]} configs/config.toml ${p} ${initial} ${deltap[s]} ${m} ${w}_${initial}_requests.txt > output/${w}/${m}/${track_length[s]}_${q_size[s]}_${initial}_${deltap[s]}_${v}_${p}_${i}.csv
 								mv details.csv output/${w}/${m}/details_${track_length[s]}_${q_size[s]}_${initial}_${deltap[s]}_${v}_${p}_${i}.csv
-								cp -r output /users/douglasp/dez_22/
+								cp -r output /users/douglasp/jan_12/
 							fi
 						done;
 					done;
