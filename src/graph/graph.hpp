@@ -182,7 +182,7 @@ private:
     vertex_weight_t vertex_weight_;
     edges_weight_t edges_weight_;
     
-    int n_edges_{0};
+    size_t n_edges_{0};
     int total_vertex_weight_{0};
     int total_edges_weight_{0};
 };

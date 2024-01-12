@@ -20,7 +20,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-
+#include <assert.h>
 #include "graph/graph.hpp"
 #include "request/request.hpp"
 #include "storage/storage.h"
@@ -69,7 +69,16 @@ public:
         if constexpr(Capacity > 0){
             sem_init(&remaining_space_, 0, Capacity);
         }
+
+        //create cpu set for this worker
+        cpu_set_t cpu_set;
+        CPU_ZERO(&cpu_set);
+        CPU_SET(id_+4, &cpu_set);
+
         worker_thread_ = std::thread(&Partition<T, Capacity>::thread_loop, this);
+
+        //assign worker thread affinity
+        assert(pthread_setaffinity_np(worker_thread_.native_handle(), sizeof(cpu_set_t), &cpu_set) == 0);
     }
 
     size_t request_queue_size() {

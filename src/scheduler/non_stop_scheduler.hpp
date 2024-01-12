@@ -17,7 +17,7 @@
 #include <utility>
 #include <vector>
 #include <atomic>
-
+#include <assert.h>
 #include "graph/graph.hpp"
 #include "graph/partitioning.h"
 #include "partition.hpp"
@@ -60,11 +60,25 @@ public:
         reparting_.store(false, std::memory_order_seq_cst);
         update_.store(false, std::memory_order_seq_cst);
 
+        //create cpu set for threads
+        cpu_set_t graph_cpu_set;
+        cpu_set_t part_cpu_set;
+        CPU_ZERO(&graph_cpu_set);
+        CPU_ZERO(&part_cpu_set);
+        CPU_SET(2, &graph_cpu_set);
+        CPU_SET(3, &part_cpu_set);
+
         sem_init(&this->graph_requests_semaphore_, 0, 0);
         this->graph_thread_ = std::thread(&NonStopScheduler<T, TL, WorkerCapacity>::update_graph_loop, this);
 
+        //assign graph thread affinity
+        assert(pthread_setaffinity_np(this->graph_thread_.native_handle(), sizeof(cpu_set_t), &graph_cpu_set) == 0);
+
         sem_init(&this->repart_semaphore_, 0, 0);
         this->reparting_thread_ = std::thread(&NonStopScheduler<T, TL, WorkerCapacity>::partitioning_loop, this);
+
+        //assign partition thread affinity
+        assert(pthread_setaffinity_np(this->reparting_thread_.native_handle(), sizeof(cpu_set_t), &part_cpu_set) == 0);
 
         client_message dummy;
         dummy.type = DUMMY;

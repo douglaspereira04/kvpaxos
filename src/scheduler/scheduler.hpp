@@ -16,7 +16,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
+#include <assert.h>
 #include "input_graph.hpp"
 #include "graph/graph.hpp"
 #include "graph/partitioning.h"
@@ -54,7 +54,15 @@ public:
 
         sem_init(&graph_requests_semaphore_, 0, 0);
         pthread_barrier_init(&repartition_barrier_, NULL, 2);
+
+        //create cpu set for threads
+        cpu_set_t graph_cpu_set;
+        CPU_ZERO(&graph_cpu_set);
+        CPU_SET(2, &graph_cpu_set);
         graph_thread_ = std::thread(&Scheduler<T, TL, WorkerCapacity>::update_graph_loop, this);
+
+        //assign graph thread affinity
+        assert(pthread_setaffinity_np(this->graph_thread_.native_handle(), sizeof(cpu_set_t), &graph_cpu_set) == 0);
 
 
         client_message dummy;

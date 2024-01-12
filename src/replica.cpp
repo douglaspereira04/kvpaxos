@@ -43,7 +43,7 @@
 #include <utility>
 #include <vector>
 #include <random>
-
+#include <assert.h>
 #include <cds/init.h>
 #include <cds/gc/hp.h>
 
@@ -143,6 +143,7 @@ initialize_scheduler(
 
 	for (auto i = 0; i <= n_initial_keys; i++) {
 		struct client_message client_message;
+		client_message.type = WRITE; 
 		client_message.key = i;
 		scheduler->process_populate_request(client_message);
 	}
@@ -236,6 +237,11 @@ run(const toml_config& config)
 	auto throughput_thread = std::thread(
 		metrics_loop, SLEEP, n_requests, scheduler
 	);
+	//create cpu set for metrics
+	cpu_set_t cpu_set;
+	CPU_ZERO(&cpu_set);
+	CPU_SET(0, &cpu_set);
+    assert(pthread_setaffinity_np(throughput_thread.native_handle(), sizeof(cpu_set_t), &cpu_set) == 0);
 	
 	auto start_execution_timestamp = std::chrono::system_clock::now();
 	execute_requests(*scheduler, messages);
@@ -324,6 +330,12 @@ main(int argc, char const *argv[])
 		usage(std::string(argv[0]));
 		exit(1);
 	}
+
+	//create cpu set for main
+	cpu_set_t cpu_set;
+	CPU_ZERO(&cpu_set);
+	CPU_SET(1, &cpu_set);
+    assert(pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpu_set) == 0);
 
 
 	params = const_cast<char**>(argv);
