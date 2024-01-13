@@ -6,9 +6,9 @@ versions=(non_stop)
 workloads=(ycsb_d)
 n_initial_keys=(1000000)
 deltap=(0)
-track_length=(0)
+track_length=(0 1000 10000 100000)
 q_size=(0)
-scenarios=0
+scenarios=3
 reps=1
 
 for w in "${workloads[@]}"; do

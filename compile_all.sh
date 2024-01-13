@@ -1,6 +1,6 @@
 #!/bin/bash
 
-track_length=(0)
+track_length=(0 1000 10000 100000)
 q_size=(0)
 
 
