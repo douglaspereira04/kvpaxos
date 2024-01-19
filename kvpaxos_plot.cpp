@@ -26,35 +26,62 @@ std::vector<std::string> sizes = {
 };
 
 std::vector<std::pair<std::string, std::string>> non_stop_ycsb_d = {
+    {"RR","output/ycsb_d/ROUND_ROBIN/0_0_1000000_500000000_old_8_1.csv"},
+    {"SW","output/ycsb_d/ROUND_ROBIN/0_0_1000000_500000000_old_1_1.csv"},
     {"NS","output/ycsb_d/METIS/0_0_1000000_0_non_stop_8_1.csv"},
-    {"NS, {/:Italic {/Symbol d}}{/:Italic r} = 100","output/ycsb_d/METIS/100_0_1000000_0_non_stop_8_1.csv"},
-    {"NS, {/:Italic {/Symbol d}}{/:Italic r} = 1.000","output/ycsb_d/METIS/1000_0_1000000_0_non_stop_8_1.csv"},
-    {"NS, {/:Italic {/Symbol d}}{/:Italic r} = 10.000","output/ycsb_d/METIS/10000_0_1000000_0_non_stop_8_1.csv"},
-    {"NS, {/:Italic {/Symbol d}}{/:Italic r} = 100.000","output/ycsb_d/METIS/100000_0_1000000_0_non_stop_8_1.csv"},
+    {"NS, {/:Italic W}=1K","output/ycsb_d/METIS/1000_0_1000000_0_non_stop_8_1.csv"},
+    {"NS, {/:Italic W}=10K","output/ycsb_d/METIS/10000_0_1000000_0_non_stop_8_1.csv"},
+    {"NS, {/:Italic W}=100K","output/ycsb_d/METIS/100000_0_1000000_0_non_stop_8_1.csv"},
 };
 
 std::vector<std::pair<std::string, std::string>> non_stop_ycsb_e = {
+    {"RR","output/ycsb_e/ROUND_ROBIN/0_0_1000000_500000000_old_8_1.csv"},
+    {"SW","output/ycsb_e/ROUND_ROBIN/0_0_1000000_500000000_old_1_1.csv"},
     {"NS","output/ycsb_e/METIS/0_0_1000000_0_non_stop_8_1.csv"},
-    {"NS, {/:Italic {/Symbol d}}{/:Italic r} = 100","output/ycsb_e/METIS/100_0_1000000_0_non_stop_8_1.csv"},
-    {"NS, {/:Italic {/Symbol d}}{/:Italic r} = 1.000","output/ycsb_e/METIS/1000_0_1000000_0_non_stop_8_1.csv"},
-    {"NS, {/:Italic {/Symbol d}}{/:Italic r} = 10.000","output/ycsb_e/METIS/10000_0_1000000_0_non_stop_8_1.csv"},
-    {"NS, {/:Italic {/Symbol d}}{/:Italic r} = 100.000","output/ycsb_e/METIS/100000_0_1000000_0_non_stop_8_1.csv"},
+    {"NS, {/:Italic W}=1K","output/ycsb_e/METIS/1000_0_1000000_0_non_stop_8_1.csv"},
+    {"NS, {/:Italic W}=10K","output/ycsb_e/METIS/10000_0_1000000_0_non_stop_8_1.csv"},
+    {"NS, {/:Italic W}=100K","output/ycsb_e/METIS/100000_0_1000000_0_non_stop_8_1.csv"},
 };
 
 std::vector<std::pair<std::string, std::string>> old_ycsb_d = {
-    {"Base {/:Italic {/Symbol d}}{/:Italic p} = 100.000","output/ycsb_d/METIS/0_0_1000000_100000_old_8_1.csv"},
-    {"Base {/:Italic {/Symbol d}}{/:Italic p} = 1.000.000","output/ycsb_d/METIS/0_0_1000000_1000000_old_8_1.csv"},
-    {"Base {/:Italic {/Symbol d}}{/:Italic p} = 10.000.000","output/ycsb_d/METIS/0_0_1000000_10000000_old_8_1.csv"},
+    //{"Base {/:Italic {/Symbol D}}{/:Italic p}=100K","output/ycsb_d/METIS/0_0_1000000_100000_old_8_1.csv"},
+    {"RR","output/ycsb_d/ROUND_ROBIN/0_0_1000000_500000000_old_8_1.csv"},
+    {"SW","output/ycsb_d/ROUND_ROBIN/0_0_1000000_500000000_old_1_1.csv"},
+    {"Base {/:Italic {/Symbol D}}{/:Italic p}=1M","output/ycsb_d/METIS/0_0_1000000_1000000_old_8_1.csv"},
+    {"Base {/:Italic {/Symbol D}}{/:Italic p}=10M","output/ycsb_d/METIS/0_0_1000000_10000000_old_8_1.csv"},
+    {"Base, {/:Italic {/Symbol D}}{/:Italic p}={/:Italic W}=1K","output/ycsb_d/METIS/1000_0_1000000_1000_old_8_1.csv"},
+    {"Base, {/:Italic {/Symbol D}}{/:Italic p}={/:Italic W}=10K","output/ycsb_d/METIS/10000_0_1000000_10000_old_8_1.csv"},
+    {"Base, {/:Italic {/Symbol D}}{/:Italic p}={/:Italic W}=100K","output/ycsb_d/METIS/100000_0_1000000_100000_old_8_1.csv"},
+    
 };
 
 std::vector<std::pair<std::string, std::string>> old_ycsb_e = {
-    {"Base {/:Italic {/Symbol d}}{/:Italic p} = 10.000","output/ycsb_e/METIS/0_0_1000000_10000_old_8_1.csv"},
-    {"Base {/:Italic {/Symbol d}}{/:Italic p} = 100.000","output/ycsb_e/METIS/0_0_1000000_100000_old_8_1.csv"},
-    {"Base {/:Italic {/Symbol d}}{/:Italic p} = 1.000.000","output/ycsb_e/METIS/0_0_1000000_1000000_old_8_1.csv"},
+    {"RR","output/ycsb_e/ROUND_ROBIN/0_0_1000000_500000000_old_8_1.csv"},
+    {"SW","output/ycsb_e/ROUND_ROBIN/0_0_1000000_500000000_old_1_1.csv"},
+    {"Base {/:Italic {/Symbol D}}{/:Italic p}=100K","output/ycsb_e/METIS/0_0_1000000_100000_old_8_1.csv"},
+    {"Base {/:Italic {/Symbol D}}{/:Italic p}=1M","output/ycsb_e/METIS/0_0_1000000_1000000_old_8_1.csv"},
+    {"Base, {/:Italic {/Symbol D}}{/:Italic p}={/:Italic W}=1K","output/ycsb_e/METIS/1000_0_1000000_1000_old_8_1.csv"},
+    {"Base, {/:Italic {/Symbol D}}{/:Italic p}={/:Italic W}=10K","output/ycsb_e/METIS/10000_0_1000000_10000_old_8_1.csv"},
+    {"Base, {/:Italic {/Symbol D}}{/:Italic p}={/:Italic W}=100K","output/ycsb_e/METIS/100000_0_1000000_100000_old_8_1.csv"},
+};
+
+std::vector<std::pair<std::string, std::string>> best_simple_ycsb_d = {
+    {"Base {/:Italic {/Symbol D}}{/:Italic p}=10M","output/ycsb_d/METIS/0_0_1000000_10000000_old_8_1.csv"},
+    {"NS","output/ycsb_d/METIS/0_0_1000000_0_non_stop_8_1.csv"},
+    {"RR","output/ycsb_d/ROUND_ROBIN/0_0_1000000_500000000_old_8_1.csv"},
+    {"SW","output/ycsb_d/ROUND_ROBIN/0_0_1000000_500000000_old_1_1.csv"},
 };
 
 
-void plot_files(std::vector<std::pair<std::string,std::string>> files, std::string image_name, std::string folder, bool fit_to_faster){
+std::vector<std::pair<std::string, std::string>> best_simple_ycsb_e = {
+    {"Base, {/:Italic {/Symbol D}}{/:Italic p}={/:Italic W}=10K","output/ycsb_e/METIS/10000_0_1000000_10000_old_8_1.csv"},
+    {"NS, {/:Italic W}=1K","output/ycsb_e/METIS/1000_0_1000000_0_non_stop_8_1.csv"},
+    {"RR","output/ycsb_e/ROUND_ROBIN/0_0_1000000_500000000_old_8_1.csv"},
+    {"SW","output/ycsb_e/ROUND_ROBIN/0_0_1000000_500000000_old_1_1.csv"},
+};
+
+
+void plot_files(std::vector<std::pair<std::string,std::string>> files, std::string image_name, std::string folder, bool fit_to_faster, double y_range, double x_range){
     std::vector<double> x;
     std::map<std::string,std::vector<double>> y;
     double min_x = std::numeric_limits<double>::max();
@@ -97,32 +124,45 @@ void plot_files(std::vector<std::pair<std::string,std::string>> files, std::stri
     std::vector<std::string> legend_vector;
     std::cout << "x.size():" << x.size() << std::endl;
 
+    auto ax1 = matplot::nexttile();
     int i = 0;
     for (const auto& kv : y) {
         auto p = matplot::plot(x, kv.second);
+        if((kv.first == "Base {/:Italic {/Symbol D}}{/:Italic p}=1M" || kv.first == "NS, {/:Italic W}=100K" || kv.first == "NS, {/:Italic W}=1K") && image_name == "ycsb_d"){
+            p->line_style("--");
+        }
+        if(kv.first == "RR"){
+            p->line_spec(matplot::line_spec("--k"));
+        }else if(kv.first == "SW"){
+            p->line_spec(matplot::line_spec("--r"));
+        }
         p->line_width(1);
         p->marker_size(8);
         p->display_name(kv.first);
         i = (i+1)%8;
         matplot::hold(matplot::on);
     }
+    //matplot::title("\n\n"+image_name);
+
+    auto lgd = matplot::legend(true);
+    //lgd->location(matplot::legend::general_alignment::topright);
+    //lgd->inside(false);
+    //lgd->label_after_sample(true);
+    lgd->position({static_cast<float>(x_range*1.12),static_cast<float>(y_range*0.95)});
+    lgd->font_size(9.f);
 
     if(fit_to_faster){
-        matplot::xrange({0.0,100.0});
+        matplot::xrange({0.0,min_x});
+    } else if(x_range != 0){
+        matplot::xrange({0.0,x_range});
     }else{
         matplot::xrange({0.0,x.back()});
     }
+
+    if(y_range != 0){
+        matplot::yrange({0.0,y_range});
+    }
     matplot::grid(matplot::on);
-    matplot::xlabel("Tempo (segundos)");
-    matplot::ylabel("Vazão (kRequisições)");
-    auto lgd = matplot::legend(true);
-    lgd->location(matplot::legend::general_alignment::topright);
-    lgd->inside(false);
-    lgd->font_size(14.f);
-    std::string path = folder+image_name+".png";
-    matplot::title("");
-    matplot::save(path);
-    matplot::hold(false);
 }
 
 void plot_all(std::string folder, bool fit_to_faster = false){
@@ -150,11 +190,44 @@ void plot_all(std::string folder, bool fit_to_faster = false){
         plot_files(files, "old_free_ycsb_e_"+sizes[i], folder, fit_to_faster);
     }*/
 
-    plot_files(non_stop_ycsb_d, "non_stop_ycsb_d", folder, fit_to_faster);
-    plot_files(non_stop_ycsb_e, "non_stop_ycsb_e", folder, fit_to_faster);
+    matplot::tiledlayout(3, 1);
 
-    plot_files(old_ycsb_d, "old_ycsb_d", folder, fit_to_faster);
-    plot_files(old_ycsb_e, "old_ycsb_e", folder, fit_to_faster);
+    plot_files(non_stop_ycsb_d, "ycsb_d", folder, fit_to_faster, 700, 140);
+    //plot_files(non_stop_ycsb_e, "non_stop_ycsb_e", folder, fit_to_faster, 200, 100);
+
+    plot_files(old_ycsb_d, "ycsb_d", folder, fit_to_faster, 700, 140);
+    matplot::ylabel("Vazão (kRequisições)");
+    //plot_files(old_ycsb_e, "old_ycsb_e", folder, fit_to_faster, 200, 150);
+
+    //plot_files(best_simple_ycsb_d, "ycsb_d", folder, fit_to_faster, 700, 140);
+    //plot_files(best_simple_ycsb_e, "best_ycsb_e", folder, fit_to_faster, 200, 150);
+
+    //plot_files(best_sliding_ycsb_e, "best_sliding_ycsb_e", folder, fit_to_faster, 200, 150);
+
+
+    matplot::xlabel("Tempo (segundos)");
+
+    std::string path = "ycsb_d.png";
+    matplot::save(path);
+    matplot::hold(false);
+
+    matplot::tiledlayout(3, 1);
+
+    plot_files(non_stop_ycsb_e, "ycsb_e", folder, fit_to_faster, 100, 220);
+
+    plot_files(old_ycsb_e, "ycsb_e", folder, fit_to_faster, 100, 220);
+    matplot::ylabel("Vazão (kRequisições)");
+
+    //plot_files(best_simple_ycsb_e, "ycsb_e", folder, fit_to_faster, 100, 220);
+
+    //plot_files(best_sliding_ycsb_e, "best_sliding_ycsb_e", folder, fit_to_faster, 200, 150);
+
+
+    matplot::xlabel("Tempo (segundos)");
+
+    path = "ycsb_e.png";
+    matplot::save(path);
+    matplot::hold(false);
 
 
     /*
@@ -197,6 +270,5 @@ void plot_all(std::string folder, bool fit_to_faster = false){
 }
 int main(int argc, char *argv[]){
     plot_all("results/");
-    plot_all("results/zoom/", true);
     return 0;
 }
