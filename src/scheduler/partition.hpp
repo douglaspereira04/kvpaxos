@@ -25,6 +25,7 @@
 #include "request/request.hpp"
 #include "storage/storage.h"
 #include "types/types.h"
+//#include <boost/lockfree/spsc_queue.hpp>
 
 
 namespace kvpaxos {
@@ -82,7 +83,7 @@ public:
     }
 
     size_t request_queue_size() {
-        return requests_queue_.size();
+       return requests_queue_.size();
     }
 
     size_t error_count() {
@@ -97,6 +98,19 @@ public:
             requests_queue_.push(std::move(request));
         queue_mutex_.unlock();
         sem_post(&semaphore_);
+    }
+
+    struct client_message pop_request() {
+        struct client_message request;
+        sem_wait(&semaphore_);
+        queue_mutex_.lock();
+            request = std::move(requests_queue_.front());
+            requests_queue_.pop();
+        queue_mutex_.unlock();
+        if constexpr(Capacity > 0){
+            sem_post(&remaining_space_);
+        }
+        return request;
     }
 
     void insert_data(const T& data, int weight = 0) {
@@ -163,17 +177,10 @@ private:
 		cds::threading::Manager::attachThread();
 #endif
         while (executing_) {
-            sem_wait(&semaphore_);
+
+            struct client_message request = pop_request();
             if (not executing_) {
                 return;
-            }
-
-            queue_mutex_.lock();
-                auto request = std::move(requests_queue_.front());
-                requests_queue_.pop();
-            queue_mutex_.unlock();
-            if constexpr(Capacity > 0){
-                sem_post(&remaining_space_);
             }
 
             auto type = static_cast<request_type>(request.type);
@@ -253,6 +260,7 @@ private:
     std::thread worker_thread_;
     sem_t semaphore_;
     std::queue<struct client_message> requests_queue_;
+    //boost::lockfree::spsc_queue<struct client_message, Capacity> bounded_requests_queue;
     std::mutex queue_mutex_;
 
     int total_weight_ = 0;
