@@ -1,13 +1,13 @@
 #!/bin/bash
-methods=(METIS)
-partitions=(8)
+methods=(ROUND_ROBIN)
+partitions=(1 8)
 versions=(old)
-workloads=(ycsb_d)
+workloads=(ycsb_a)
 n_initial_keys=(1000000)
-deltap=(10000 10000 10000 10000 100000 100000 100000 100000 1000000 1000000 1000000 1000000 10000000 10000000 10000000 10000000)
-track_length=(0 1000 10000 100000 0 1000 10000 100000 0 1000 10000 100000 0 1000 10000 100000 0 1000 10000 100000 )
-q_size=(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
-scenarios=19
+deltap=(500000000)
+track_length=(0)
+q_size=(0)
+scenarios=0
 reps=1
 
 for w in "${workloads[@]}"; do

@@ -1,14 +1,14 @@
 #!/bin/bash
 # ./non_stop_0_0 configs/config.toml 4 1000000 0 METIS ycsb_d_1000000_requests.txt
-methods=(METIS KAHIP)
+methods=(METIS)
 partitions=(8)
 versions=(non_stop)
 workloads=(ycsb_d)
 n_initial_keys=(1000000)
-deltap=(0 0 0 0)
-track_length=(0 1000 10000 100000)
-q_size=(0 0 0 0)
-scenarios=3
+deltap=(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+track_length=(0 0 0 0 1000 1000 1000 1000 10000 10000 10000 10000 100000 100000 100000 100000)
+q_size=(0 1000 10000 100000 0 1000 10000 100000 0 1000 10000 100000 0 1000 10000 100000)
+scenarios=15
 reps=1
 
 for w in "${workloads[@]}"; do
