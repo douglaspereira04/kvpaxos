@@ -7,6 +7,7 @@ add_subdirectory(scheduler)
 add_subdirectory(graph)
 
 find_package(LibCDS REQUIRED)
+find_package(Boost REQUIRED)
 
 add_executable(replica)
 
@@ -55,6 +56,7 @@ target_sources(
 target_link_libraries(
     replica
         PRIVATE
+            Boost::boost
             LibCDS::cds
             CONAN_PKG::toml11
             request

@@ -126,6 +126,18 @@ public:
         return in_queue;
     }
 
+    size_t max_in_queue_amount() {
+        size_t max = 0;
+        for (auto& kv: partitions_) {
+            auto* partition = kv.second;
+            size_t in_queue = partition->request_queue_size();
+            if(partition->request_queue_size() > max){
+                max = in_queue;
+            }
+        }
+        return max;
+    }
+
     size_t graph_vertices(){
         return workload_graph_.n_vertex();
     }

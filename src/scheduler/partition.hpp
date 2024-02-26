@@ -25,7 +25,7 @@
 #include "request/request.hpp"
 #include "storage/storage.h"
 #include "types/types.h"
-//#include <boost/lockfree/spsc_queue.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
 
 
 namespace kvpaxos {
@@ -83,7 +83,11 @@ public:
     }
 
     size_t request_queue_size() {
-       return requests_queue_.size();
+        if(Capacity > 0){
+            return bounded_requests_queue.read_available();
+        } else {
+            return requests_queue_.size();
+        }
     }
 
     size_t error_count() {
@@ -93,22 +97,28 @@ public:
     void push_request(struct client_message request) {
         if constexpr(Capacity > 0){
             sem_wait(&remaining_space_);
+            bounded_requests_queue.push(request);
+        }else{
+            queue_mutex_.lock();
+                requests_queue_.push(std::move(request));
+            queue_mutex_.unlock();
         }
-        queue_mutex_.lock();
-            requests_queue_.push(std::move(request));
-        queue_mutex_.unlock();
         sem_post(&semaphore_);
     }
 
     struct client_message pop_request() {
         struct client_message request;
         sem_wait(&semaphore_);
-        queue_mutex_.lock();
-            request = std::move(requests_queue_.front());
-            requests_queue_.pop();
-        queue_mutex_.unlock();
+
         if constexpr(Capacity > 0){
+            request = std::move(bounded_requests_queue.front());
+            bounded_requests_queue.pop();
             sem_post(&remaining_space_);
+        }else{
+            queue_mutex_.lock();
+                request = std::move(requests_queue_.front());
+                requests_queue_.pop();
+            queue_mutex_.unlock();
         }
         return request;
     }
@@ -260,7 +270,7 @@ private:
     std::thread worker_thread_;
     sem_t semaphore_;
     std::queue<struct client_message> requests_queue_;
-    //boost::lockfree::spsc_queue<struct client_message, Capacity> bounded_requests_queue;
+    boost::lockfree::spsc_queue<struct client_message, boost::lockfree::capacity<Capacity>> bounded_requests_queue;
     std::mutex queue_mutex_;
 
     int total_weight_ = 0;
