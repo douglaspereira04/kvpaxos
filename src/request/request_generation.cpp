@@ -522,6 +522,9 @@ void generate_export_requests(
             do{
                 key = data_generator();
             } while(key >= insertkeysequence->last_value());
+            if(type == request_type::UPDATE){
+                type = request_type::WRITE;
+            }
         }else if(type == request_type::SCAN){
             int size_value = scan_length_generator();
             size = std::to_string(size_value);
@@ -533,7 +536,7 @@ void generate_export_requests(
             key = insertkeysequence->next();
             insertkeysequence->acknowledge(key);
         }
-        
+
         auto request = Request(type, key, size);
         ofs << static_cast<int>(request.type()) << "," << request.key() << "," << request.args() << "," << std::endl;
     }

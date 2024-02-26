@@ -16,10 +16,11 @@ public:
   template<typename _UniformRandomBitGenerator>
   _IntType operator()(_UniformRandomBitGenerator &__urng)
   {
-    _IntType ret = zipfian_int_distribution<_IntType>::next(__urng);
-    ret = min + fnvhash64(ret) % itemcount;
-    lastvalue = ret;
-    return ret;
+    long ret = zipfian_int_distribution<long>::next(__urng);
+    long hash = fnvhash64(static_cast<uint64_t>(ret));
+    ret = min + hash % itemcount;
+    lastvalue = static_cast<_IntType>(ret);
+    return static_cast<_IntType>(ret);
   }
   
 
@@ -51,26 +52,25 @@ public:
   _IntType min, max, itemcount;
   _IntType lastvalue;
 
-  static _IntType fnvhash64(_IntType val)
+  static uint64_t fnvhash64(uint64_t val)
   {
-    long hashval = FNV_OFFSET_BASIS_64;
+    uint64_t hashval = FNV_OFFSET_BASIS_64;
 
     for (int i = 0; i < 8; i++)
     {
-      long octet = val & 0x00ff;
+      uint64_t octet = val & 0x00ff;
       val = val >> 8;
 
       hashval = hashval ^ octet;
       hashval = hashval * FNV_PRIME_64;
-      // hashval = hashval ^ octet;
     }
-    return (_IntType)abs(hashval);
+    return labs(hashval);
   }
 
 private:
 
-  static const long FNV_OFFSET_BASIS_64 = 0xCBF29CE484222325L;
-  static const long FNV_PRIME_64 = 1099511628211L;
+  static const uint64_t FNV_OFFSET_BASIS_64 = 0xCBF29CE484222325L;
+  static const uint64_t FNV_PRIME_64 = 1099511628211L;
   const double USED_ZIPFIAN_CONSTANT = 0.99;
   const double ZETAN = 26.46902820178302;
   const long ITEM_COUNT = 10000000000L;
