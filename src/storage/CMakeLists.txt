@@ -1,14 +1,5 @@
 add_library(storage)
 
-IF(${STORAGE} STREQUAL "FELDMAN")
-    target_compile_definitions(storage PUBLIC FELDMAN)
-ELSEIF(${STORAGE} STREQUAL "MICHAEL")
-    target_compile_definitions(storage PUBLIC MICHAEL)
-ELSEIF(${STORAGE} STREQUAL "TBB")
-    target_compile_definitions(storage PUBLIC TBB)
-ELSE()
-ENDIF()
-
 target_sources(
     storage
         PUBLIC

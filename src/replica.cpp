@@ -44,10 +44,7 @@
 #include <vector>
 #include <random>
 #include <assert.h>
-#include <cds/init.h>
-#include <cds/gc/hp.h>
 
-#include "request/skewed_latest_int_distribution.cpp"
 #include "request/request_generation.h"
 #include "types/types.h"
 #include "graph/graph.hpp"
@@ -312,7 +309,6 @@ run(const toml_config& config)
 	ofs << std::endl;
 	ofs.flush();
     ofs.close();
-	exit(EXIT_SUCCESS);
 }
 
 static void
@@ -355,11 +351,6 @@ main(int argc, char const *argv[])
 	
 
     }else{
-		#if defined(MICHAEL) || defined(FELDMAN)
-			cds::Initialize();
-			cds::gc::HP gc;
-			cds::threading::Manager::attachThread();
-		#endif
 		run(config);
 	}
 	

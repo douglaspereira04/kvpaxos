@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <map>
 #include <vector>
+#include <unordered_map>
 
 
 namespace model {
@@ -13,17 +14,9 @@ template <typename T>
 class Graph {
 
 public:
-#if defined(TBB_GRAPH)
-    #include "tbb/concurrent_unordered_map.h"
-    typedef tbb::concurrent_unordered_map<T, int> vertex_weight_t;
-    typedef tbb::concurrent_unordered_map<T, tbb::concurrent_unordered_map<T, int>>
-        edges_weight_t;
-#else
-    #include <unordered_map>
     typedef std::unordered_map<T, int> vertex_weight_t;
     typedef std::unordered_map<T, std::unordered_map<T, int>>
         edges_weight_t;
-#endif
 
 public:
     Graph() = default;

@@ -4,27 +4,14 @@
 
 namespace kvstorage {
 
-#if defined(MICHAEL) || defined(FELDMAN)
-    typedef typename storage_t::guarded_ptr GuardedPointer;
-#endif
-
 int VALUE_SIZE = 4096;
 std::string template_value(VALUE_SIZE, '*');
 
 
 std::string Storage::read(int key) {
     std::string val;
+    val = storage_.at(key);
 
-#if defined(MICHAEL) || defined(FELDMAN)
-    GuardedPointer gp(storage_.get(key));
-    if(gp){
-        val = gp->second;
-    }
-#elif defined(TBB)
-    val = storage_.at(key);
-#else 
-    val = storage_.at(key);
-#endif
     try {
 
         return decompress(val);
@@ -40,13 +27,7 @@ std::string Storage::read(int key) {
 
 void Storage::write(int key, const std::string& value) {
     auto compressed_value = compress(template_value);
-#if defined(MICHAEL) || defined(FELDMAN)
-    storage_.insert(key,compressed_value);
-#elif defined(TBB)
     storage_[key] = compressed_value;
-# else 
-    storage_.insert(key, compressed_value);
-#endif
 }
 
 std::vector<std::string> Storage::scan(int start, int length) {
