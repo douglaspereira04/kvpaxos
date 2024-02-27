@@ -21,17 +21,17 @@ const std::unordered_map<std::string, Distribution> string_to_distribution({
     {"LATEST", Distribution::LATEST}
 });
 
-RandFunction uniform_distribution_rand(int min_value, int max_value);
-DoubleRandFunction uniform_double_distribution_rand(double min_value, double max_value);
-RandFunction zipfian_distribution(long min, long max);
-RandFunction scrambled_zipfian_distribution(long min, long max);
-RandFunction skewed_latest_distribution(acknowledged_counter<long> *&counter, zipfian_int_distribution<long> *& zip);
+RandFunction uniform_distribution_rand(int min_value, int max_value, long seed = std::mt19937::default_seed);
+DoubleRandFunction uniform_double_distribution_rand(double min_value, double max_value, long seed = std::mt19937::default_seed);
+RandFunction zipfian_distribution(long min, long max, long seed = std::mt19937::default_seed);
+RandFunction scrambled_zipfian_distribution(long min, long max, long seed = std::mt19937::default_seed);
+RandFunction skewed_latest_distribution(acknowledged_counter<long> *&counter, zipfian_int_distribution<long> *& zip, long seed = std::mt19937::default_seed);
 RandFunction fixed_distribution(int value);
 RandFunction binomial_distribution(
-    int n_experiments, double success_probability
+    int n_experiments, double success_probability, long seed = std::mt19937::default_seed
 );
 RandFunction ranged_binomial_distribution(
-    int min_value, int n_experiments, double success_probability
+    int min_value, int n_experiments, double success_probability, long seed = std::mt19937::default_seed
 );
 
 }

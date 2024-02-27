@@ -419,6 +419,14 @@ void generate_export_requests(
         config, "output", "requests", "export_path"
     );
 
+    const auto key_seed = toml::find<long>(
+        config, "workload", "key_seed"
+    );
+
+    const auto operation_seed = toml::find<long>(
+        config, "workload", "operation_seed"
+    );
+
     const auto n_records = toml::find<int>(
         config, "workload", "n_records"
     );
@@ -465,19 +473,24 @@ void generate_export_requests(
     rfunc::RandFunction data_generator;
     if (data_distribution == rfunc::UNIFORM) {
         data_generator = rfunc::uniform_distribution_rand(
-            0, n_records
+            0, n_records, key_seed
         );
     } else if (data_distribution == rfunc::ZIPFIAN) {
         int expectednewkeys = (int) ((n_operations) * insert_proportion * 2.0);
-        data_generator = rfunc::scrambled_zipfian_distribution(0, n_records + expectednewkeys);
+        data_generator = rfunc::scrambled_zipfian_distribution(0, n_records + expectednewkeys, key_seed);
     }  else if (data_distribution == rfunc::LATEST) {
         auto zip = new zipfian_int_distribution<long>(0, insertkeysequence->last_value());
-        data_generator = rfunc::skewed_latest_distribution(insertkeysequence, zip);
+        data_generator = rfunc::skewed_latest_distribution(insertkeysequence, zip, key_seed);
         //leaking
     }
 
     rfunc::RandFunction scan_length_generator;
     if(scan_proportion > 0){
+
+        const auto scan_seed = toml::find<long>(
+            config, "workload", "scan_seed"
+        );
+
         operation_proportions.push_back(std::make_pair(request_type::SCAN,scan_proportion));
     
         const auto scan_length_distribution_str = toml::find<std::string>(
@@ -497,17 +510,17 @@ void generate_export_requests(
 
         if (scan_length_distribution == rfunc::UNIFORM) {
             scan_length_generator = rfunc::uniform_distribution_rand(
-                min_scan_length, max_scan_length
+                min_scan_length, max_scan_length, scan_seed
             );
         } else if (scan_length_distribution == rfunc::ZIPFIAN) {
             int expectednewkeys = (int) ((n_operations) * insert_proportion * 2.0);
-            scan_length_generator = rfunc::scrambled_zipfian_distribution(0, n_records);
+            scan_length_generator = rfunc::scrambled_zipfian_distribution(0, n_records, scan_seed);
         }
 
     }
 
     rfunc::DoubleRandFunction operation_generator = rfunc::uniform_double_distribution_rand(
-        0.0, 1.0
+        0.0, 1.0, operation_seed
     );
 
 
