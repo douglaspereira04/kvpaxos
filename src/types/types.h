@@ -48,4 +48,10 @@ enum request_type
 	DUMMY
 };
 
+enum interval_type
+{
+	MICROSECONDS,
+	OPERATIONS
+};
+
 #endif

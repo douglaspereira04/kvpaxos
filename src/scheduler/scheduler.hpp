@@ -29,7 +29,7 @@
 
 namespace kvpaxos {
 
-template <typename T, size_t TL = 0, size_t WorkerCapacity = 0>
+template <typename T, size_t TL = 0, size_t WorkerCapacity = 0, interval_type IntervalType = interval_type::OPERATIONS>
 class Scheduler {
 public:
     Scheduler(){}
@@ -38,10 +38,14 @@ public:
                 int n_partitions,
                 model::CutMethod repartition_method
     ) : n_partitions_{n_partitions},
-        repartition_interval_{repartition_interval},
         repartition_method_{repartition_method}
     {
-
+        if constexpr(IntervalType == interval_type::MICROSECONDS){
+            this->time_start_ = std::chrono::system_clock::now();
+            this->time_interval_ = std::chrono::milliseconds(repartition_interval);
+        } else if(IntervalType == interval_type::OPERATIONS){
+            this->operation_interval_ = repartition_interval;
+        }
         round_robin_counter_ = 0;
         sync_counter_ = 0;
         n_dispatched_requests_ = 0;
@@ -55,7 +59,7 @@ public:
         sem_init(&graph_requests_semaphore_, 0, 0);
         pthread_barrier_init(&repartition_barrier_, NULL, 2);
 
-        graph_thread_ = std::thread(&Scheduler<T, TL, WorkerCapacity>::update_graph_loop, this);
+        graph_thread_ = std::thread(&Scheduler<T, TL, WorkerCapacity, IntervalType>::update_graph_loop, this);
 
 
         client_message dummy;
@@ -90,7 +94,7 @@ public:
 
                 auto expired_request = std::move(graph_deletion_queue_.front());
                 graph_deletion_queue_.pop_front();
-                Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
+                Scheduler<T, TL, WorkerCapacity, IntervalType>::expire(expired_request);
             }
         }
     }
@@ -203,9 +207,16 @@ public:
         n_dispatched_requests_++;
 
         if (repartition_method_ != model::ROUND_ROBIN) {
-            if (
-                n_dispatched_requests_ % repartition_interval_ == 0
-            ) {
+            bool start_repartitioning = false;
+            if constexpr(IntervalType == interval_type::MICROSECONDS){
+                auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - this->time_start_);
+                if(interval >= this->time_interval_){
+                    start_repartitioning = true;
+                }
+            } else if constexpr(IntervalType == interval_type::OPERATIONS){
+                start_repartitioning = n_dispatched_requests_ % operation_interval_ == 0;
+            }
+            if (start_repartitioning) {
                 repartition_request_timestamp_.push_back(std::chrono::system_clock::now());
 
                 notify_graph(SYNC);
@@ -222,7 +233,9 @@ public:
 
                 sync_all_partitions();
 
-                repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
+                auto apply_time = std::chrono::system_clock::now();
+                repartition_apply_timestamp_.push_back(apply_time);
+                this->time_start_ = apply_time;
             }
         }
     }
@@ -253,7 +266,7 @@ public:
         bool new_mapping = false;
         for (auto i = 0; i < range; i++) {
 
-            if(!Scheduler<T, TL, WorkerCapacity>::mapped(request.key + i)){
+            if(!Scheduler<T, TL, WorkerCapacity, IntervalType>::mapped(request.key + i)){
                 map_key(request.key + i, round_robin_counter_);
                 new_mapping = true;
             } else {
@@ -335,7 +348,7 @@ public:
 
                     auto expired_request = std::move(graph_deletion_queue_.front());
                     graph_deletion_queue_.pop_front();
-                    Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
+                    Scheduler<T, TL, WorkerCapacity, IntervalType>::expire(expired_request);
                 }
             }
         }
@@ -431,7 +444,10 @@ public:
     model::Graph<T> workload_graph_;
     model::CutMethod repartition_method_;
     pthread_barrier_t repartition_barrier_;
-    int repartition_interval_;
+
+    int operation_interval_;
+    std::chrono::milliseconds time_interval_;
+    std::chrono::_V2::high_resolution_clock::time_point time_start_;
 
 
     std::vector<time_point> repartition_timestamps_;
