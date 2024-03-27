@@ -36,10 +36,10 @@ experiments () {
                             for v in "${versions[@]}"; do
                                 mkdir -p output/${w}/${m}
                                 echo ${w}_${m}_${initial}_${interval}_${v}_${p}_${i}_${window}_${queue}
-                                if [ ! -f "output/${w}/${m}/${window}_${window}_${initial}_${interval}_${v}_${p}_${i}.csv" ]; then
-                                    ./${v}_${window}_${window} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt > output/${w}/${m}/${window}_${queue}_${initial}_${interval}_${v}_${p}_${i}.csv
-                                    mv details.csv output/${w}/${m}/details_${window}_${window}_${initial}_${interval}_${v}_${p}_${i}.csv
-                                    cp -r output /users/douglasp/mar_26/
+                                if [ ! -f "output/${w}/${m}/${window}_${queue}_${initial}_${interval}_${v}_${p}_${i}.csv" ]; then
+                                    ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt > output/${w}/${m}/${window}_${queue}_${initial}_${interval}_${v}_${p}_${i}.csv
+                                    mv details.csv output/${w}/${m}/details_${window}_${queue}_${initial}_${interval}_${v}_${p}_${i}.csv
+                                    cp -r output /users/douglasp/mar_27/
                                 fi
                             done;
                         done;

@@ -1,8 +1,8 @@
 #!/bin/bash
 source ./experiments.sh
 
-_methods=(METIS)
-_partitions=(8)
+_methods=(ROUND_ROBIN)
+_partitions=(1 8)
 _versions=(old)
 _workloads=(ycsb_e)
 _n_initial_keys=(1000000)
