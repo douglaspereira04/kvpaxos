@@ -6,6 +6,7 @@ workload.key_seed = 1908944376
 workload.operation_seed = 1836524827
 workload.scan_seed = 2239123249
 
+
 workload.single_distribution = true
 workload.data_distribution = "ZIPFIAN"
 workload.scan_length_distribution = "UNIFORM"

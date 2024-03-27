@@ -58,7 +58,7 @@
 	typedef kvpaxos::NonStopScheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
 #else
 	#include "scheduler/scheduler.hpp"
-	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS> Scheduler;
+	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
 #endif
 
 
@@ -90,7 +90,7 @@ metrics_loop(int sleep_duration, int n_requests, Scheduler* scheduler)
 		std::cout << ", In Queue " << i;
 	}
 	std::cout << ", In Queue Total" << std::endl;
-	
+
 	while (RUNNING) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
 		auto executed_requests = scheduler->n_executed_requests();
@@ -109,7 +109,7 @@ metrics_loop(int sleep_duration, int n_requests, Scheduler* scheduler)
 			std::cout << in_queue[i] << ", ";
 		}
 		std::cout << total << std::endl;
-		
+
 		already_counted_throughput += throughput;
 		counter++;
 
@@ -294,11 +294,11 @@ run(const toml_config& config)
 			reconstruction_duration = (*reconstruction_it).count()/pow(10,9);
 		}
 		reconstruction_it++;
-		
+
 		ofs << repartition_request_time << ","<< copy_time << "," << repartition_begin_time << "," << end_time << ","<< reconstruction_duration << ","<< repartition_apply_time;
 
 		ofs << std::endl;
-		
+
 	}
 
 	ofs << std::endl;
