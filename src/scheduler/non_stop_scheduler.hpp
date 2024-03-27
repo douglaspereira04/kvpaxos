@@ -47,7 +47,7 @@ public:
         this->n_dispatched_requests_ = 0;
 
         this->n_partitions_ = n_partitions;
-        this->repartition_interval_ = repartition_interval;
+        this->operation_interval_ = repartition_interval;
         this->repartition_method_ = repartition_method;
 
         for (auto i = 0; i < this->n_partitions_; i++) {
