@@ -11,6 +11,8 @@ for track_length_ in "${track_length[@]}"; do
         ./compile.sh NON_STOP ${track_length_} ${q_size_} ${schedule_queue_size}
         mv ./build/bin/replica ./build/bin/non_stop_${track_length_}_${q_size_}
 
+        #./compile.sh FREE ${track_length_} ${q_size_} ${schedule_queue_size}
+        #mv ./build/bin/replica ./build/bin/free_${track_length_}_${q_size_}
 
         ./compile.sh OLD ${track_length_} ${q_size_} ${schedule_queue_size}
         mv ./build/bin/replica ./build/bin/old_${track_length_}_${q_size_}

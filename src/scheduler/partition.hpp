@@ -26,6 +26,8 @@
 #include "storage/storage.h"
 #include "types/types.h"
 #include <boost/lockfree/spsc_queue.hpp>
+#include <iostream>
+#include "utils/utils.h"
 
 
 namespace kvpaxos {
@@ -72,13 +74,15 @@ public:
         }
 
         worker_thread_ = std::thread(&Partition<T, Capacity>::thread_loop, this);
+        utils::set_affinity(id_+5, worker_thread_, cpu_set);
     }
 
     size_t request_queue_size() {
-        if(Capacity > 0){
+        if constexpr(Capacity > 0){
             return bounded_requests_queue.read_available();
         } else {
-            return requests_queue_.size();
+            size_t size = requests_queue_.size();
+            return size;
         }
     }
 
@@ -138,7 +142,7 @@ public:
         return id_;
     }
 
-    int n_executed_requests() const {
+    size_t n_executed_requests() const {
         return n_executed_requests_;
     }
 
@@ -249,8 +253,10 @@ private:
         }
     }
 
-    int id_, socket_fd_, n_executed_requests_;
+    int id_, socket_fd_;
+    size_t n_executed_requests_;
     static kvstorage::Storage storage_;
+    cpu_set_t cpu_set;
 
     bool executing_;
     std::thread worker_thread_;

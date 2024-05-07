@@ -7,7 +7,7 @@
 
 namespace rfunc {
 
-RandFunction uniform_distribution_rand(int min_value, int max_value, long seed) {
+RandFunction uniform_distribution_rand(long min_value, long max_value, long seed) {
     std::mt19937 generator(seed);
     std::uniform_int_distribution<long> distribution(min_value, max_value);
 

@@ -25,28 +25,33 @@
 #include "storage/storage.h"
 #include "types/types.h"
 #include "scheduler.hpp"
+#include "utils/utils.h"
 
 
 namespace kvpaxos {
 
-template <typename T, size_t TL = 0, size_t WorkerCapacity = 0>
-class FreeScheduler : public Scheduler<T, TL, WorkerCapacity> {
+template <typename T, size_t TL = 0, size_t WorkerCapacity = 0, interval_type IntervalType = interval_type::OPERATIONS>
+class FreeScheduler : public Scheduler<T, TL, WorkerCapacity, IntervalType> {
 
 public:
 
     FreeScheduler() {}
-    FreeScheduler(int n_requests,
-                int repartition_interval,
+    FreeScheduler(int repartition_interval,
                 int n_partitions,
                 model::CutMethod repartition_method
     ) {
+        this->n_partitions_ = n_partitions;
+        this->repartition_method_ = repartition_method;
+
+        if constexpr(IntervalType == interval_type::MICROSECONDS){
+            this->time_start_ = std::chrono::system_clock::now();
+            this->time_interval_ = std::chrono::milliseconds(repartition_interval);
+        } else if(IntervalType == interval_type::OPERATIONS){
+            this->operation_interval_ = repartition_interval;
+        }
         this->round_robin_counter_ = 0;
         this->sync_counter_ = 0;
         this->n_dispatched_requests_ = 0;
-        
-        this->n_partitions_ = n_partitions;
-        this->repartition_interval_ = repartition_interval;
-        this->repartition_method_ = repartition_method;
 
         for (auto i = 0; i < this->n_partitions_; i++) {
             auto* partition = new Partition<T, WorkerCapacity>(i);
@@ -55,13 +60,16 @@ public:
         this->data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
         updated_data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
+        this->reparting_.store(false, std::memory_order_seq_cst);
+        this->update_.store(false, std::memory_order_seq_cst);
+
         sem_init(&this->graph_requests_semaphore_, 0, 0);
-        this->graph_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity>::update_graph_loop, this);
-        
+        this->graph_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity, IntervalType>::update_graph_loop, this);
+	    utils::set_affinity(3, this->graph_thread_, this->graph_cpu_set);
+
         sem_init(&repart_semaphore_, 0, 0);
-        sem_init(&update_semaphore_, 0, 0);
-        sem_init(&updated_semaphore_, 0, 0);
-        reparting_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity>::partitioning_loop, this);
+        reparting_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity, IntervalType>::partitioning_loop, this);
+	    utils::set_affinity(4, reparting_thread_, reparting_cpu_set);
 
         client_message dummy;
         dummy.type = DUMMY;
@@ -76,17 +84,17 @@ public:
     }
 
     void schedule_and_answer(struct client_message& request) {
-
-        Scheduler<T, TL, WorkerCapacity>::dispatch(request);
+        Scheduler<T, TL, WorkerCapacity, IntervalType>::dispatch(request);
         this->n_dispatched_requests_++;
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {
 
-            if(sem_trywait(&update_semaphore_) == 0){
-                FreeScheduler<T, TL, WorkerCapacity>::change_partition_scheme();
-
+            if(update_.load(std::memory_order_acquire) == true){
+                FreeScheduler<T, TL, WorkerCapacity, IntervalType>::change_partition_scheme();
                 this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
-                sem_post(&updated_semaphore_);
+
+                update_.store(false, std::memory_order_release);
+                reparting_.store(false, std::memory_order_release);
             }
         }
     }
@@ -98,14 +106,12 @@ public:
         this->data_to_partition_ = updated_data_to_partition_;
         updated_data_to_partition_ = temp;
 
-        Scheduler<T, TL, WorkerCapacity>::sync_all_partitions();
+        Scheduler<T, TL, WorkerCapacity, IntervalType>::sync_all_partitions();
     }
 
     void order_partitioning(){
         auto begin = std::chrono::system_clock::now();
-        input_graph_mutex_.lock();
-            input_graph_ = InputGraph<T>(this->workload_graph_);
-        input_graph_mutex_.unlock();
+        input_graph_ = InputGraph<T>(this->workload_graph_);
         this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
         this->repartition_request_timestamp_.push_back(std::chrono::system_clock::now());
@@ -120,19 +126,34 @@ public:
                 this->graph_requests_queue_.pop_front();
             this->graph_requests_mutex_.unlock();
 
-            Scheduler<T, TL, WorkerCapacity>::update_graph(request);
+            Scheduler<T, TL, WorkerCapacity, IntervalType>::update_graph(request);
 
             if constexpr(TL > 0){
                 this->graph_deletion_queue_.push_back(request);
 
                 auto expired_request = std::move(this->graph_deletion_queue_.front());
                 this->graph_deletion_queue_.pop_front();
-                Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
+                Scheduler<T, TL, WorkerCapacity, IntervalType>::expire(expired_request);
             }
             n_processed_requests++;
 
-            if( n_processed_requests % this->repartition_interval_ == 0 ) {
-                FreeScheduler<T, TL, WorkerCapacity>::order_partitioning();
+            if(reparting_.load(std::memory_order_acquire) == false){
+                bool start_repartitioning = false;
+                if constexpr(IntervalType == interval_type::MICROSECONDS){
+                    auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - this->time_start_);
+                    if(interval >= this->time_interval_){
+                        start_repartitioning = true;
+                    }
+                } else if constexpr(IntervalType == interval_type::OPERATIONS){
+                    start_repartitioning = this->n_dispatched_requests_ % this->operation_interval_ == 0;
+                }
+                if (start_repartitioning) {
+                    if(this->workload_graph_.n_vertex() > 0){
+                        reparting_.store(true, std::memory_order_release);
+                        FreeScheduler<T, TL, WorkerCapacity, IntervalType>::order_partitioning();
+                        this->time_start_ = std::chrono::system_clock::now();
+                    }
+                }
             }
         }
     }
@@ -143,14 +164,10 @@ public:
 
             delete updated_data_to_partition_;
 
-            input_graph_mutex_.lock();
-                auto temp = Scheduler<T, TL, WorkerCapacity>::partitioning(input_graph_);
-            input_graph_mutex_.unlock();
+            auto temp = Scheduler<T, TL, WorkerCapacity, IntervalType>::partitioning(input_graph_);
 
             updated_data_to_partition_ = temp;
-            sem_post(&update_semaphore_);
-
-            sem_wait(&updated_semaphore_);
+            update_.store(true, std::memory_order_release);
         }
     }
 
@@ -162,13 +179,13 @@ public:
     int n_processed_requests = 0;
 
     sem_t repart_semaphore_;
-    sem_t update_semaphore_;
-    sem_t updated_semaphore_;
-
-    std::mutex input_graph_mutex_;
 
     std::thread reparting_thread_;
+    cpu_set_t reparting_cpu_set;
 
+
+    std::atomic_bool reparting_;
+    std::atomic_bool update_;
 };
 
 };

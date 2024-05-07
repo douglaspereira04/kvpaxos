@@ -24,4 +24,5 @@ target_link_libraries(
             storage
             request
             types
+            utils
 )

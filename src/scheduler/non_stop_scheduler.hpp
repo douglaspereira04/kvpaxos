@@ -26,6 +26,7 @@
 #include "types/types.h"
 #include "scheduler.hpp"
 #include "free_scheduler.hpp"
+#include "utils/utils.h"
 
 
 namespace kvpaxos {
@@ -37,18 +38,16 @@ class NonStopScheduler : public FreeScheduler<T, TL, WorkerCapacity> {
 public:
 
     NonStopScheduler() {}
-    NonStopScheduler(int n_requests,
-                int repartition_interval,
+    NonStopScheduler(int repartition_interval,
                 int n_partitions,
                 model::CutMethod repartition_method
     ) {
+        this->n_partitions_ = n_partitions;
+        this->repartition_method_ = repartition_method;
+
         this->round_robin_counter_ = 0;
         this->sync_counter_ = 0;
         this->n_dispatched_requests_ = 0;
-
-        this->n_partitions_ = n_partitions;
-        this->operation_interval_ = repartition_interval;
-        this->repartition_method_ = repartition_method;
 
         for (auto i = 0; i < this->n_partitions_; i++) {
             auto* partition = new Partition<T, WorkerCapacity>(i);
@@ -57,15 +56,17 @@ public:
         this->data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
         this->updated_data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
-        reparting_.store(false, std::memory_order_seq_cst);
-        update_.store(false, std::memory_order_seq_cst);
+        this->reparting_.store(false, std::memory_order_seq_cst);
+        this->update_.store(false, std::memory_order_seq_cst);
 
 
         sem_init(&this->graph_requests_semaphore_, 0, 0);
         this->graph_thread_ = std::thread(&NonStopScheduler<T, TL, WorkerCapacity>::update_graph_loop, this);
+	    utils::set_affinity(3, this->graph_thread_, this->graph_cpu_set);
 
         sem_init(&this->repart_semaphore_, 0, 0);
-        this->reparting_thread_ = std::thread(&NonStopScheduler<T, TL, WorkerCapacity>::partitioning_loop, this);
+        this->reparting_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity>::partitioning_loop, this);
+	    utils::set_affinity(4, this->reparting_thread_, this->reparting_cpu_set);
 
         client_message dummy;
         dummy.type = DUMMY;
@@ -76,22 +77,6 @@ public:
             }
         }
 
-    }
-
-    void schedule_and_answer(struct client_message& request) {
-        Scheduler<T, TL, WorkerCapacity>::dispatch(request);
-        this->n_dispatched_requests_++;
-
-        if (this->repartition_method_ != model::ROUND_ROBIN) {
-
-            if(update_.load(std::memory_order_acquire) == true){
-                FreeScheduler<T, TL, WorkerCapacity>::change_partition_scheme();
-                this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
-
-                update_.store(false, std::memory_order_release);
-                reparting_.store(false, std::memory_order_release);
-            }
-        }
     }
 
     void update_graph_loop() {
@@ -112,42 +97,15 @@ public:
                 Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
             }
 
-            if(reparting_.load(std::memory_order_acquire) == false) {
+            if(this->reparting_.load(std::memory_order_acquire) == false) {
                 if(this->workload_graph_.n_vertex() > 0){
-                    reparting_.store(true, std::memory_order_release);
-                    NonStopScheduler<T, TL, WorkerCapacity>::order_partitioning();
+                    this->reparting_.store(true, std::memory_order_release);
+                    FreeScheduler<T, TL, WorkerCapacity>::order_partitioning();
                 }
             } 
 
         }
     }
-
-    void order_partitioning(){
-        auto begin = std::chrono::system_clock::now();
-        this->input_graph_ = InputGraph<T>(this->workload_graph_);
-        this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
-
-        this->repartition_request_timestamp_.push_back(std::chrono::system_clock::now());
-        sem_post(&this->repart_semaphore_);
-    }
-
-    void partitioning_loop(){
-        while(true){
-            sem_wait(&this->repart_semaphore_);
-
-            delete this->updated_data_to_partition_;
-
-            auto temp = Scheduler<T, TL, WorkerCapacity>::partitioning(this->input_graph_);
-
-            this->updated_data_to_partition_ = temp;
-            update_.store(true, std::memory_order_release);
-        }
-    }
-
-public:
-
-    std::atomic_bool reparting_;
-    std::atomic_bool update_;
 
 };
 

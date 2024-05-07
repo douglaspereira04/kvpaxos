@@ -25,6 +25,7 @@
 #include "storage/storage.h"
 #include "types/types.h"
 #include <iostream>
+#include "utils/utils.h"
 
 
 namespace kvpaxos {
@@ -33,8 +34,7 @@ template <typename T, size_t TL = 0, size_t WorkerCapacity = 0, interval_type In
 class Scheduler {
 public:
     Scheduler(){}
-    Scheduler(int n_requests,
-                int repartition_interval,
+    Scheduler(int repartition_interval,
                 int n_partitions,
                 model::CutMethod repartition_method
     ) : n_partitions_{n_partitions},
@@ -60,6 +60,7 @@ public:
         pthread_barrier_init(&repartition_barrier_, NULL, 2);
 
         graph_thread_ = std::thread(&Scheduler<T, TL, WorkerCapacity, IntervalType>::update_graph_loop, this);
+	    utils::set_affinity(3, graph_thread_, graph_cpu_set);
 
 
         client_message dummy;
@@ -105,8 +106,8 @@ public:
         }
     }
 
-    int n_executed_requests() {
-        auto n_executed_requests = 0;
+    size_t n_executed_requests() {
+        size_t n_executed_requests = 0;
         for (auto& kv: partitions_) {
             auto* partition = kv.second;
             n_executed_requests += partition->n_executed_requests();
@@ -118,21 +119,10 @@ public:
         std::vector<size_t> in_queue;
         for (auto& kv: partitions_) {
             auto* partition = kv.second;
-            in_queue.push_back(partition->request_queue_size());
+            size_t amount = partition->request_queue_size();
+            in_queue.push_back(amount);
         }
         return in_queue;
-    }
-
-    size_t max_in_queue_amount() {
-        size_t max = 0;
-        for (auto& kv: partitions_) {
-            auto* partition = kv.second;
-            size_t in_queue = partition->request_queue_size();
-            if(partition->request_queue_size() > max){
-                max = in_queue;
-            }
-        }
-        return max;
     }
 
     size_t graph_vertices(){
@@ -197,7 +187,6 @@ public:
                 graph_requests_queue_.push_back(request);
             graph_requests_mutex_.unlock();
             sem_post(&graph_requests_semaphore_);
-
         }
     }
 
@@ -436,6 +425,8 @@ public:
     std::unordered_map<T, Partition<T, WorkerCapacity>*>* data_to_partition_;
 
     std::thread graph_thread_;
+    cpu_set_t graph_cpu_set;
+
     sem_t graph_requests_semaphore_;
     std::mutex graph_requests_mutex_;
     std::deque<struct client_message> graph_requests_queue_;

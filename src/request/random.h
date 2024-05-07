@@ -21,7 +21,7 @@ const std::unordered_map<std::string, Distribution> string_to_distribution({
     {"LATEST", Distribution::LATEST}
 });
 
-RandFunction uniform_distribution_rand(int min_value, int max_value, long seed = std::mt19937::default_seed);
+RandFunction uniform_distribution_rand(long min_value, long max_value, long seed = std::mt19937::default_seed);
 DoubleRandFunction uniform_double_distribution_rand(double min_value, double max_value, long seed = std::mt19937::default_seed);
 RandFunction zipfian_distribution(long min, long max, long seed = std::mt19937::default_seed);
 RandFunction scrambled_zipfian_distribution(long min, long max, long seed = std::mt19937::default_seed);

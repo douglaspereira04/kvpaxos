@@ -2,6 +2,7 @@ add_subdirectory(compresser)
 add_subdirectory(request)
 #add_subdirectory(evclient)
 add_subdirectory(types)
+add_subdirectory(utils)
 add_subdirectory(storage)
 add_subdirectory(scheduler)
 add_subdirectory(graph)
@@ -39,5 +40,6 @@ target_link_libraries(
             CONAN_PKG::toml11
             request
             types
+            utils
             scheduler
 )

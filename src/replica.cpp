@@ -47,12 +47,13 @@
 #include <boost/lockfree/spsc_queue.hpp>
 #include "request/request_generation.h"
 #include "types/types.h"
+#include "utils/utils.h"
 #include "graph/graph.hpp"
 
 
 #if defined(FREE)
 	#include "scheduler/free_scheduler.hpp"
-	typedef kvpaxos::FreeScheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
+	typedef kvpaxos::FreeScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS> Scheduler;
 #elif defined(NON_STOP)
 	#include "scheduler/non_stop_scheduler.hpp"
 	typedef kvpaxos::NonStopScheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
@@ -72,22 +73,35 @@ static int verbose = 0;
 static int SLEEP = 1000;
 static bool RUNNING = true;
 
-int N_PARTITIONS = 2;
-int N_INITIAL_KEYS = 3;
-int REPARTITION_INTERVAL = 4;
-int REPARTITION_METHOD = 5;
-int REQUESTS_PATH = 6;
-int REQUEST_RATE = 7;
-int RATE_RAISE_INTERVAL = 8;
+static const int N_PARTITIONS = 2;
+static const int N_INITIAL_KEYS = 3;
+static const int REPARTITION_INTERVAL = 4;
+static const int REPARTITION_METHOD = 5;
+static const int REQUESTS_PATH = 6;
+static const int REQUEST_RATE = 7;
+static const int REQUEST_RATE_SEED = 8;
+static const int RATE_RAISE_INTERVAL = 9;
+static const int RATE_RAISE = 10;
 
-char* *params;
+static char* *params;
+
+static int arrived = 0;
+
+static int client_message_id = 0;
+
+static long request_rate;
+static long request_rate_seed;
+static std::chrono::nanoseconds rate_raise_interval;
+static long rate_raise;
+static sem_t schedule_sem;
 
 void
-metrics_loop(int sleep_duration, int n_requests, Scheduler* scheduler)
+metrics_loop(int sleep_duration, size_t n_requests, Scheduler* scheduler)
 {
-	auto already_counted_throughput = 0;
-	auto counter = 0;
-	std::cout << "Sec,Throughput,Graph Vertices,Graph Edges";
+	int prev_arrived = 0;
+	int counter = 0;
+	auto prev_throughput = 0;
+	std::cout << "Sec,Executed,Arrival Rate,Throughput,Graph Vertices,Graph Edges";
 	int n_partitions =  atoi(params[N_PARTITIONS]);
 	for (int i = 0; i < n_partitions; i++)
 	{
@@ -97,12 +111,19 @@ metrics_loop(int sleep_duration, int n_requests, Scheduler* scheduler)
 
 	while (RUNNING) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
-		auto executed_requests = scheduler->n_executed_requests();
+		size_t executed_requests = scheduler->n_executed_requests();
 		auto graph_vertices = scheduler->graph_vertices();
 		auto graph_edges = scheduler->graph_edges();
 		auto in_queue = scheduler->in_queue_amount();
-		auto throughput = executed_requests - already_counted_throughput;
+		auto throughput = executed_requests - prev_throughput;
 		std::cout << counter << ",";
+
+		int curr_arrived = arrived;
+		int arrival_rate = curr_arrived - prev_arrived;
+		prev_arrived = curr_arrived;
+
+		std::cout << executed_requests << ",";
+		std::cout << arrival_rate << ",";
 		std::cout << throughput << ",";
 		std::cout << graph_vertices << ",";
 		std::cout << graph_edges << ",";
@@ -114,19 +135,17 @@ metrics_loop(int sleep_duration, int n_requests, Scheduler* scheduler)
 		}
 		std::cout << total << std::endl;
 
-		already_counted_throughput += throughput;
-		counter++;
+		prev_throughput += throughput;
 
-		if (executed_requests >= n_requests) {
+		if (executed_requests == n_requests) {
 			break;
 		}
+		counter++;
 	}
 }
 
 static Scheduler*
-initialize_scheduler(
-	int n_requests,
-	const toml_config& config)
+initialize_scheduler(const toml_config& config)
 {
 	auto n_partitions = atoi(params[N_PARTITIONS]);
 	auto repartition_interval = atoi(params[REPARTITION_INTERVAL]);
@@ -137,7 +156,7 @@ initialize_scheduler(
 	);
 
 	auto* scheduler = new Scheduler(
-		n_requests, repartition_interval, n_partitions,
+		repartition_interval, n_partitions,
 		repartition_method
 	);
 	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
@@ -152,9 +171,8 @@ initialize_scheduler(
 	scheduler->run();
 	return scheduler;
 }
-static int client_message_id = 0;
 struct client_message *
-to_client_message(
+build_client_message(
 	workload::Request& request)
 {
 	struct client_message *client_message = new struct client_message();
@@ -171,82 +189,111 @@ to_client_message(
 	return client_message;
 }
 
-int request_rate = atoi(params[REQUEST_RATE]);
-int rate_raise_interval = atoi(params[RATE_RAISE_INTERVAL]);
-int64_t sleep_duration = static_cast<int64_t>(1.0E9/request_rate);
-
 void
 workload_loop(std::vector<client_message*> *messages, scheduling_queue_t *scheduling_queue)
 {
-	for(auto message = messages->begin(); message != messages->end(); message++){
-		scheduling_queue->push(*message);
-		std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_duration));
+	size_t message_it = 0;
+	size_t n_requests = messages->size();
+	client_message* *messages_data = messages->data();
+
+	std::mt19937 generator(request_rate_seed);
+	std::poisson_distribution<long> interval_distribution(1);
+	if(request_rate>0){
+		interval_distribution = std::poisson_distribution<long>(1.0E9/request_rate);
+	}
+	auto raise_interval_begin = std::chrono::steady_clock::now();
+	while(message_it < n_requests){
+		auto begin = std::chrono::steady_clock::now();
+		scheduling_queue->push(messages_data[message_it++]);
+		sem_post(&schedule_sem);
+		arrived++;
+
+		auto duration = std::chrono::nanoseconds(interval_distribution(generator));
+		auto now = std::chrono::steady_clock::now();
+		while(request_rate > 0 && (now-begin)<duration){now = std::chrono::steady_clock::now();}
+		if (rate_raise_interval > std::chrono::nanoseconds::zero() && (now-raise_interval_begin)>=rate_raise_interval){
+			request_rate += rate_raise;
+			interval_distribution = std::poisson_distribution<long>(1.0E9/request_rate);
+			raise_interval_begin = now;
+		}
 	}
 	scheduling_queue->push(nullptr);
+	sem_post(&schedule_sem);
 }
 
+static std::chrono::_V2::system_clock::time_point schedule_end;
 void
 scheduling_loop(
 	Scheduler *scheduler, scheduling_queue_t *scheduling_queue)
 {
 	while(true){
-		while(scheduling_queue->read_available()==0){
-			std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_duration));
-		}
-		client_message* message = std::move(scheduling_queue->front());
+		sem_wait(&schedule_sem);
+		client_message* message = scheduling_queue->front();
 		scheduling_queue->pop();
 		if (message == nullptr){
 			break;
 		}
 		scheduler->schedule_and_answer(*message);
 	}
-
+	
+	schedule_end = std::chrono::system_clock::now();
 }
 
 
 static void
 run(const toml_config& config)
 {
+	request_rate = atol(params[REQUEST_RATE]);
+	request_rate_seed = atol(params[REQUEST_RATE_SEED]);
+	rate_raise_interval = std::chrono::seconds(atol(params[RATE_RAISE_INTERVAL]));
+	rate_raise = atol(params[RATE_RAISE]);
 	std::string requests_path = params[REQUESTS_PATH];
-	
 	
 	std::ifstream requests_file(requests_path);
 	std::vector<client_message*> *messages = new std::vector<client_message*>();
 	while (requests_file.peek() != EOF) {
 		workload::Request request= workload::import_cs_request(requests_file);
-		client_message* message = to_client_message(request);
+		client_message* message = build_client_message(request);
 		messages->push_back(message);
 	}
 	requests_file.close();
-	int n_requests = messages->size();
+	size_t n_requests = messages->size();
+	client_message* *messages_array = messages->data();
+	auto* scheduler = initialize_scheduler(config);
+	scheduling_queue_t *scheduling_queue = new scheduling_queue_t();
 
-	auto* scheduler = initialize_scheduler(n_requests, config);
+	auto scheduling_thread = std::thread(scheduling_loop, scheduler, scheduling_queue);
+	cpu_set_t scheduler_cpu_set;
+	utils::set_affinity(2,scheduling_thread, scheduler_cpu_set);
+	
 	auto throughput_thread = std::thread(
 		metrics_loop, SLEEP, n_requests, scheduler
 	);
+	cpu_set_t throughput_cpu_set;
+	utils::set_affinity(0,throughput_thread, throughput_cpu_set);
 	
 	auto start_execution_timestamp = std::chrono::system_clock::now();
-	scheduling_queue_t scheduling_queue;
-	auto scheduling_thread = std::thread(scheduling_loop, scheduler, &scheduling_queue);
-	auto workload_thread = std::thread(workload_loop, messages, &scheduling_queue);
+	auto workload_thread = std::thread(workload_loop, messages, scheduling_queue);
+	cpu_set_t workload_cpu_set;
+	utils::set_affinity(1,workload_thread, workload_cpu_set);
 
-	auto end_scheduling = std::chrono::system_clock::now();
-
-	throughput_thread.join();
-	scheduling_thread.join();
 	workload_thread.join();
+	scheduling_thread.join();
+	throughput_thread.join();
+
+	auto end_scheduling = schedule_end;
 	auto end_execution_timestamp = std::chrono::system_clock::now();
 
 	delete messages;
+	delete scheduling_queue;
+
 
 	auto makespan = end_execution_timestamp - start_execution_timestamp;
-
 
     std::ofstream ofs("details.csv", std::ofstream::out);
 	ofs << "Scheduling End," << (end_scheduling - start_execution_timestamp).count()/pow(10,9) << "\n";
 	ofs << "Makespan," << makespan.count()/pow(10,9) << "\n";
 	ofs << "Error Count," << scheduler->error_count() << "\n";
-	
 
 	auto& repartition_times = scheduler->repartition_timestamps();
 	ofs << "Repartition Request, Graph Copy Duration, Repartition Begin, Repartition End, Reconstruction Duration, Apply Time" << std::endl;
