@@ -53,13 +53,13 @@
 
 #if defined(FREE)
 	#include "scheduler/free_scheduler.hpp"
-	typedef kvpaxos::FreeScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS> Scheduler;
+	typedef kvpaxos::FreeScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
 #elif defined(NON_STOP)
 	#include "scheduler/non_stop_scheduler.hpp"
 	typedef kvpaxos::NonStopScheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
 #else
 	#include "scheduler/scheduler.hpp"
-	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS> Scheduler;
+	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
 #endif
 
 typedef boost::lockfree::spsc_queue<client_message*, boost::lockfree::capacity<SCHEDULE_QUEUE_SIZE>> scheduling_queue_t;
@@ -80,8 +80,6 @@ static const int REPARTITION_METHOD = 5;
 static const int REQUESTS_PATH = 6;
 static const int REQUEST_RATE = 7;
 static const int REQUEST_RATE_SEED = 8;
-static const int RATE_RAISE_INTERVAL = 9;
-static const int RATE_RAISE = 10;
 
 static char* *params;
 
@@ -91,8 +89,6 @@ static int client_message_id = 0;
 
 static long request_rate;
 static long request_rate_seed;
-static std::chrono::nanoseconds rate_raise_interval;
-static long rate_raise;
 static sem_t schedule_sem;
 
 void
@@ -200,21 +196,23 @@ workload_loop(std::vector<client_message*> *messages, scheduling_queue_t *schedu
 	std::poisson_distribution<long> interval_distribution(1);
 	if(request_rate>0){
 		interval_distribution = std::poisson_distribution<long>(1.0E9/request_rate);
-	}
-	auto raise_interval_begin = std::chrono::steady_clock::now();
-	while(message_it < n_requests){
-		auto begin = std::chrono::steady_clock::now();
-		scheduling_queue->push(messages_data[message_it++]);
-		sem_post(&schedule_sem);
-		arrived++;
 
-		auto duration = std::chrono::nanoseconds(interval_distribution(generator));
-		auto now = std::chrono::steady_clock::now();
-		while(request_rate > 0 && (now-begin)<duration){now = std::chrono::steady_clock::now();}
-		if (rate_raise_interval > std::chrono::nanoseconds::zero() && (now-raise_interval_begin)>=rate_raise_interval){
-			request_rate += rate_raise;
-			interval_distribution = std::poisson_distribution<long>(1.0E9/request_rate);
-			raise_interval_begin = now;
+		while(message_it < n_requests){
+			auto begin = std::chrono::steady_clock::now();
+			scheduling_queue->push(messages_data[message_it++]);
+			sem_post(&schedule_sem);
+			arrived++;
+
+			auto duration = std::chrono::nanoseconds(interval_distribution(generator));
+			auto now = std::chrono::steady_clock::now();
+			while((now-begin)<duration){now = std::chrono::steady_clock::now();}
+		}
+	} else {
+		while(message_it < n_requests){
+			auto begin = std::chrono::steady_clock::now();
+			scheduling_queue->push(messages_data[message_it++]);
+			sem_post(&schedule_sem);
+			arrived++;
 		}
 	}
 	scheduling_queue->push(nullptr);
@@ -245,8 +243,6 @@ run(const toml_config& config)
 {
 	request_rate = atol(params[REQUEST_RATE]);
 	request_rate_seed = atol(params[REQUEST_RATE_SEED]);
-	rate_raise_interval = std::chrono::seconds(atol(params[RATE_RAISE_INTERVAL]));
-	rate_raise = atol(params[RATE_RAISE]);
 	std::string requests_path = params[REQUESTS_PATH];
 	
 	std::ifstream requests_file(requests_path);
