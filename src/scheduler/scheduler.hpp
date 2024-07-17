@@ -41,10 +41,10 @@ public:
         repartition_method_{repartition_method}
     {
         if constexpr(IntervalType == interval_type::MICROSECONDS){
-            this->time_start_ = std::chrono::system_clock::now();
-            this->time_interval_ = std::chrono::milliseconds(repartition_interval);
+            time_start_ = std::chrono::system_clock::now();
+            time_interval_ = std::chrono::milliseconds(repartition_interval);
         } else if(IntervalType == interval_type::OPERATIONS){
-            this->operation_interval_ = repartition_interval;
+            operation_interval_ = repartition_interval;
         }
         round_robin_counter_ = 0;
         sync_counter_ = 0;
@@ -198,8 +198,8 @@ public:
         if (repartition_method_ != model::ROUND_ROBIN) {
             bool start_repartitioning = false;
             if constexpr(IntervalType == interval_type::MICROSECONDS){
-                auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - this->time_start_);
-                if(interval >= this->time_interval_){
+                auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - time_start_);
+                if(interval >= time_interval_){
                     start_repartitioning = true;
                 }
             } else if constexpr(IntervalType == interval_type::OPERATIONS){
@@ -224,7 +224,9 @@ public:
 
                 auto apply_time = std::chrono::system_clock::now();
                 repartition_apply_timestamp_.push_back(apply_time);
-                this->time_start_ = apply_time;
+                if constexpr(IntervalType == interval_type::MICROSECONDS){
+                    time_start_ = apply_time;
+                }
             }
         }
     }

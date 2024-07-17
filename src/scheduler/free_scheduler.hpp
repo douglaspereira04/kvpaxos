@@ -93,6 +93,10 @@ public:
                 FreeScheduler<T, TL, WorkerCapacity, IntervalType>::change_partition_scheme();
                 this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
 
+                if constexpr(IntervalType == interval_type::MICROSECONDS){
+                    this->time_start_ = std::chrono::system_clock::now();
+                }
+
                 update_.store(false, std::memory_order_release);
                 reparting_.store(false, std::memory_order_release);
             }
@@ -151,7 +155,6 @@ public:
                     if(this->workload_graph_.n_vertex() > 0){
                         reparting_.store(true, std::memory_order_release);
                         FreeScheduler<T, TL, WorkerCapacity, IntervalType>::order_partitioning();
-                        this->time_start_ = std::chrono::system_clock::now();
                     }
                 }
             }
