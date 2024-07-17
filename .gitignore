@@ -4,3 +4,17 @@ Makefile
 *.cmake
 *.make
 *.lock
+CMakeCache.txt
+compile_commands.json
+conanbuildinfo.txt
+conanfile.txt
+conaninfo.txt
+graph_info.json
+.vscode/c_cpp_properties.json
+.vscode/settings.json
+project_libkahip-prefix/tmp/project_libkahip-cfgcmd.txt
+project_libkahip-prefix/tmp/project_libkahip-cfgcmd.txt.in
+project_libmetis-prefix/tmp/project_libmetis-cfgcmd.txt
+project_libmetis-prefix/tmp/project_libmetis-cfgcmd.txt.in
+project_libpaxos-prefix/tmp/project_libpaxos-cfgcmd.txt
+project_libpaxos-prefix/tmp/project_libpaxos-cfgcmd.txt.in
