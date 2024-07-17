@@ -24,7 +24,3 @@ include(cmake/add_libkahip.cmake)
 include(cmake/add_libmetis.cmake)
 
 add_subdirectory(src)
-
-add_subdirectory(matplotplusplus)
-add_executable(kvpaxos_plot kvpaxos_plot.cpp)
-target_link_libraries(kvpaxos_plot PUBLIC matplot)
