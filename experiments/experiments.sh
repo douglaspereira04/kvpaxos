@@ -40,7 +40,7 @@ experiments () {
                                     output_dir="output"
                                     output_file="${arrival_rate}_${initial}_${w}_${m}_${p}_${v}_${window}_${queue}_${interval}"
                                     mkdir -p $output_dir
-                                    echo ${w}_${m}_${initial}_${interval}_${v}_${p}_${i}_${window}_${queue}
+                                    echo ${output_file}
                                     if [ ! -f "${output_dir}/${output_file}" ]; then
                                         echo ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed}
                                         ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} > ${output_dir}/${output_file}.csv
