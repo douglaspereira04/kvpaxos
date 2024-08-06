@@ -45,8 +45,8 @@ experiments () {
                                         echo ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed}
                                         ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} > ${output_dir}/${output_file}.csv
                                         mv details.csv ${output_dir}/details_${output_file}
-                                        mkdir -p /users/douglasp/jul/output
-                                        cp -r output /users/douglasp/jul/
+                                        mkdir -p /users/douglasp/ago/output
+                                        cp -r output /users/douglasp/ago/
                                     fi
                                 done;
                             done;
