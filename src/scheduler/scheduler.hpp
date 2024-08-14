@@ -172,14 +172,11 @@ public:
 
     void dispatch(struct client_message& request){
 
-        auto partitions = std::move(involved_partitions(request));
-        auto arbitrary_partition = *begin(partitions);
-        if (partitions.size() > 1) {
-            sync_partitions(partitions);
-            arbitrary_partition->push_request(request);
-            sync_partitions(partitions);
+        if (request.type == SCAN) {
+            dispatch_scan(request);
         } else {
-            arbitrary_partition->push_request(request);
+            auto partition = std::move(get_partition(request));
+            partition->push_request(request);
         }
 
         if (repartition_method_ != model::ROUND_ROBIN) {
@@ -242,6 +239,22 @@ public:
         sem_post(&graph_requests_semaphore_);
     }
 
+
+    Partition<T, WorkerCapacity>* get_partition(
+        const struct client_message& request)
+    {
+        Partition<T, WorkerCapacity>* partition = data_to_partition_->at(request.key);
+        if(partition == data_to_partition_->end()){
+            partition = partitions_.at(round_robin_counter_);
+            map_key(request.key);
+        } else {
+            partitions.insert(partition);
+        }
+
+        return partition;
+    }
+
+
     std::unordered_set<Partition<T, WorkerCapacity>*> involved_partitions(
         const struct client_message& request)
     {
@@ -253,21 +266,76 @@ public:
             range = std::stoi(request.args);
         }
 
-
         bool new_mapping = false;
         for (auto i = 0; i < range; i++) {
-
-            if(!Scheduler<T, TL, WorkerCapacity, IntervalType>::mapped(request.key + i)){
+            
+            Partition<T, WorkerCapacity>* partition = data_to_partition_->at(request.key + i);
+            if(partition == data_to_partition_->end()){
                 map_key(request.key + i, round_robin_counter_);
                 new_mapping = true;
             } else {
-                partitions.insert(data_to_partition_->at(request.key + i));
+                partitions.insert(partition);
             }
         }
 
         if(new_mapping){
             partitions.insert(partitions_.at(round_robin_counter_));
             round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
+        }
+
+        return partitions;
+    }
+
+    dispatch_scan(
+        const struct client_message& request)
+    {
+        std::unordered_set<Partition<T, WorkerCapacity>*> partitions;
+        auto type = static_cast<request_type>(request.type);
+
+        auto range = 1;
+        if (type == SCAN) {
+            range = std::stoi(request.args);
+        }
+        
+        typedef std::vector<int> key_vector_t;
+        std::unordered_map<Partition<T, WorkerCapacity>*, key_vector_t> *partition_to_keys = new std::unordered_map<Partition<T, WorkerCapacity>*, key_vector_t>();
+
+        bool new_mapping = false;
+        key_vector_t unmapped_keys = key_vector_t();
+        for (int i = 0; i < range; i++) {
+
+            Partition<T, WorkerCapacity>* partition = data_to_partition_->at(request.key + i);
+            if(partition == data_to_partition_->end()){
+                map_key(request.key + i, round_robin_counter_);
+                unmapped_keys.push_back(request.key + i);
+                new_mapping = true;
+            } else {
+                partitions.insert(partition);
+                key_vector_t keys = partition_to_keys.find(partition);
+                if (keys == partition_to_keys.end()){
+                    keys = key_vector_t();
+                    keys = partition_to_keys[partition] = keys;
+                }
+                keys.push_back(request.key + i);
+            }
+        }
+
+        if(new_mapping){
+            partitions.insert(partitions_.at(round_robin_counter_));
+            partition_to_keys[partitions_.at(round_robin_counter_)] = unmapped_keys;
+            round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
+        }
+
+        if (partitions.size() > 1){
+            typedef sync_manager_t<int, std::string, Partition<T, WorkerCapacity>*> sync_manager_a;
+            sync_manager_a *sync_manager = new sync_manager_a(partitions.size(), range, partition_to_keys);
+            request.s_addr = reinterpret_cast<unsigned long>(sync_manager);
+            for(auto *partition: partitions){
+                partition->push_request(request);
+            }
+        } else{
+            request.s_addr = nullptr;
+            partition->push_request(request);
         }
 
         return partitions;

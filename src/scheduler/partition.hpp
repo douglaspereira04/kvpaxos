@@ -209,6 +209,8 @@ private:
             case SCAN:
             {
                 auto length = std::stoi(request_args);
+                /*
+                auto length = std::stoi(request_args);
                 std::vector<std::string> values;
                 try{
                     values = std::move(storage_.scan(key, length));
@@ -224,6 +226,47 @@ private:
 
                 std::vector<T> keys(length);
                 std::iota(keys.begin(), keys.end(), 1);
+                */
+                sync_manager_t *sync_manager = reinterpret_cast<sync_manager_t>(request.s_addr);
+                if(sync_manager == nullptr){
+                    std::vector<std::string> values;
+                    try{
+                        values = std::move(storage_.scan(key, length));
+
+                        std::ostringstream oss;
+                        std::copy(values.begin(), values.end(), std::ostream_iterator<std::string>(oss, ","));
+                        answer = std::string(oss.str());
+
+                        std::vector<T> keys(length);
+                        std::iota(keys.begin(), keys.end(), 1);
+                    } catch (...){
+                        error_count_++;
+                        answer = "ERROR";
+                        break;
+                    }
+                } else {    
+                    std::vector<int> my_keys = sync_manager->partition_to_keys->find(this);
+                    for(int curr_key: my_keys){
+                        sync_manager->values[curr_key-key] = std::move(storage_.read(curr_key));
+                    }
+		            auto reached = sync_manager->reached.fetch_add(-1, std::memory_order_seq_cst);
+                    if (reached == 1){
+                        std::ostringstream oss;
+                        std::copy(values.begin(), values.end(), std::ostream_iterator<std::string>(oss, ","));
+                        answer = std::string(oss.str());
+
+                        std::vector<T> keys(length);
+                        std::iota(keys.begin(), keys.end(), 1);
+
+                        for(int i = 0; i < sync_manager->partitions-1; i++){
+                            sem_post(&sync_manager->sync_sem);
+                        }
+                    } else {
+                        
+                    }
+                }
+                
+
                 break;
             }
 
