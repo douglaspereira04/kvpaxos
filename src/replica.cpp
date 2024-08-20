@@ -57,6 +57,9 @@
 #elif defined(NON_STOP)
 	#include "scheduler/non_stop_scheduler.hpp"
 	typedef kvpaxos::NonStopScheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
+#elif defined(ASYNC)
+	#include "scheduler/async_scheduler.hpp"
+	typedef kvpaxos::AsyncScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
 #else
 	#include "scheduler/scheduler.hpp"
 	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;

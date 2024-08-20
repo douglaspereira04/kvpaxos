@@ -1,21 +1,18 @@
 #!/bin/bash
 
+#./async_0_0 configs/config.toml 2 100000 1000 METIS requests.txt 0 167227088
 track_length=(0 1000 10000 100000 1000000 10000000)
 q_size=(0 1000 10000 100000 1000000 10000000)
 schedule_queue_size=50000000
+schedulers=(OLD FREE NON_STOP ASYNC)
 
 
 for track_length_ in "${track_length[@]}"; do
     for q_size_ in "${q_size[@]}"; do
-
-        ./compile.sh NON_STOP ${track_length_} ${q_size_} ${schedule_queue_size}
-        mv ./build/bin/replica ./build/bin/non_stop_${track_length_}_${q_size_}
-
-        #./compile.sh FREE ${track_length_} ${q_size_} ${schedule_queue_size}
-        #mv ./build/bin/replica ./build/bin/free_${track_length_}_${q_size_}
-
-        ./compile.sh OLD ${track_length_} ${q_size_} ${schedule_queue_size}
-        mv ./build/bin/replica ./build/bin/old_${track_length_}_${q_size_}
+        for scheduler in "${schedulers[@]}"; do
+            ./compile.sh ${scheduler} ${track_length_} ${q_size_} ${schedule_queue_size}
+            mv ./build/bin/replica ./build/bin/${scheduler,,}_${track_length_}_${q_size_}
+        done;
     done;
 done;
 

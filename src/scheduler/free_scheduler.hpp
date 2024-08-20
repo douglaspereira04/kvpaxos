@@ -60,7 +60,7 @@ public:
         this->data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
         updated_data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
-        this->reparting_.store(false, std::memory_order_seq_cst);
+        this->repartitioning_.store(false, std::memory_order_seq_cst);
         this->update_.store(false, std::memory_order_seq_cst);
 
         sem_init(&this->graph_requests_semaphore_, 0, 0);
@@ -98,7 +98,7 @@ public:
                 }
 
                 update_.store(false, std::memory_order_release);
-                reparting_.store(false, std::memory_order_release);
+                repartitioning_.store(false, std::memory_order_release);
             }
         }
     }
@@ -141,7 +141,7 @@ public:
             }
             n_processed_requests++;
 
-            if(reparting_.load(std::memory_order_acquire) == false){
+            if(repartitioning_.load(std::memory_order_acquire) == false){
                 bool start_repartitioning = false;
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
                     auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - this->time_start_);
@@ -153,7 +153,7 @@ public:
                 }
                 if (start_repartitioning) {
                     if(this->workload_graph_.n_vertex() > 0){
-                        reparting_.store(true, std::memory_order_release);
+                        repartitioning_.store(true, std::memory_order_release);
                         FreeScheduler<T, TL, WorkerCapacity, IntervalType>::order_partitioning();
                     }
                 }
@@ -187,7 +187,7 @@ public:
     cpu_set_t reparting_cpu_set;
 
 
-    std::atomic_bool reparting_;
+    std::atomic_bool repartitioning_;
     std::atomic_bool update_;
 };
 

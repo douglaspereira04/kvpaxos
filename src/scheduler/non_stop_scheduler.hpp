@@ -32,8 +32,8 @@
 namespace kvpaxos {
 
 
-template <typename T, size_t TL = 0, size_t WorkerCapacity = 0>
-class NonStopScheduler : public FreeScheduler<T, TL, WorkerCapacity> {
+template <typename T, size_t TL = 0, size_t WorkerCapacity = 0, interval_type IntervalType = interval_type::OPERATIONS>
+class NonStopScheduler : public FreeScheduler<T, TL, WorkerCapacity, IntervalType> {
 
 public:
 
@@ -56,7 +56,7 @@ public:
         this->data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
         this->updated_data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
-        this->reparting_.store(false, std::memory_order_seq_cst);
+        this->repartitioning_.store(false, std::memory_order_seq_cst);
         this->update_.store(false, std::memory_order_seq_cst);
 
 
@@ -97,9 +97,9 @@ public:
                 Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
             }
 
-            if(this->reparting_.load(std::memory_order_acquire) == false) {
+            if(this->repartitioning_.load(std::memory_order_acquire) == false) {
                 if(this->workload_graph_.n_vertex() > 0){
-                    this->reparting_.store(true, std::memory_order_release);
+                    this->repartitioning_.store(true, std::memory_order_release);
                     FreeScheduler<T, TL, WorkerCapacity>::order_partitioning();
                 }
             } 
