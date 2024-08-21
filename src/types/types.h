@@ -13,6 +13,7 @@
 #include <chrono>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 #include <unordered_set>
 #include <tbb/concurrent_unordered_map.h>
 
@@ -37,6 +38,19 @@ struct client_message {
 };
 typedef struct client_message client_message;
 
+struct sync_book_t {
+	sync_book_t(int length, std::unordered_map<int, std::vector<int>> partition_to_keys_){
+		partition_to_keys = partition_to_keys_;
+		values = std::vector<std::string>(length);
+		remaining.store(partition_to_keys_.size(), std::memory_order_relaxed);
+	}
+
+	std::unordered_map<int, std::vector<int>> partition_to_keys;
+	std::vector<std::string> values;
+	std::atomic_uint16_t remaining;
+};
+typedef struct sync_book_t sync_book_t;
+
 enum request_type
 {
 	READ,
@@ -45,7 +59,8 @@ enum request_type
 	SYNC,
 	ERROR,
 	UPDATE,
-	DUMMY
+	DUMMY,
+	SYNC_SCAN,
 };
 
 enum interval_type

@@ -68,6 +68,7 @@ public:
     }
 
     void start_worker_thread() {
+        sem_init(&sync_sem_, 0, 0);
         sem_init(&semaphore_, 0, 0);
         if constexpr(Capacity > 0){
             sem_init(&remaining_space_, 0, Capacity);
@@ -187,43 +188,58 @@ private:
             }
 
             auto type = static_cast<request_type>(request.type);
-            auto key = request.key;
-            auto request_args = std::string(request.args);
 
             std::string answer;
             switch (type)
             {
             case READ:
             {
-                answer = std::move(storage_.read(key));
+                answer = std::move(storage_.read(request.key));
                 break;
             }
 
             case WRITE:
             {
-                storage_.write(key, request_args);
+                auto request_args = std::string(request.args);
+                storage_.write(request.key, request_args);
                 answer = request_args;
                 break;
             }
 
             case SCAN:
             {
-                auto length = std::stoi(request_args);
-                std::vector<std::string> values;
-                try{
-                    values = std::move(storage_.scan(key, length));
-                } catch (...){
-                    error_count_++;
-                    answer = "ERROR";
-                    break;
+                if (reinterpret_cast<unsigned long>(nullptr) != request.s_addr){
+                    sync_book_t *sync_book = reinterpret_cast<sync_book_t*>(request.s_addr);
+                    for (int key: sync_book->partition_to_keys[id_]){
+                        sync_book->values[key-request.key] = std::move(storage_.read(request.key));
+                    }
+                    auto remaining = sync_book->remaining.fetch_add(-1);
+                    if (remaining == 1){
+                        std::ostringstream oss;
+                        std::copy(values.begin(), values.end(), std::ostream_iterator<std::string>(oss, ","));
+                        answer = std::string(oss.str());
+
+
+                        //what last will do
+                    }
+                }else{
+                    auto request_args = std::string(request.args);
+                    auto length = std::stoi(request_args);
+                    std::vector<std::string> values;
+                    try{
+                        values = std::move(storage_.scan(request.key, length));
+                    } catch (...){
+                        error_count_++;
+                        answer = "ERROR";
+                        break;
+                    }
+
+                    std::ostringstream oss;
+                    std::copy(values.begin(), values.end(), std::ostream_iterator<std::string>(oss, ","));
+                    answer = std::string(oss.str());
+
+                    std::vector<T> keys(length);
                 }
-
-                std::ostringstream oss;
-                std::copy(values.begin(), values.end(), std::ostream_iterator<std::string>(oss, ","));
-                answer = std::string(oss.str());
-
-                std::vector<T> keys(length);
-                std::iota(keys.begin(), keys.end(), 1);
                 break;
             }
 
@@ -235,6 +251,12 @@ private:
                     pthread_barrier_destroy(barrier);
                     delete barrier;
                 }
+                break;
+            }
+
+            case SYNC_SCAN:
+            {
+                sem_wait(&sync_sem_);
                 break;
             }
 
@@ -271,6 +293,8 @@ private:
     sem_t remaining_space_;
 
     size_t error_count_ = 0;
+
+    sem_t sync_sem_;
 };
 
 template<typename T, size_t Capacity>

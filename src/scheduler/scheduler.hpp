@@ -172,14 +172,11 @@ public:
 
     void dispatch(struct client_message& request){
 
-        auto partitions = std::move(involved_partitions(request));
-        auto arbitrary_partition = *begin(partitions);
-        if (partitions.size() > 1) {
-            sync_partitions(partitions);
-            arbitrary_partition->push_request(request);
-            sync_partitions(partitions);
+        auto type = static_cast<request_type>(request.type);
+        if (type == SCAN) {
+            dispatch_scan(request);
         } else {
-            arbitrary_partition->push_request(request);
+            dispatch_read_write(request);
         }
 
         if (repartition_method_ != model::ROUND_ROBIN) {
@@ -242,35 +239,89 @@ public:
         sem_post(&graph_requests_semaphore_);
     }
 
-    std::unordered_set<Partition<T, WorkerCapacity>*> involved_partitions(
-        const struct client_message& request)
+    std::unordered_map<int, std::vector<int>> get_scan_partition_to_keys(
+        const struct client_message& request, int length)
     {
-        std::unordered_set<Partition<T, WorkerCapacity>*> partitions;
-        auto type = static_cast<request_type>(request.type);
+	    std::unordered_map<int, std::vector<int>> partition_to_keys;
 
-        auto range = 1;
-        if (type == SCAN) {
-            range = std::stoi(request.args);
-        }
+        std::vector<int> not_mapped;
+        Partition<T, WorkerCapacity> *partition = nullptr;
+        for (auto i = 0; i < length; i++) {
 
-
-        bool new_mapping = false;
-        for (auto i = 0; i < range; i++) {
-
-            if(!Scheduler<T, TL, WorkerCapacity, IntervalType>::mapped(request.key + i)){
-                map_key(request.key + i, round_robin_counter_);
-                new_mapping = true;
+            auto data_to_partition_it = data_to_partition_->find(request.key+i);
+            if(data_to_partition_it == data_to_partition_->end()){
+                not_mapped.push_back(request.key+i);
             } else {
-                partitions.insert(data_to_partition_->at(request.key + i));
+                partition = data_to_partition_it->second;
+                auto partition_to_keys_it = partition_to_keys.find(partition->id());
+                if (partition_to_keys_it == partition_to_keys.end()){
+                    std::vector<int> keys;
+                    partition_to_keys[partition->id()] = keys;
+                    keys.push_back(request.key+i);
+                } else {
+                    partition_to_keys_it->second.push_back(request.key+i)
+                }
             }
         }
 
-        if(new_mapping){
-            partitions.insert(partitions_.at(round_robin_counter_));
-            round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
+        if (not_mapped.size() > 0){
+            if (partition != nullptr){
+                for (int key : not_mapped) {
+                    data_to_partition_->emplace(key, partition);
+                    partition_to_keys[partition->id()].push_back(key);
+                }
+            } else {
+                std::vector<int> keys;
+                partition = partitions_.at(round_robin_counter_);
+                round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
+                for (int key : not_mapped) {
+                    data_to_partition_->emplace(key, partition);
+                    keys.push_back(key);
+                }
+                partition_to_keys[partition->id()] = keys;
+            }
         }
 
-        return partitions;
+        return partition_to_keys;
+    }
+
+    dispatch_scan(
+        const struct client_message& request)
+    {
+        int length = std::stoi(request.args);
+        std::unordered_map<int, std::vector<int>> partition_to_keys = get_scan_partition_to_keys(request, length);
+        if(partition_to_keys.size()>1){
+            sync_book_t *sync_book = new sync_book_t(length, partition_to_keys);
+            request.s_addr = reinterpret_cast<unsigned long>(sync_book);
+            for (auto& partition_to_keys_it :partition_to_keys){
+                partitions_[partition_to_keys_it.first]->push_request(request);
+            }
+            for (auto i = 0; i < length; i++) {
+                auto in_scan_it = in_scan_.find(request.key+i);
+                if (in_scan_it == in_scan_.end()){
+                    std::queue<sync_book_t*> sync_books;
+                    in_scan_[request.key+i] = sync_books;
+                    sync_books.push(sync_book);
+                } else {
+                    in_scan_it->second.push(sync_book);
+                }
+            }
+        } else {
+            request.s_addr = reinterpret_cast<unsigned long>(nullptr);
+            partitions_[partition_to_keys.begin()->first]->push_request(request);
+        }
+    }
+
+    dispatch_read_write(
+        const struct client_message& request)
+    {
+        auto data_to_partition_it = data_to_partition_->find(request.key);
+        if(data_to_partition_it == data_to_partition_->end()){
+            auto partition = partitions_.at(round_robin_counter_);
+            data_to_partition_->emplace(request.key, partition);
+            round_robin_counter_ = (round_robin_counter_+1) % n_partitions_;
+            partition->push_request(request);
+        }
     }
 
     struct client_message create_sync_request(int n_partitions) {
@@ -452,6 +503,7 @@ public:
 
     std::vector<std::vector<size_t>> in_queue_amount_;
 
+    std::unordered_map<int,std::queue<sync_book_t*>> in_scan_;
 };
 
 };
