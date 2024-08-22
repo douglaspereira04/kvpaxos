@@ -63,7 +63,7 @@ public:
         this->data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
         this->updated_data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
-        this->repartitioning_.store(false, std::memory_order_seq_cst);
+        repartitioning_ = false;
         this->update_.store(false, std::memory_order_seq_cst);
         this->repartition_.store(false, std::memory_order_seq_cst);
 
@@ -93,7 +93,7 @@ public:
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {
 
-            if (this->repartitioning_.load(std::memory_order_acquire) == false){
+            if (repartitioning_ == false){
                 bool interval_achieved;
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
                     interval_achieved = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - this->time_start_) >= this->time_interval_;
@@ -103,16 +103,13 @@ public:
                 if (interval_achieved) {
                     repartition_.store(true, std::memory_order_release);
                 }
+                repartitioning_ = true;
             } else if(this->update_.load(std::memory_order_acquire) == true){
                 FreeScheduler<T, TL, WorkerCapacity, IntervalType>::change_partition_scheme();
                 this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
 
-                if constexpr(IntervalType == interval_type::MICROSECONDS){
-                    this->time_start_ = std::chrono::system_clock::now();
-                }
-
                 this->update_.store(false, std::memory_order_release);
-                this->repartitioning_.store(false, std::memory_order_release);
+                repartitioning_ = false;
 
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
                     this->time_start_ = std::chrono::system_clock::now();
@@ -146,7 +143,6 @@ public:
                 repartition_.store(false, std::memory_order_relaxed);
 
                 if(this->workload_graph_.n_vertex() > 0){
-                    this->repartitioning_.store(true, std::memory_order_release);
                     FreeScheduler<T, TL, WorkerCapacity, IntervalType>::order_partitioning();
                 }
             } 
@@ -155,6 +151,7 @@ public:
     }
 
     std::atomic_bool repartition_;
+    int repartitioning_;
     int operation_start_ = 0;
 
 };
