@@ -18,38 +18,50 @@ case $node in
     ;;
 
   3)
-    ./non_stop_ycsb_a.sh
+    ./batch_ycsb_a.sh
     ;;
 
   4)
-    ./non_stop_ycsb_d.sh
+    ./batch_ycsb_d.sh
     ;;
 
   5)
-    ./non_stop_ycsb_e.sh
+    ./batch_ycsb_e.sh
     ;;
 
   6)
-    ./old_ycsb_a.sh
+    ./non_stop_ycsb_a.sh
     ;;
 
   7)
-    ./old_ycsb_d.sh
+    ./non_stop_ycsb_d.sh
     ;;
 
   8)
-    ./old_ycsb_e.sh
+    ./non_stop_ycsb_e.sh
     ;;
 
   9)
-    ./rr_ycsb_a.sh
+    ./old_ycsb_a.sh
     ;;
 
   10)
-    ./rr_ycsb_d.sh
+    ./old_ycsb_d.sh
     ;;
 
   11)
+    ./old_ycsb_e.sh
+    ;;
+
+  12)
+    ./rr_ycsb_a.sh
+    ;;
+
+  13)
+    ./rr_ycsb_d.sh
+    ;;
+
+  14)
     ./rr_ycsb_e.sh
     ;;
 

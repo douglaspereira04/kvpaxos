@@ -4,7 +4,7 @@
 track_length=(0 1000 10000 100000 1000000 10000000)
 q_size=(0 1000 10000 100000 1000000 10000000)
 schedule_queue_size=50000000
-schedulers=(OLD NON_STOP ASYNC)
+schedulers=(ASYNC BATCH)
 
 
 for track_length_ in "${track_length[@]}"; do
