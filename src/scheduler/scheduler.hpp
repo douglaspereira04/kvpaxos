@@ -42,8 +42,8 @@ public:
     {
         if constexpr(IntervalType == interval_type::MICROSECONDS){
             time_start_ = std::chrono::system_clock::now();
-            time_interval_ = std::chrono::milliseconds(repartition_interval);
-        } else if(IntervalType == interval_type::OPERATIONS){
+            time_interval_ = std::chrono::microseconds(repartition_interval);
+        } else if constexpr(IntervalType == interval_type::OPERATIONS){
             operation_interval_ = repartition_interval;
         }
         round_robin_counter_ = 0;
@@ -198,7 +198,7 @@ public:
         if (repartition_method_ != model::ROUND_ROBIN) {
             bool start_repartitioning = false;
             if constexpr(IntervalType == interval_type::MICROSECONDS){
-                auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - time_start_);
+                auto interval = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - time_start_);
                 if(interval >= time_interval_){
                     start_repartitioning = true;
                 }
@@ -439,7 +439,7 @@ public:
     pthread_barrier_t repartition_barrier_;
 
     int operation_interval_;
-    std::chrono::milliseconds time_interval_;
+    std::chrono::microseconds time_interval_;
     std::chrono::_V2::high_resolution_clock::time_point time_start_;
 
 

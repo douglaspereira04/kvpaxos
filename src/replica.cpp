@@ -60,6 +60,9 @@
 #elif defined(ASYNC)
 	#include "scheduler/async_scheduler.hpp"
 	typedef kvpaxos::AsyncScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
+#elif defined(BATCH)
+	#include "scheduler/batch_scheduler.hpp"
+	typedef kvpaxos::BatchScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS> Scheduler;
 #else
 	#include "scheduler/scheduler.hpp"
 	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;

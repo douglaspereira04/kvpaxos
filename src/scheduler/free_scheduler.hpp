@@ -45,8 +45,8 @@ public:
 
         if constexpr(IntervalType == interval_type::MICROSECONDS){
             this->time_start_ = std::chrono::system_clock::now();
-            this->time_interval_ = std::chrono::milliseconds(repartition_interval);
-        } else if(IntervalType == interval_type::OPERATIONS){
+            this->time_interval_ = std::chrono::microseconds(repartition_interval);
+        } else if constexpr(IntervalType == interval_type::OPERATIONS){
             this->operation_interval_ = repartition_interval;
         }
         this->round_robin_counter_ = 0;
@@ -144,7 +144,7 @@ public:
             if(repartitioning_.load(std::memory_order_acquire) == false){
                 bool start_repartitioning = false;
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
-                    auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - this->time_start_);
+                    auto interval = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - this->time_start_);
                     if(interval >= this->time_interval_){
                         start_repartitioning = true;
                     }

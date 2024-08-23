@@ -44,8 +44,8 @@ public:
     ) {
         if constexpr(IntervalType == interval_type::MICROSECONDS){
             this->time_start_ = std::chrono::system_clock::now();
-            this->time_interval_ = std::chrono::milliseconds(repartition_interval);
-        } else if(IntervalType == interval_type::OPERATIONS){
+            this->time_interval_ = std::chrono::microseconds(repartition_interval);
+        } else if constexpr(IntervalType == interval_type::OPERATIONS){
             operation_start_ = 0;
             this->operation_interval_ = repartition_interval;
         }
@@ -96,7 +96,7 @@ public:
             if (repartitioning_ == false){
                 bool interval_achieved;
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
-                    interval_achieved = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - this->time_start_) >= this->time_interval_;
+                    interval_achieved = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - this->time_start_) >= this->time_interval_;
                 } else if constexpr(IntervalType == interval_type::OPERATIONS){
                     interval_achieved = this->n_dispatched_requests_ - operation_start_ >= this->operation_interval_;
                 }
@@ -108,7 +108,7 @@ public:
                 FreeScheduler<T, TL, WorkerCapacity, IntervalType>::change_partition_scheme();
                 this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
 
-                this->update_.store(false, std::memory_order_release);
+                this->update_.store(false, std::memory_order_relaxed);
                 repartitioning_ = false;
 
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
