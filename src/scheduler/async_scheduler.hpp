@@ -102,8 +102,8 @@ public:
                 }
                 if (interval_achieved) {
                     repartition_.store(true, std::memory_order_release);
+                    repartitioning_ = true;
                 }
-                repartitioning_ = true;
             } else if(this->update_.load(std::memory_order_acquire) == true){
                 FreeScheduler<T, TL, WorkerCapacity, IntervalType>::change_partition_scheme();
                 this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
@@ -151,7 +151,7 @@ public:
     }
 
     std::atomic_bool repartition_;
-    int repartitioning_;
+    bool repartitioning_;
     int operation_start_ = 0;
 
 };
