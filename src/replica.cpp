@@ -111,8 +111,12 @@ metrics_loop(int sleep_duration, size_t n_requests, Scheduler* scheduler)
 	}
 	std::cout << ", In Queue Total" << std::endl;
 
+	auto duration = std::chrono::milliseconds(sleep_duration);
+	auto begin = std::chrono::high_resolution_clock::now();
 	while (RUNNING) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
+		auto now = std::chrono::high_resolution_clock::now();
+		while(now < begin + duration){now = std::chrono::high_resolution_clock::now();}
+		begin = now;
 		size_t executed_requests = scheduler->n_executed_requests();
 		auto graph_vertices = scheduler->graph_vertices();
 		auto graph_edges = scheduler->graph_edges();
@@ -203,19 +207,19 @@ workload_loop(std::vector<client_message*> *messages, scheduling_queue_t *schedu
 	if(request_rate>0){
 		interval_distribution = std::poisson_distribution<long>(1.0E9/request_rate);
 
+		auto begin = std::chrono::high_resolution_clock::now();
 		while(message_it < n_requests){
-			auto begin = std::chrono::steady_clock::now();
 			scheduling_queue->push(messages_data[message_it++]);
 			sem_post(&schedule_sem);
 			arrived++;
 
 			auto duration = std::chrono::nanoseconds(interval_distribution(generator));
-			auto now = std::chrono::steady_clock::now();
-			while((now-begin)<duration){now = std::chrono::steady_clock::now();}
+			auto now = std::chrono::high_resolution_clock::now();
+			while(now < begin + duration){now = std::chrono::high_resolution_clock::now();}
+			begin = now;
 		}
 	} else {
 		while(message_it < n_requests){
-			auto begin = std::chrono::steady_clock::now();
 			scheduling_queue->push(messages_data[message_it++]);
 			sem_post(&schedule_sem);
 			arrived++;
