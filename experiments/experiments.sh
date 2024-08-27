@@ -14,7 +14,7 @@ experiments () {
     local -n versions=$3
     local -n workloads=$4
     local -n n_initial_keys=$5
-    arrival_rates=$6
+    local -n arrival_rates=$6
     arrival_rate_seed=$7
     parameters_file=${8}
     reps=${9}
@@ -45,8 +45,8 @@ experiments () {
                                         echo ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed}
                                         ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} > ${output_dir}/${output_file}.csv
                                         mv details.csv ${output_dir}/details_${output_file}
-                                        mkdir -p /users/douglasp/ago/output
-                                        cp -r output /users/douglasp/ago/
+                                        mkdir -p /users/douglasp/sep/output
+                                        cp -r output /users/douglasp/sep/
                                     fi
                                 done;
                             done;
