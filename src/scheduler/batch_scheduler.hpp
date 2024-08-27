@@ -108,9 +108,15 @@ public:
     }
 
     void update_graph_loop() {
+        std::chrono::_V2::system_clock::time_point begin;
+        if constexpr(IntervalType == interval_type::MICROSECONDS){
+            begin = std::chrono::high_resolution_clock::now();
+        } 
         while(true){
             if constexpr(IntervalType == interval_type::MICROSECONDS){
-                std::this_thread::sleep_for(this->time_interval_);
+                auto now = std::chrono::high_resolution_clock::now();
+                while(now < begin + this->time_interval_){now = std::chrono::high_resolution_clock::now();}
+                begin = now;
             } 
             static_assert(IntervalType == interval_type::MICROSECONDS, "Não pensei com ops");
             this->graph_requests_mutex_.lock();
