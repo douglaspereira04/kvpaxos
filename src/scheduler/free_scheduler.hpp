@@ -66,7 +66,6 @@ public:
         this->scheduling_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity, IntervalType>::scheduling_loop, this);
         utils::set_affinity(2,this->scheduling_thread_, this->scheduler_cpu_set_);
 
-        sem_init(&this->graph_requests_semaphore_, 0, 0);
         this->graph_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity, IntervalType>::update_graph_loop, this);
 	    utils::set_affinity(3, this->graph_thread_, this->graph_cpu_set_);
 
@@ -88,6 +87,7 @@ public:
 
     void scheduling_loop() {
         while(true){
+            this->scheduling_queue_.template wait<0>();
             client_message message = this->scheduling_queue_.template pop<0>();
             if (message.type == END){
                 break;
@@ -106,8 +106,10 @@ public:
 
             if(update_.load(std::memory_order_acquire) == true){
                 FreeScheduler<T, TL, WorkerCapacity, IntervalType>::change_partition_scheme();
-                this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
 
+                if constexpr(utils::ENABLE_INFO){
+                    this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
+                }
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
                     this->time_start_ = std::chrono::system_clock::now();
                 }
@@ -129,16 +131,25 @@ public:
     }
 
     void order_partitioning(){
-        auto begin = std::chrono::system_clock::now();
+        time_point begin;
+        if constexpr(utils::ENABLE_INFO){
+            begin = std::chrono::system_clock::now();
+        }
         input_graph_ = InputGraph<T>(this->workload_graph_);
-        this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
 
-        this->repartition_request_timestamp_.push_back(std::chrono::system_clock::now());
+        if constexpr(utils::ENABLE_INFO){
+            this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
+        }
+
+        if constexpr(utils::ENABLE_INFO){
+            this->repartition_request_timestamp_.push_back(std::chrono::system_clock::now());
+        }
         sem_post(&repart_semaphore_);
     }
 
     void update_graph_loop() {
         while(true) {
+            this->scheduling_queue_.template wait<1>();
             client_message request = this->scheduling_queue_.template pop<1>();
     
             Scheduler<T, TL, WorkerCapacity, IntervalType>::update_graph(request);
@@ -150,7 +161,6 @@ public:
                 this->graph_deletion_queue_.pop_front();
                 Scheduler<T, TL, WorkerCapacity, IntervalType>::expire(expired_request);
             }
-            n_processed_requests++;
 
             if(repartitioning_.load(std::memory_order_acquire) == false){
                 bool start_repartitioning = false;
@@ -189,8 +199,6 @@ public:
 
     std::unordered_map<T, Partition<T, WorkerCapacity>*>* updated_data_to_partition_;
     InputGraph<T> input_graph_;
-
-    int n_processed_requests = 0;
 
     sem_t repart_semaphore_;
 

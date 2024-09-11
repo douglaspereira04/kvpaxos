@@ -44,14 +44,21 @@ public:
         model::Node<T>* new_node = new model::Node<T>(value);
         tail->next = new_node;
         tail = new_node;
-        sem_post(&semaphores[0]);
-        sem_post(&semaphores[1]);
         
     }
 
     template <size_t Head>
-    T pop(){
+    void notify(){
+        sem_post(&semaphores[Head]);
+    }
+
+    template <size_t Head>
+    void wait(){
         sem_wait(&semaphores[Head]);
+    }
+
+    template <size_t Head>
+    T pop(){
         model::Node<T>* head = heads[Head]->next;
         T curr_value = head->value;
         heads[Head] = head;

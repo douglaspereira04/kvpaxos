@@ -71,7 +71,6 @@ public:
         this->scheduling_thread_ = std::thread(&AsyncScheduler<T, TL, WorkerCapacity, IntervalType>::scheduling_loop, this);
         utils::set_affinity(2,this->scheduling_thread_, this->scheduler_cpu_set_);
 
-        sem_init(&this->graph_requests_semaphore_, 0, 0);
         this->graph_thread_ = std::thread(&AsyncScheduler<T, TL, WorkerCapacity, IntervalType>::update_graph_loop, this);
 	    utils::set_affinity(3, this->graph_thread_, this->graph_cpu_set_);
 
@@ -92,6 +91,7 @@ public:
 
     void scheduling_loop() {
         while(true){
+            this->scheduling_queue_.template wait<0>();
             client_message message = this->scheduling_queue_.template pop<0>();
             if (message.type == END){
                 break;
@@ -121,8 +121,10 @@ public:
                 }
             } else if(this->update_.load(std::memory_order_acquire) == true){
                 FreeScheduler<T, TL, WorkerCapacity, IntervalType>::change_partition_scheme();
-                this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
 
+                if constexpr(utils::ENABLE_INFO){
+                    this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
+                }
                 this->update_.store(false, std::memory_order_relaxed);
                 repartitioning_ = false;
 
@@ -138,6 +140,7 @@ public:
 
     void update_graph_loop() {
         while(true) {
+            this->scheduling_queue_.template wait<1>();
             client_message request = this->scheduling_queue_.template pop<1>();
 
             Scheduler<T, TL, WorkerCapacity>::update_graph(request);

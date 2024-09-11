@@ -63,7 +63,6 @@ public:
         this->scheduling_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity, IntervalType>::scheduling_loop, this);
         utils::set_affinity(2,this->scheduling_thread_, this->scheduler_cpu_set_);
 
-        sem_init(&this->graph_requests_semaphore_, 0, 0);
         this->graph_thread_ = std::thread(&NonStopScheduler<T, TL, WorkerCapacity, IntervalType>::update_graph_loop, this);
 	    utils::set_affinity(3, this->graph_thread_, this->graph_cpu_set_);
 
@@ -84,6 +83,7 @@ public:
 
     void update_graph_loop() {
         while(true) {
+            this->scheduling_queue_.template wait<1>();
             client_message request = this->scheduling_queue_.template pop<1>();
 
             Scheduler<T, TL, WorkerCapacity, IntervalType>::update_graph(request);

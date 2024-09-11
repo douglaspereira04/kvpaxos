@@ -5,6 +5,7 @@ include(cmake/base.cmake)
 include(cmake/project_options.cmake)
 include(cmake/conan.cmake)
 
+option(INF "description" ON)
 set(SCHEDULER "OLD" CACHE STRING "OLD, FREE, NON_STOP, ASYNC, BATCH")
 set(TRACK_LENGTH "0" CACHE STRING "PATTERN TRACKER GRAPH SIZE (0 for INFINITY)")
 set(Q_SIZE "0" CACHE STRING "WORKER THREADS QUEUE SIZE (0 for INFINITY)")
