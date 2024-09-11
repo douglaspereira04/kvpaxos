@@ -1,0 +1,33 @@
+# base manager configuration
+workload.n_records = 100000
+workload.n_operations = 500000
+
+workload.key_seed = 1908944376
+workload.operation_seed = 1836524827
+workload.scan_seed = 2239123249
+
+
+workload.single_distribution = true
+workload.data_distribution = "ZIPFIAN"
+workload.scan_length_distribution = "UNIFORM"
+workload.read_proportion = 0.0
+workload.update_proportion = 0.0
+workload.scan_proportion = 0.95
+workload.insert_proportion = 0.05
+
+workload.min_scan_length = 2
+workload.max_scan_length = 8
+
+# export
+export = true
+output.requests.export_path = "requests.txt"
+
+# shoul execute
+execution.execute_requests = false
+output.info_path = "info.txt"
+
+workload.requests.import_requests = false
+# structure
+# GRAPH, SPANNING_TREE
+
+

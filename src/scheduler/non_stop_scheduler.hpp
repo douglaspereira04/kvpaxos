@@ -60,12 +60,15 @@ public:
         this->update_.store(false, std::memory_order_seq_cst);
 
 
+        this->scheduling_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity, IntervalType>::scheduling_loop, this);
+        utils::set_affinity(2,this->scheduling_thread_, this->scheduler_cpu_set_);
+
         sem_init(&this->graph_requests_semaphore_, 0, 0);
-        this->graph_thread_ = std::thread(&NonStopScheduler<T, TL, WorkerCapacity>::update_graph_loop, this);
-	    utils::set_affinity(3, this->graph_thread_, this->graph_cpu_set);
+        this->graph_thread_ = std::thread(&NonStopScheduler<T, TL, WorkerCapacity, IntervalType>::update_graph_loop, this);
+	    utils::set_affinity(3, this->graph_thread_, this->graph_cpu_set_);
 
         sem_init(&this->repart_semaphore_, 0, 0);
-        this->reparting_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity>::partitioning_loop, this);
+        this->reparting_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity, IntervalType>::partitioning_loop, this);
 	    utils::set_affinity(4, this->reparting_thread_, this->reparting_cpu_set);
 
         client_message dummy;
@@ -81,26 +84,22 @@ public:
 
     void update_graph_loop() {
         while(true) {
-            sem_wait(&this->graph_requests_semaphore_);
-            this->graph_requests_mutex_.lock();
-                auto request = std::move(this->graph_requests_queue_.front());
-                this->graph_requests_queue_.pop_front();
-            this->graph_requests_mutex_.unlock();
+            client_message request = this->scheduling_queue_.template pop<1>();
 
-            Scheduler<T, TL, WorkerCapacity>::update_graph(request);
+            Scheduler<T, TL, WorkerCapacity, IntervalType>::update_graph(request);
 
             if constexpr(TL > 0){
                 this->graph_deletion_queue_.push_back(request);
 
                 auto expired_request = std::move(this->graph_deletion_queue_.front());
                 this->graph_deletion_queue_.pop_front();
-                Scheduler<T, TL, WorkerCapacity>::expire(expired_request);
+                Scheduler<T, TL, WorkerCapacity, IntervalType>::expire(expired_request);
             }
 
             if(this->repartitioning_.load(std::memory_order_acquire) == false) {
                 if(this->workload_graph_.n_vertex() > 0){
                     this->repartitioning_.store(true, std::memory_order_release);
-                    FreeScheduler<T, TL, WorkerCapacity>::order_partitioning();
+                    FreeScheduler<T, TL, WorkerCapacity, IntervalType>::order_partitioning();
                 }
             } 
 

@@ -63,9 +63,12 @@ public:
         this->repartitioning_.store(false, std::memory_order_seq_cst);
         this->update_.store(false, std::memory_order_seq_cst);
 
+        this->scheduling_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity, IntervalType>::scheduling_loop, this);
+        utils::set_affinity(2,this->scheduling_thread_, this->scheduler_cpu_set_);
+
         sem_init(&this->graph_requests_semaphore_, 0, 0);
         this->graph_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity, IntervalType>::update_graph_loop, this);
-	    utils::set_affinity(3, this->graph_thread_, this->graph_cpu_set);
+	    utils::set_affinity(3, this->graph_thread_, this->graph_cpu_set_);
 
         sem_init(&repart_semaphore_, 0, 0);
         reparting_thread_ = std::thread(&FreeScheduler<T, TL, WorkerCapacity, IntervalType>::partitioning_loop, this);
@@ -81,6 +84,18 @@ public:
             }
         }
 
+    }
+
+    void scheduling_loop() {
+        while(true){
+            client_message message = this->scheduling_queue_.template pop<0>();
+            if (message.type == END){
+                break;
+            }
+            FreeScheduler<T, TL, WorkerCapacity, IntervalType>::schedule_and_answer(message);
+        }
+        
+        this->schedule_end_ = std::chrono::system_clock::now();
     }
 
     void schedule_and_answer(struct client_message& request) {
@@ -124,12 +139,8 @@ public:
 
     void update_graph_loop() {
         while(true) {
-            sem_wait(&this->graph_requests_semaphore_);
-            this->graph_requests_mutex_.lock();
-                auto request = std::move(this->graph_requests_queue_.front());
-                this->graph_requests_queue_.pop_front();
-            this->graph_requests_mutex_.unlock();
-
+            client_message request = this->scheduling_queue_.template pop<1>();
+    
             Scheduler<T, TL, WorkerCapacity, IntervalType>::update_graph(request);
 
             if constexpr(TL > 0){

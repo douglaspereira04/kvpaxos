@@ -6,6 +6,7 @@ add_subdirectory(utils)
 add_subdirectory(storage)
 add_subdirectory(scheduler)
 add_subdirectory(graph)
+add_subdirectory(linked_queue)
 
 find_package(Boost REQUIRED)
 

@@ -60,9 +60,6 @@
 #elif defined(ASYNC)
 	#include "scheduler/async_scheduler.hpp"
 	typedef kvpaxos::AsyncScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
-#elif defined(BATCH)
-	#include "scheduler/batch_scheduler.hpp"
-	typedef kvpaxos::BatchScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS> Scheduler;
 #else
 	#include "scheduler/scheduler.hpp"
 	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
@@ -111,12 +108,8 @@ metrics_loop(int sleep_duration, size_t n_requests, Scheduler* scheduler)
 	}
 	std::cout << ", In Queue Total" << std::endl;
 
-	auto duration = std::chrono::milliseconds(sleep_duration);
-	auto begin = std::chrono::high_resolution_clock::now();
 	while (RUNNING) {
-		auto now = std::chrono::high_resolution_clock::now();
-		while(now < begin + duration){now = std::chrono::high_resolution_clock::now();}
-		begin = now;
+		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
 		size_t executed_requests = scheduler->n_executed_requests();
 		auto graph_vertices = scheduler->graph_vertices();
 		auto graph_edges = scheduler->graph_edges();
@@ -177,30 +170,28 @@ initialize_scheduler(const toml_config& config)
 	scheduler->run();
 	return scheduler;
 }
-struct client_message *
-build_client_message(
+struct client_message build_client_message(
 	workload::Request& request)
 {
-	struct client_message *client_message = new struct client_message();
-	client_message->sin_port = htons(0);
-	client_message->id = client_message_id;
-	client_message->type = request.type();
-	client_message->key = request.key();
+	struct client_message client_message;
+	client_message.sin_port = htons(0);
+	client_message.id = client_message_id;
+	client_message.type = request.type();
+	client_message.key = request.key();
 	for (auto i = 0; i < request.args().size(); i++) {
-		client_message->args[i] = request.args()[i];
+		client_message.args[i] = request.args()[i];
 	}
-	client_message->args[request.args().size()] = 0;
-	client_message->size = request.args().size();
+	client_message.args[request.args().size()] = 0;
+	client_message.size = request.args().size();
 	client_message_id++;
 	return client_message;
 }
 
 void
-workload_loop(std::vector<client_message*> *messages, scheduling_queue_t *scheduling_queue)
+workload_loop(std::vector<client_message> *messages, Scheduler *scheduler)
 {
 	size_t message_it = 0;
 	size_t n_requests = messages->size();
-	client_message* *messages_data = messages->data();
 
 	std::mt19937 generator(request_rate_seed);
 	std::poisson_distribution<long> interval_distribution(1);
@@ -209,7 +200,7 @@ workload_loop(std::vector<client_message*> *messages, scheduling_queue_t *schedu
 
 		auto begin = std::chrono::high_resolution_clock::now();
 		while(message_it < n_requests){
-			scheduling_queue->push(messages_data[message_it++]);
+			scheduler->submit(messages->at(message_it++));
 			sem_post(&schedule_sem);
 			arrived++;
 
@@ -220,31 +211,15 @@ workload_loop(std::vector<client_message*> *messages, scheduling_queue_t *schedu
 		}
 	} else {
 		while(message_it < n_requests){
-			scheduling_queue->push(messages_data[message_it++]);
+			scheduler->submit(messages->at(message_it++));
 			sem_post(&schedule_sem);
 			arrived++;
 		}
 	}
-	scheduling_queue->push(nullptr);
+	client_message end_message;
+	end_message.type = END;
+	scheduler->submit(end_message);
 	sem_post(&schedule_sem);
-}
-
-static std::chrono::_V2::system_clock::time_point schedule_end;
-void
-scheduling_loop(
-	Scheduler *scheduler, scheduling_queue_t *scheduling_queue)
-{
-	while(true){
-		sem_wait(&schedule_sem);
-		client_message* message = scheduling_queue->front();
-		scheduling_queue->pop();
-		if (message == nullptr){
-			break;
-		}
-		scheduler->schedule_and_answer(*message);
-	}
-	
-	schedule_end = std::chrono::system_clock::now();
 }
 
 
@@ -256,21 +231,15 @@ run(const toml_config& config)
 	std::string requests_path = params[REQUESTS_PATH];
 	
 	std::ifstream requests_file(requests_path);
-	std::vector<client_message*> *messages = new std::vector<client_message*>();
+	std::vector<client_message> *messages = new std::vector<client_message>();
 	while (requests_file.peek() != EOF) {
 		workload::Request request= workload::import_cs_request(requests_file);
-		client_message* message = build_client_message(request);
+		client_message message = build_client_message(request);
 		messages->push_back(message);
 	}
 	requests_file.close();
 	size_t n_requests = messages->size();
-	client_message* *messages_array = messages->data();
 	auto* scheduler = initialize_scheduler(config);
-	scheduling_queue_t *scheduling_queue = new scheduling_queue_t();
-
-	auto scheduling_thread = std::thread(scheduling_loop, scheduler, scheduling_queue);
-	cpu_set_t scheduler_cpu_set;
-	utils::set_affinity(2,scheduling_thread, scheduler_cpu_set);
 	
 	auto throughput_thread = std::thread(
 		metrics_loop, SLEEP, n_requests, scheduler
@@ -279,19 +248,18 @@ run(const toml_config& config)
 	utils::set_affinity(0,throughput_thread, throughput_cpu_set);
 	
 	auto start_execution_timestamp = std::chrono::system_clock::now();
-	auto workload_thread = std::thread(workload_loop, messages, scheduling_queue);
+	auto workload_thread = std::thread(workload_loop, messages, scheduler);
 	cpu_set_t workload_cpu_set;
 	utils::set_affinity(1,workload_thread, workload_cpu_set);
 
+	scheduler->join();
 	workload_thread.join();
-	scheduling_thread.join();
 	throughput_thread.join();
 
-	auto end_scheduling = schedule_end;
+	auto end_scheduling = scheduler->schedule_end();
 	auto end_execution_timestamp = std::chrono::system_clock::now();
 
 	delete messages;
-	delete scheduling_queue;
 
 
 	auto makespan = end_execution_timestamp - start_execution_timestamp;

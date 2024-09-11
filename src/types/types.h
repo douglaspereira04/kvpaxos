@@ -45,7 +45,8 @@ enum request_type
 	SYNC,
 	ERROR,
 	UPDATE,
-	DUMMY
+	DUMMY,
+	END
 };
 
 enum interval_type

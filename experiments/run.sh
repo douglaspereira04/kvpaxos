@@ -18,51 +18,63 @@ case $node in
     ;;
 
   3)
-    ./batch_ycsb_a.sh
-    ;;
-
-  4)
-    ./batch_ycsb_d.sh
-    ;;
-
-  5)
-    ./batch_ycsb_e.sh
-    ;;
-
-  6)
-    ./non_stop_ycsb_a.sh
-    ;;
-
-  7)
-    ./non_stop_ycsb_d.sh
-    ;;
-
-  8)
-    ./non_stop_ycsb_e.sh
-    ;;
-
-  9)
     ./old_ycsb_a.sh
     ;;
 
-  10)
+  4)
     ./old_ycsb_d.sh
     ;;
 
-  11)
+  5)
     ./old_ycsb_e.sh
     ;;
 
-  12)
+  6)
     ./rr_ycsb_a.sh
     ;;
 
-  13)
+  7)
     ./rr_ycsb_d.sh
     ;;
 
-  14)
+  8)
     ./rr_ycsb_e.sh
+    ;;
+
+  9)
+    ./async_ycsb_a.sh pt2
+    ;;
+
+  10)
+    ./async_ycsb_d.sh pt2
+    ;;
+
+  11)
+    ./async_ycsb_e.sh pt2
+    ;;
+
+  12)
+    ./old_ycsb_a.sh pt2
+    ;;
+
+  13)
+    ./old_ycsb_d.sh pt2
+    ;;
+
+  14)
+    ./old_ycsb_e.sh pt2
+    ;;
+
+  15)
+    ./rr_ycsb_a.sh pt2
+    ;;
+
+  16)
+    ./rr_ycsb_d.sh pt2
+    ;;
+
+  17)
+    ./rr_ycsb_e.sh pt2
     ;;
 
   *)

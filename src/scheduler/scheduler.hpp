@@ -22,6 +22,7 @@
 #include "graph/partitioning.h"
 #include "partition.hpp"
 #include "request/request.hpp"
+#include "linked_queue/linked_queue.hpp"
 #include "storage/storage.h"
 #include "types/types.h"
 #include <iostream>
@@ -59,8 +60,11 @@ public:
         sem_init(&graph_requests_semaphore_, 0, 0);
         pthread_barrier_init(&repartition_barrier_, NULL, 2);
 
+        scheduling_thread_ = std::thread(&Scheduler<T, TL, WorkerCapacity, IntervalType>::scheduling_loop, this);
+        utils::set_affinity(2,scheduling_thread_, scheduler_cpu_set_);
+
         graph_thread_ = std::thread(&Scheduler<T, TL, WorkerCapacity, IntervalType>::update_graph_loop, this);
-	    utils::set_affinity(3, graph_thread_, graph_cpu_set);
+	    utils::set_affinity(3, graph_thread_, graph_cpu_set_);
 
 
         client_message dummy;
@@ -106,6 +110,10 @@ public:
         }
     }
 
+    void join(){
+        scheduling_thread_.join();
+    }
+
     size_t n_executed_requests() {
         size_t n_executed_requests = 0;
         for (auto& kv: partitions_) {
@@ -131,6 +139,10 @@ public:
 
     size_t graph_edges(){
         return workload_graph_.n_edges();
+    }
+
+    time_point schedule_end(){
+        return schedule_end_;
     }
 
     int n_dispatched_requests(){
@@ -319,15 +331,27 @@ public:
         return data_to_partition_->find(key) != data_to_partition_->end();
     }
 
+
+    void submit(client_message &message){
+        scheduling_queue_.push(message);
+    }
+
+    void scheduling_loop() {
+        while(true){
+            client_message message = scheduling_queue_.template pop<0>();
+            if (message.type == END){
+                break;
+            }
+            schedule_and_answer(message);
+        }
+        
+        schedule_end_ = std::chrono::system_clock::now();
+    }
+
     void update_graph_loop() {
 
         while(true) {
-            sem_wait(&graph_requests_semaphore_);
-
-            graph_requests_mutex_.lock();
-                auto request = std::move(graph_requests_queue_.front());
-                graph_requests_queue_.pop_front();
-            graph_requests_mutex_.unlock();
+            client_message request = scheduling_queue_.pop<1>();
 
             if (request.type == SYNC) {
                 pthread_barrier_wait(&repartition_barrier_);
@@ -427,7 +451,10 @@ public:
     std::unordered_map<T, Partition<T, WorkerCapacity>*>* data_to_partition_;
 
     std::thread graph_thread_;
-    cpu_set_t graph_cpu_set;
+    cpu_set_t graph_cpu_set_;
+
+    std::thread scheduling_thread_;
+    cpu_set_t scheduler_cpu_set_;
 
     sem_t graph_requests_semaphore_;
     std::mutex graph_requests_mutex_;
@@ -449,8 +476,11 @@ public:
     std::vector<time_point> repartition_request_timestamp_;
     std::vector<time_point> repartition_apply_timestamp_;
     std::vector<duration> reconstruction_duration_;
+    time_point schedule_end_;
 
     std::vector<std::vector<size_t>> in_queue_amount_;
+
+    model::LinkedQueue<client_message> scheduling_queue_;
 
 };
 
