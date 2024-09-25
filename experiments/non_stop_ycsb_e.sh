@@ -8,7 +8,10 @@ _workloads=(ycsb_e)
 _n_initial_keys=(1000000)
 _parameters_file="non_stop_ycsb_e_parameters.txt"
 _reps=1
-if [ $1 = "pt2" ]; then
+
+if [ $1 = "pt0" ]; then
+    _arrival_rates=(0)
+elif [ $1 = "pt2" ]; then
     _arrival_rates=(50000 60000 70000)
 else
     _arrival_rates=(20000 30000 40000)

@@ -8,7 +8,10 @@ _workloads=(ycsb_a)
 _n_initial_keys=(1000000)
 _parameters_file="batch_ycsb_a_d_parameters.txt"
 _reps=1
-if [ $1 = "pt2" ]; then
+
+if [ $1 = "pt0" ]; then
+    _arrival_rates=(0)
+elif [ $1 = "pt2" ]; then
     _arrival_rates=(400000 500000 600000)
 else
     _arrival_rates=(100000 200000 300000)

@@ -2,79 +2,42 @@
 source ./experiments.sh
 
 node=$(get_node_id)
-
 case $node in
 
   0)
-    ./async_ycsb_a.sh
+    ./async_ycsb_a.sh $1
     ;;
 
   1)
-    ./async_ycsb_d.sh
+    ./async_ycsb_d.sh $1
     ;;
 
   2)
-    ./async_ycsb_e.sh
+    ./async_ycsb_e.sh $1
     ;;
 
   3)
-    ./old_ycsb_a.sh
+    ./old_ycsb_a.sh $1
     ;;
 
   4)
-    ./old_ycsb_d.sh
+    ./old_ycsb_d.sh $1
     ;;
 
   5)
-    ./old_ycsb_e.sh
+    ./old_ycsb_e.sh $1
     ;;
 
   6)
-    ./rr_ycsb_a.sh
+    ./rr_ycsb_a.sh $1
     ;;
 
   7)
-    ./rr_ycsb_d.sh
+    ./rr_ycsb_d.sh $1
     ;;
 
   8)
-    ./rr_ycsb_e.sh
-    ;;
-
-  9)
-    ./async_ycsb_a.sh pt2
-    ;;
-
-  10)
-    ./async_ycsb_d.sh pt2
-    ;;
-
-  11)
-    ./async_ycsb_e.sh pt2
-    ;;
-
-  12)
-    ./old_ycsb_a.sh pt2
-    ;;
-
-  13)
-    ./old_ycsb_d.sh pt2
-    ;;
-
-  14)
-    ./old_ycsb_e.sh pt2
-    ;;
-
-  15)
-    ./rr_ycsb_a.sh pt2
-    ;;
-
-  16)
-    ./rr_ycsb_d.sh pt2
-    ;;
-
-  17)
-    ./rr_ycsb_e.sh pt2
+    ./rr_ycsb_e.sh $1
     ;;
 
   *)
