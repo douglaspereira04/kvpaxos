@@ -22,7 +22,7 @@ struct  Node {
     }
 };
 
-template <typename T>
+template <typename T, size_t Window>
 class LinkedQueue {
     
 
@@ -37,6 +37,10 @@ public:
         tail = sentinel;
         sem_init(&semaphores[0], 0, 0);
         sem_init(&semaphores[1], 0, 0);
+
+        sem_init(&ahead_sems[0], 0, Window);
+        sem_init(&ahead_sems[1], 0, Window);
+        
         
     }
 
@@ -53,8 +57,15 @@ public:
     }
 
     template <size_t Head>
+    void free(){
+        sem_post(&semaphores[Head]);
+        sem_post(&ahead_sems[Head]);
+    }
+
+    template <size_t Head>
     void wait(){
         sem_wait(&semaphores[Head]);
+        sem_wait(&ahead_sems[Head]);
     }
 
     template <size_t Head>
@@ -72,7 +83,23 @@ public:
         } else {
             head->passed.store(true, std::memory_order_release);
         }
+        sem_post(&ahead_sems[(Head+1)%2]);
         return curr_value;
+    }
+
+    template <size_t Head>
+    bool is_ahead(){
+        int vals[2];
+        if(sem_getvalue(&semaphores[0], &vals[0]) != 0){
+            return false;
+        }
+        if(sem_getvalue(&semaphores[1], &vals[1]) != 0){
+            return false;
+        }
+        if constexpr(Head == 0){
+            return vals[0] <= vals[1];
+        }
+        return vals[1] <= vals[0];
     }
 
 
@@ -81,6 +108,8 @@ private:
     model::Node<T>* heads[2];
     model::Node<T>* free_head;
     sem_t semaphores[2];
+
+    sem_t ahead_sems[2];
 };
 
 }

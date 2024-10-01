@@ -216,7 +216,7 @@ public:
                 }
                 
                 note_ = true;
-                scheduling_queue_.template notify<1>();
+                scheduling_queue_.template free<1>();
                 pthread_barrier_wait(&repartition_barrier_);
 
                 time_point begin;
@@ -351,12 +351,12 @@ public:
 
         while(true) {
             scheduling_queue_.template wait<1>();
-            if (note_){
+            if (note_ && scheduling_queue_.template is_ahead<1>()){
                 note_ = false;
                 pthread_barrier_wait(&repartition_barrier_);
                 pthread_barrier_wait(&repartition_barrier_);
             } else {
-                client_message request = scheduling_queue_.pop<1>();
+                client_message request = scheduling_queue_.template pop<1>();
 
                 update_graph(request);
 
@@ -486,7 +486,7 @@ public:
 
     std::vector<std::vector<size_t>> in_queue_amount_;
 
-    model::LinkedQueue<client_message> scheduling_queue_;
+    model::LinkedQueue<client_message, 100> scheduling_queue_;
 
     bool note_;
 
