@@ -59,6 +59,9 @@
 #elif defined(ASYNC)
 	#include "scheduler/async_scheduler.hpp"
 	typedef kvpaxos::AsyncScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
+#elif defined(ASYNC_IMB)
+	#include "scheduler/async_imb_scheduler.hpp"
+	typedef kvpaxos::AsyncImbScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS> Scheduler;
 #else
 	#include "scheduler/scheduler.hpp"
 	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
@@ -82,6 +85,8 @@ static const int REPARTITION_METHOD = 5;
 static const int REQUESTS_PATH = 6;
 static const int REQUEST_RATE = 7;
 static const int REQUEST_RATE_SEED = 8;
+static const int QUEUE_HEAD_DISTANCE = 9;
+static const int BALANCE_THRESHOLD = 10;
 
 static char* *params;
 
@@ -137,10 +142,23 @@ initialize_scheduler(const toml_config& config)
 		repartition_method_s
 	);
 
+	float q_head_distance = atoi(params[QUEUE_HEAD_DISTANCE]);
+	float balance_threshold = atof(params[BALANCE_THRESHOLD]);
+
+#if defined(ASYNC_IMB)
 	auto* scheduler = new Scheduler(
 		repartition_interval, n_partitions,
-		repartition_method
+		repartition_method,
+		q_head_distance,
+		balance_threshold
 	);
+#else
+	auto* scheduler = new Scheduler(
+		repartition_interval, n_partitions,
+		repartition_method,
+		q_head_distance
+	);
+#endif
 	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
 
 	for (auto i = 0; i <= n_initial_keys; i++) {
@@ -181,7 +199,7 @@ workload_loop(std::vector<client_message> *messages, Scheduler *scheduler)
 	if(request_rate>0){
 		interval_distribution = std::poisson_distribution<long>(1.0E9/request_rate);
 
-		auto begin = std::chrono::high_resolution_clock::now();
+		auto begin = utils::now();
 		while(message_it < n_requests){
 			scheduler->submit(messages->at(message_it++));
 			sem_post(&schedule_sem);
@@ -190,8 +208,8 @@ workload_loop(std::vector<client_message> *messages, Scheduler *scheduler)
 				arrived++;
 			}
 			auto duration = std::chrono::nanoseconds(interval_distribution(generator));
-			auto now = std::chrono::high_resolution_clock::now();
-			while(now < begin + duration){now = std::chrono::high_resolution_clock::now();}
+			auto now = utils::now();
+			while(now < begin + duration){now = utils::now();}
 			begin = now;
 		}
 	} else {
@@ -235,7 +253,7 @@ run(const toml_config& config)
 	cpu_set_t throughput_cpu_set;
 	utils::set_affinity(0,throughput_thread, throughput_cpu_set);
 	
-	auto start_execution_timestamp = std::chrono::system_clock::now();
+	auto start_execution_timestamp = utils::now();
 	auto workload_thread = std::thread(workload_loop, messages, scheduler);
 	cpu_set_t workload_cpu_set;
 	utils::set_affinity(1,workload_thread, workload_cpu_set);
@@ -245,7 +263,7 @@ run(const toml_config& config)
 	throughput_thread.join();
 
 	auto end_scheduling = scheduler->schedule_end();
-	auto end_execution_timestamp = std::chrono::system_clock::now();
+	auto end_execution_timestamp = utils::now();
 
 	delete messages;
 

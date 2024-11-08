@@ -53,6 +53,7 @@ enum interval_type
 {
 	MICROSECONDS,
 	OPERATIONS
+	
 };
 
 #endif

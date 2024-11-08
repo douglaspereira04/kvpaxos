@@ -22,12 +22,20 @@ struct  Node {
     }
 };
 
-template <typename T, size_t Window>
+template <typename T>
 class LinkedQueue {
     
 
 public:
-    LinkedQueue(){
+    LinkedQueue(){}
+
+    LinkedQueue(size_t distance)
+    : LinkedQueue(
+        static_cast<size_t>(distance/2), 
+        static_cast<size_t>(distance/2+(distance & 1))
+    ){}
+
+    LinkedQueue(size_t ahead_0, size_t ahead_1){
         model::Node<T>* sentinel = new model::Node<T>();
         semaphores[0] = sem_t();
         semaphores[1] = sem_t();
@@ -38,8 +46,8 @@ public:
         sem_init(&semaphores[0], 0, 0);
         sem_init(&semaphores[1], 0, 0);
 
-        sem_init(&ahead_sems[0], 0, Window);
-        sem_init(&ahead_sems[1], 0, Window);
+        sem_init(&ahead_sems[0], 0, ahead_1);
+        sem_init(&ahead_sems[1], 0, ahead_0);
         
         
     }
@@ -97,9 +105,9 @@ public:
             return false;
         }
         if constexpr(Head == 0){
-            return vals[0] <= vals[1];
+            return vals[0] < vals[1];
         }
-        return vals[1] <= vals[0];
+        return vals[1] < vals[0];
     }
 
 

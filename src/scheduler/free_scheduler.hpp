@@ -38,13 +38,15 @@ public:
     FreeScheduler() {}
     FreeScheduler(int repartition_interval,
                 int n_partitions,
-                model::CutMethod repartition_method
+                model::CutMethod repartition_method,
+                size_t queue_head_distance
     ) {
         this->n_partitions_ = n_partitions;
+        this->scheduling_queue_ = model::LinkedQueue<client_message>(queue_head_distance);
         this->repartition_method_ = repartition_method;
 
         if constexpr(IntervalType == interval_type::MICROSECONDS){
-            this->time_start_ = std::chrono::system_clock::now();
+            this->time_start_ = utils::now();
             this->time_interval_ = std::chrono::microseconds(repartition_interval);
         } else if constexpr(IntervalType == interval_type::OPERATIONS){
             this->operation_interval_ = repartition_interval;
@@ -95,7 +97,7 @@ public:
             FreeScheduler<T, TL, WorkerCapacity, IntervalType>::schedule_and_answer(message);
         }
         
-        this->schedule_end_ = std::chrono::system_clock::now();
+        this->schedule_end_ = utils::now();
     }
 
     void schedule_and_answer(struct client_message& request) {
@@ -108,10 +110,10 @@ public:
                 FreeScheduler<T, TL, WorkerCapacity, IntervalType>::change_partition_scheme();
 
                 if constexpr(utils::ENABLE_INFO){
-                    this->repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
+                    this->repartition_apply_timestamp_.push_back(utils::now());
                 }
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
-                    this->time_start_ = std::chrono::system_clock::now();
+                    this->time_start_ = utils::now();
                 }
 
                 update_.store(false, std::memory_order_release);
@@ -133,16 +135,16 @@ public:
     void order_partitioning(){
         time_point begin;
         if constexpr(utils::ENABLE_INFO){
-            begin = std::chrono::system_clock::now();
+            begin = utils::now();
         }
         input_graph_ = InputGraph<T>(this->workload_graph_);
 
         if constexpr(utils::ENABLE_INFO){
-            this->graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
+            this->graph_copy_duration_.push_back(utils::now() - begin);
         }
 
         if constexpr(utils::ENABLE_INFO){
-            this->repartition_request_timestamp_.push_back(std::chrono::system_clock::now());
+            this->repartition_request_timestamp_.push_back(utils::now());
         }
         sem_post(&repart_semaphore_);
     }
@@ -165,7 +167,7 @@ public:
             if(repartitioning_.load(std::memory_order_acquire) == false){
                 bool start_repartitioning = false;
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
-                    auto interval = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - this->time_start_);
+                    auto interval = std::chrono::duration_cast<std::chrono::microseconds>(utils::now() - this->time_start_);
                     if(interval >= this->time_interval_){
                         start_repartitioning = true;
                     }

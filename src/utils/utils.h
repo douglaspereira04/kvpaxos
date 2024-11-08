@@ -2,8 +2,18 @@
 #define _KVPAXOS_UTILS_H_
 
 #include <thread>
+#include <chrono>
+#include "types/types.h"
 
 namespace utils{ 
+
+inline time_point now(){
+    return std::chrono::_V2::system_clock::now();
+}
+
+inline duration to_us(duration t) {
+    return std::chrono::duration_cast<std::chrono::microseconds>(t);
+}
 
 /// @brief Set affinity of a std::thread
 /// @param cpu is the cpu to set the afinitty of a given thread

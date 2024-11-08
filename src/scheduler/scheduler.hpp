@@ -27,6 +27,7 @@
 #include "types/types.h"
 #include <iostream>
 #include "utils/utils.h"
+#include <algorithm>
 
 
 namespace kvpaxos {
@@ -37,12 +38,15 @@ public:
     Scheduler(){}
     Scheduler(int repartition_interval,
                 int n_partitions,
-                model::CutMethod repartition_method
+                model::CutMethod repartition_method,
+                size_t queue_head_distance
     ) : n_partitions_{n_partitions},
         repartition_method_{repartition_method}
     {
+        scheduling_queue_ = model::LinkedQueue<client_message>(queue_head_distance);
+
         if constexpr(IntervalType == interval_type::MICROSECONDS){
-            time_start_ = std::chrono::system_clock::now();
+            time_start_ = utils::now();
             time_interval_ = std::chrono::microseconds(repartition_interval);
         } else if constexpr(IntervalType == interval_type::OPERATIONS){
             operation_interval_ = repartition_interval;
@@ -114,7 +118,7 @@ public:
         scheduling_thread_.join();
     }
 
-    size_t n_executed_requests() {
+    size_t n_executed_requests() const{
         size_t n_executed_requests = 0;
         for (auto& kv: partitions_) {
             auto* partition = kv.second;
@@ -123,7 +127,16 @@ public:
         return n_executed_requests;
     }
 
-    std::vector<size_t> in_queue_amount() {
+    size_t n_enqueued_requests() const{
+        size_t n_enqueued_requests = 0;
+        for (auto& kv: partitions_) {
+            auto* partition = kv.second;
+            n_enqueued_requests += partition->request_queue_size();
+        }
+        return n_enqueued_requests;
+    }
+
+    std::vector<size_t> in_queue_amount() const{
         std::vector<size_t> in_queue;
         for (auto& kv: partitions_) {
             auto* partition = kv.second;
@@ -203,7 +216,7 @@ public:
         if (repartition_method_ != model::ROUND_ROBIN) {
             bool start_repartitioning = false;
             if constexpr(IntervalType == interval_type::MICROSECONDS){
-                auto interval = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - time_start_);
+                auto interval = utils::to_us(utils::now() - time_start_);
                 if(interval >= time_interval_){
                     start_repartitioning = true;
                 }
@@ -212,7 +225,7 @@ public:
             }
             if (start_repartitioning) {
                 if constexpr(utils::ENABLE_INFO){
-                    repartition_request_timestamp_.push_back(std::chrono::system_clock::now());
+                    repartition_request_timestamp_.push_back(utils::now());
                 }
                 
                 note_ = true;
@@ -221,14 +234,14 @@ public:
 
                 time_point begin;
                 if constexpr(utils::ENABLE_INFO){
-                    begin = std::chrono::system_clock::now();
+                    begin = utils::now();
                 }
                 auto input_graph = InputGraph<T>(workload_graph_);
                 pthread_barrier_wait(&repartition_barrier_);
 
 
                 if constexpr(utils::ENABLE_INFO){
-                    graph_copy_duration_.push_back(std::chrono::system_clock::now() - begin);
+                    graph_copy_duration_.push_back(utils::now() - begin);
                 }
 
                 auto temp = partitioning(input_graph);
@@ -239,10 +252,10 @@ public:
                 sync_all_partitions();
 
                 if constexpr(utils::ENABLE_INFO){
-                    repartition_apply_timestamp_.push_back(std::chrono::system_clock::now());
+                    repartition_apply_timestamp_.push_back(utils::now());
                 }
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
-                    time_start_ = std::chrono::system_clock::now();
+                    time_start_ = utils::now();
                 }
             }
         }
@@ -344,14 +357,14 @@ public:
             schedule_and_answer(message);
         }
         
-        schedule_end_ = std::chrono::system_clock::now();
+        schedule_end_ = utils::now();
     }
 
     void update_graph_loop() {
 
         while(true) {
             scheduling_queue_.template wait<1>();
-            if (note_ && scheduling_queue_.template is_ahead<1>()){
+            if (note_ && scheduling_queue_.template is_ahead<0>()){
                 note_ = false;
                 pthread_barrier_wait(&repartition_barrier_);
                 pthread_barrier_wait(&repartition_barrier_);
@@ -412,7 +425,7 @@ public:
     std::unordered_map<T, Partition<T, WorkerCapacity>*>* partitioning(InputGraph<T> &graph) {
 
         if constexpr(utils::ENABLE_INFO){
-            repartition_timestamps_.push_back(std::chrono::system_clock::now());
+            repartition_timestamps_.push_back(utils::now());
         }
 
         auto partition_scheme = std::move(
@@ -428,8 +441,8 @@ public:
 
         time_point reconstruction_begin;
         if constexpr(utils::ENABLE_INFO){
-            repartition_end_timestamps_.push_back(std::chrono::system_clock::now());
-            reconstruction_begin = std::chrono::system_clock::now();
+            repartition_end_timestamps_.push_back(utils::now());
+            reconstruction_begin = utils::now();
         }
         auto data_to_partition = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
@@ -446,7 +459,7 @@ public:
         }
 
         if constexpr(utils::ENABLE_INFO){
-            reconstruction_duration_.push_back(std::chrono::system_clock::now() - reconstruction_begin);
+            reconstruction_duration_.push_back(utils::now() - reconstruction_begin);
         }
         return data_to_partition;
     }
@@ -472,8 +485,8 @@ public:
     pthread_barrier_t repartition_barrier_;
 
     int operation_interval_;
-    std::chrono::microseconds time_interval_;
-    std::chrono::_V2::high_resolution_clock::time_point time_start_;
+    duration time_interval_;
+    time_point time_start_;
 
 
     std::vector<time_point> repartition_timestamps_;
@@ -484,12 +497,9 @@ public:
     std::vector<duration> reconstruction_duration_;
     time_point schedule_end_;
 
-    std::vector<std::vector<size_t>> in_queue_amount_;
-
-    model::LinkedQueue<client_message, 100> scheduling_queue_;
+    model::LinkedQueue<client_message> scheduling_queue_;
 
     bool note_;
-
 };
 
 };

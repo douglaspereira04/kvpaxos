@@ -77,7 +77,7 @@ public:
         utils::set_affinity(id_+5, worker_thread_, cpu_set);
     }
 
-    size_t request_queue_size() {
+    size_t request_queue_size() const {
         if constexpr(Capacity > 0){
             return bounded_requests_queue.read_available();
         } else {
