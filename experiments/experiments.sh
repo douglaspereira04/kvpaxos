@@ -34,14 +34,14 @@ experiments () {
                                         for imbalance_threshold in "${imbalance_thresholds[@]}"; do
                                             output_dir="output"
                                             output_file="${arrival_rate}_${initial}_${w}_${m}_${p}_${v}_${window}_${queue}_${interval}_${q_heads_d}_${imbalance_threshold}"
-                                            #mkdir -p $output_dir
-                                            #echo ${output_file}
+                                            mkdir -p $output_dir
+                                            echo ${output_file}
                                             if [ ! -f "${output_dir}/${output_file}" ]; then
                                                 echo ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold}
-                                                #./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold} > ${output_dir}/${output_file}.csv
-                                                #mv details.csv ${output_dir}/details_${output_file}
-                                                #mkdir -p /users/douglasp/nov/output
-                                                #cp -r output /users/douglasp/nov/
+                                                ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold} > ${output_dir}/${output_file}.csv
+                                                mv details.csv ${output_dir}/details_${output_file}
+                                                mkdir -p /users/douglasp/nov/output
+                                                cp -r output /users/douglasp/nov/
                                             fi
                                         done;
                                     done;
