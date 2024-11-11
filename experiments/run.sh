@@ -5,7 +5,7 @@ node=$(get_node_id)
 _methods=(METIS)
 _partitions=(8)
 _n_initial_keys=(1000000)
-_queue_heads_distance=(10000)
+_queue_heads_distance=(1000 10000)
 _imbalance_thresholds=(0)
 _reps=1
 
@@ -14,42 +14,42 @@ _arrival_rate_seed=1672270886
 case $node in
 
   0)
-    _versions=(async)
+    _versions=(async_imb)
     _workloads=(ycsb_a)
     _parameters_file="async_ycsb_a_d_parameters.txt"
+    _imbalance_thresholds=(0.05 0.02)
     ;;
 
   1)
-    _versions=(async)
+    _versions=(async_imb)
     _workloads=(ycsb_d)
     _parameters_file="async_ycsb_a_d_parameters.txt"
+    _imbalance_thresholds=(0.05 0.02)
     ;;
 
   2)
-    _versions=(async)
+    _versions=(async_imb)
     _workloads=(ycsb_e)
     _parameters_file="async_ycsb_e_parameters.txt"
+    _imbalance_thresholds=(0.05 0.02)
     ;;
 
   3)
-    _versions=(async_imb)
+    _versions=(async)
     _workloads=(ycsb_a)
     _parameters_file="async_ycsb_a_d_parameters.txt"
-    _imbalance_thresholds=(0.05 0.02)
     ;;
 
   4)
-    _versions=(async_imb)
+    _versions=(async)
     _workloads=(ycsb_d)
     _parameters_file="async_ycsb_a_d_parameters.txt"
-    _imbalance_thresholds=(0.05 0.02)
     ;;
 
   5)
-    _versions=(async_imb)
+    _versions=(async)
     _workloads=(ycsb_e)
     _parameters_file="async_ycsb_e_parameters.txt"
-    _imbalance_thresholds=(0.05 0.02)
     ;;
 
   6)
