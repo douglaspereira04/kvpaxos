@@ -102,31 +102,31 @@ esac
 
 
 if [[ "${_workloads[0]}" == "ycsb_a" ]]; then
-  if [ $1 = "pt0" ]; then
+  if [ "$1" = "pt0" ]; then
       _arrival_rates=(0 100000)
-  elif [ $1 = "pt2" ]; then
+  elif [ "$1" = "pt2" ]; then
       _arrival_rates=(200000 600000)
-  elif [ $1 = "pt2" ]; then
+  elif [ "$1" = "pt2" ]; then
       _arrival_rates=(300000 400000 500000)
   else
       _arrival_rates=(800000 1000000)
   fi
 elif [[ "${_workloads[0]}" == "ycsb_d" ]]; then
-  if [ $1 = "pt0" ]; then
+  if [ "$1" = "pt0" ]; then
       _arrival_rates=(0 300000)
-  elif [ $1 = "pt1" ]; then
+  elif [ "$1" = "pt1" ]; then
       _arrival_rates=(400000 800000)
-  elif [ $1 = "pt2" ]; then
+  elif [ "$1" = "pt2" ]; then
       _arrival_rates=(500000 600000 700000)
   else
       _arrival_rates=(1000000 1200000)
   fi
 else
-  if [ $1 = "pt0" ]; then
+  if [ "$1" = "pt0" ]; then
       _arrival_rates=(0 20000)
-  elif [ $1 = "pt1" ]; then
+  elif [ "$1" = "pt1" ]; then
       _arrival_rates=(30000 70000)
-  elif [ $1 = "pt2" ]; then
+  elif [ "$1" = "pt2" ]; then
       _arrival_rates=(40000 50000 60000)
   else
       _arrival_rates=(90000 110000)
