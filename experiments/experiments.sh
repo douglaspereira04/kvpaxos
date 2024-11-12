@@ -36,7 +36,8 @@ experiments () {
                                             output_file="${arrival_rate}_${initial}_${w}_${m}_${p}_${v}_${window}_${queue}_${interval}_${q_heads_d}_${imbalance_threshold}"
                                             mkdir -p $output_dir
                                             echo ${output_file}
-                                            if [ ! -f "${output_dir}/${output_file}" ]; then
+                                            if [ ! -f "${output_dir}/details_${output_file}" ]; then
+                                                rm -f -- ${output_dir}/${output_file}.csv
                                                 echo ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold}
                                                 ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold} > ${output_dir}/${output_file}.csv
                                                 mv details.csv ${output_dir}/details_${output_file}
