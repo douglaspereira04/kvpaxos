@@ -7,7 +7,9 @@ _partitions=(8)
 _n_initial_keys=(1000000)
 _queue_heads_distance=(1000 10000)
 _imbalance_thresholds=(0)
+_arrival_rates=(0)
 _reps=1
+
 
 _arrival_rate_seed=1672270886
 
@@ -100,7 +102,7 @@ case $node in
     ;;
 esac
 
-
+:'
 if [[ "${_workloads[0]}" == "ycsb_a" ]]; then
   if [ "$1" = "pt0" ]; then
       _arrival_rates=(0 100000)
@@ -132,5 +134,5 @@ else
       _arrival_rates=(90000 110000)
   fi
 fi
-
+'
 experiments _methods _partitions _versions _workloads _n_initial_keys _arrival_rates _queue_heads_distance _imbalance_thresholds $_arrival_rate_seed $_parameters_file $_reps
