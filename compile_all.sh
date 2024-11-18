@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #./async_0_0 configs/config.toml 2 1000000 1000 METIS requests.txt 0 167227088
-track_length=(0 1000 10000 100000 1000000 10000000)
-q_size=(0 1000 10000 100000 1000000 10000000)
+track_length=(0 1000 100000)
+q_size=(0 1000 100000)
 schedule_queue_size=50000000
 schedulers=(OLD ASYNC ASYNC_IMB)
 

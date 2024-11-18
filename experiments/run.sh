@@ -18,22 +18,22 @@ case $node in
   0)
     _versions=(async_imb)
     _workloads=(ycsb_a)
-    _parameters_file="async_ycsb_a_d_parameters.txt"
-    _imbalance_thresholds=(0.05 0.02)
+    _parameters_file="async_imb_parameters.txt"
+    _imbalance_thresholds=(0.5 0.1 0.05)
     ;;
 
   1)
     _versions=(async_imb)
     _workloads=(ycsb_d)
-    _parameters_file="async_ycsb_a_d_parameters.txt"
-    _imbalance_thresholds=(0.05 0.02)
+    _parameters_file="async_imb_parameters.txt"
+    _imbalance_thresholds=(0.5 0.1 0.05)
     ;;
 
   2)
     _versions=(async_imb)
     _workloads=(ycsb_e)
     _parameters_file="async_ycsb_e_parameters.txt"
-    _imbalance_thresholds=(0.05 0.02)
+    _imbalance_thresholds=(0.5 0.1 0.05)
     ;;
 
   3)
