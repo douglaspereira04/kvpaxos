@@ -33,7 +33,7 @@
 namespace kvpaxos {
 
 
-template <typename T, size_t TL = 0, size_t WorkerCapacity = 0, interval_type IntervalType = interval_type::OPERATIONS>
+template <typename T, size_t TL = 0, size_t WorkerCapacity = 0, interval_type IntervalType = interval_type::OPERATIONS, size_t MaxSucessiveImbalances = 10>
 class AsyncImbScheduler : public FreeScheduler<T, TL, WorkerCapacity, IntervalType> {
 
 public:
@@ -48,6 +48,7 @@ public:
         //this->prev_executed = 0;
         //this->prev_throughput_ = 0;
         this->n_partitions_ = n_partitions;
+        this->sucessive_imbalance_ = new uint32_t[n_partitions];
         this->in_queue_amount_ = new size_t[this->n_partitions_];
         this->scheduling_queue_ = model::LinkedQueue<client_message>(queue_head_distance);
         if constexpr(IntervalType == interval_type::MICROSECONDS){
@@ -66,6 +67,7 @@ public:
         for (auto i = 0; i < this->n_partitions_; i++) {
             auto* partition = new Partition<T, WorkerCapacity>(i);
             this->partitions_.emplace(i, partition);
+            this->sucessive_imbalance_[i] = 0b1;
         }
         this->data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
         this->updated_data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
@@ -74,10 +76,10 @@ public:
         this->update_.store(false, std::memory_order_seq_cst);
         this->repartition_.store(false, std::memory_order_seq_cst);
 
-        this->scheduling_thread_ = std::thread(&AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType>::scheduling_loop, this);
+        this->scheduling_thread_ = std::thread(&AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::scheduling_loop, this);
         utils::set_affinity(2,this->scheduling_thread_, this->scheduler_cpu_set_);
 
-        this->graph_thread_ = std::thread(&AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType>::update_graph_loop, this);
+        this->graph_thread_ = std::thread(&AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::update_graph_loop, this);
 	    utils::set_affinity(3, this->graph_thread_, this->graph_cpu_set_);
 
         sem_init(&this->repart_semaphore_, 0, 0);
@@ -95,6 +97,12 @@ public:
 
     }
 
+    inline void clear_imbalance_count(){
+        for (int i = 0; i < this->n_partitions_; i++) {
+            this->sucessive_imbalance_[i] = 0b1;
+        }
+    }
+
     bool imbalance() const{
         size_t sum = 0;
         int i = 0;
@@ -110,7 +118,12 @@ public:
         float threshold = avg * this->balance_threshold_;
         for (i = 0; i < this->n_partitions_; i++) {
             if (std::abs(this->in_queue_amount_[i] - avg) > threshold){
-                return true;
+                this->sucessive_imbalance_[i] = this->sucessive_imbalance_[i] << 1;
+                if (this->sucessive_imbalance_[i] & (0b1 << MaxSucessiveImbalances)){
+                    return true;
+                }
+            } else {
+                this->sucessive_imbalance_[i] = (this->sucessive_imbalance_[i] >> 1) | 0b1;
             }
         }
         return false;
@@ -128,7 +141,7 @@ public:
             if (message.type == END){
                 break;
             }
-            AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType>::schedule_and_answer(message);
+            AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::schedule_and_answer(message);
         }
         
         this->schedule_end_ = utils::now();
@@ -187,20 +200,22 @@ public:
                 if (interval_achieved) {
                     //size_t executed = Scheduler<T, TL, WorkerCapacity, IntervalType>::n_executed_requests();
                     //now_ = utils::now();
-                    bool repartition = AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType>::imbalance();
+                    bool repartition = AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::imbalance();
 
                     //float throughput = (executed - prev_executed)/utils::to_us(now_ - this->time_start_);
                     //this->prev_throughput_ = throughput;
                     //prev_executed = executed;
-                    if constexpr(IntervalType == interval_type::MICROSECONDS){
-                        this->time_start_ = utils::now();
-                    } else if constexpr(IntervalType == interval_type::OPERATIONS){
-                        this->operation_start_ = this->n_processed_requests_;
-                    }
                     if (repartition) {
                         this->repartitioning_.store(true, std::memory_order_relaxed);
                         if(this->workload_graph_.n_vertex() > 0){
                             FreeScheduler<T, TL, WorkerCapacity, IntervalType>::order_partitioning();
+                            AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::clear_imbalance_count();
+                        }
+                    } else {
+                        if constexpr(IntervalType == interval_type::MICROSECONDS){
+                            this->time_start_ = utils::now();
+                        } else if constexpr(IntervalType == interval_type::OPERATIONS){
+                            this->operation_start_ = this->n_processed_requests_;
                         }
                     }
                 }
@@ -217,6 +232,8 @@ public:
 
     size_t prev_executed;
     float prev_throughput_;
+
+    uint32_t* sucessive_imbalance_;
 };
 
 };

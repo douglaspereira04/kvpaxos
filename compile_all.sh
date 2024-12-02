@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#./async_0_0 configs/config.toml 2 1000000 1000 METIS requests.txt 0 167227088
+#./async_imb_0_10000 configs/config.toml 2 100000 1000000 METIS ycsb_a_100000_requests.txt 0 167227088 1000 0.05
 track_length=(0 1000 100000)
 q_size=(0 1000 100000)
 schedule_queue_size=50000000
