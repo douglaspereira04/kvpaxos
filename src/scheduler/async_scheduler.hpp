@@ -27,6 +27,7 @@
 #include "scheduler.hpp"
 #include "free_scheduler.hpp"
 #include "utils/utils.h"
+#include "queue/queue.hpp"
 #include "linked_queue/linked_queue.hpp"
 
 
@@ -45,7 +46,7 @@ public:
                 size_t queue_head_distance
     ) {
         this->n_partitions_ = n_partitions;
-        this->scheduling_queue_ = model::LinkedQueue<client_message>(queue_head_distance);
+        this->scheduling_queue_ = model::Queue<client_message>(queue_head_distance);
         if constexpr(IntervalType == interval_type::MICROSECONDS){
             this->time_start_ = utils::now();
             this->time_interval_ = std::chrono::microseconds(repartition_interval);

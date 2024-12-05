@@ -22,6 +22,7 @@
 #include "graph/partitioning.h"
 #include "partition.hpp"
 #include "request/request.hpp"
+#include "queue/queue.hpp"
 #include "linked_queue/linked_queue.hpp"
 #include "storage/storage.h"
 #include "types/types.h"
@@ -43,7 +44,7 @@ public:
     ) : n_partitions_{n_partitions},
         repartition_method_{repartition_method}
     {
-        scheduling_queue_ = model::LinkedQueue<client_message>(queue_head_distance);
+        scheduling_queue_ = model::Queue<client_message>(queue_head_distance);
 
         if constexpr(IntervalType == interval_type::MICROSECONDS){
             time_start_ = utils::now();
@@ -497,7 +498,7 @@ public:
     std::vector<duration> reconstruction_duration_;
     time_point schedule_end_;
 
-    model::LinkedQueue<client_message> scheduling_queue_;
+    model::Queue<client_message> scheduling_queue_;
 
     bool note_;
 };

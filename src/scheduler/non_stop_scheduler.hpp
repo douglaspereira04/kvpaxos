@@ -27,6 +27,8 @@
 #include "scheduler.hpp"
 #include "free_scheduler.hpp"
 #include "utils/utils.h"
+#include "linked_queue/linked_queue.hpp"
+#include "queue/queue.hpp"
 
 
 namespace kvpaxos {
@@ -44,7 +46,7 @@ public:
                 size_t queue_head_distance
     ) {
         this->n_partitions_ = n_partitions;
-        this->scheduling_queue_ = model::LinkedQueue<client_message>(queue_head_distance);
+        this->scheduling_queue_ = model::Queue<client_message>(queue_head_distance);
         this->repartition_method_ = repartition_method;
 
         this->round_robin_counter_ = 0;
