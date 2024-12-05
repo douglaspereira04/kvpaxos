@@ -33,7 +33,7 @@
 namespace kvpaxos {
 
 
-template <typename T, size_t TL = 0, size_t WorkerCapacity = 0, interval_type IntervalType = interval_type::OPERATIONS, size_t MaxSucessiveImbalances = 10>
+template <typename T, size_t TL = 0, size_t WorkerCapacity = 0, interval_type IntervalType = interval_type::OPERATIONS, size_t MaxSucessiveImbalances = 5>
 class AsyncImbScheduler : public FreeScheduler<T, TL, WorkerCapacity, IntervalType> {
 
 public:
