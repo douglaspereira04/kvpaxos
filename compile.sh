@@ -5,5 +5,5 @@ git checkout master
 cd ../../
 mkdir build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Release .. -DINFO=ON -DSCHEDULER=$1 -DTRACK_LENGTH=$2 -DQ_SIZE=$3 -DSCHEDULE_QUEUE_SIZE=$4
+cmake -DCMAKE_BUILD_TYPE=Release .. -DINFO=OFF -DSCHEDULER=$1 -DTRACK_LENGTH=$2 -DQ_SIZE=$3 -DSCHEDULE_QUEUE_SIZE=$4
 make -j16
