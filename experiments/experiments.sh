@@ -51,8 +51,8 @@ experiments () {
                                                 echo ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold}
                                                 ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold} > ${output_dir}/${output_file}.csv
                                                 mv details.csv ${output_dir}/details_${output_file}
-                                                mkdir -p /users/douglasp/dez/output
-                                                cp -r output /users/douglasp/dez/
+                                                mkdir -p /users/douglasp/dez2/output
+                                                cp -r output /users/douglasp/dez2/
                                             fi
                                         done;
                                     done;
