@@ -19,60 +19,81 @@ case $node in
     _versions=(async_imb)
     _workloads=(ycsb_a)
     _parameters_file="async_imb_parameters.txt"
-    _imbalance_thresholds=(0.8 0.5 0.1 0.05)
+    _imbalance_thresholds=(0.05)
     ;;
 
   1)
     _versions=(async_imb)
     _workloads=(ycsb_d)
     _parameters_file="async_imb_parameters.txt"
-    _imbalance_thresholds=(0.8 0.5 0.1 0.05)
+    _imbalance_thresholds=(0.05)
     ;;
 
   2)
     _versions=(async_imb)
     _workloads=(ycsb_e)
-    _parameters_file="async_ycsb_e_parameters.txt"
-    _imbalance_thresholds=(0.8 0.5 0.1 0.05)
+    _parameters_file="async_imb_parameters.txt"
+    _imbalance_thresholds=(0.05)
     ;;
 
   3)
+    _versions=(imb)
+    _workloads=(ycsb_a)
+    _parameters_file="old_imb_parameters.txt"
+    _imbalance_thresholds=(0.05)
+    ;;
+
+  4)
+    _versions=(imb)
+    _workloads=(ycsb_d)
+    _parameters_file="old_imb_parameters.txt"
+    _imbalance_thresholds=(0.05)
+    ;;
+
+  5)
+    _versions=(imb)
+    _workloads=(ycsb_e)
+    _parameters_file="old_imb_parameters.txt"
+    _imbalance_thresholds=(0.05)
+    ;;
+
+  6)
     _versions=(async)
     _workloads=(ycsb_a)
     _parameters_file="async_ycsb_a_d_parameters.txt"
     ;;
 
-  4)
+  7)
     _versions=(async)
     _workloads=(ycsb_d)
     _parameters_file="async_ycsb_a_d_parameters.txt"
     ;;
 
-  5)
+  8)
     _versions=(async)
     _workloads=(ycsb_e)
     _parameters_file="async_ycsb_e_parameters.txt"
     ;;
 
-  6)
+  9)
     _versions=(old)
     _workloads=(ycsb_a)
     _parameters_file="old_ycsb_a_d_parameters.txt"
     ;;
 
-  7)
+  10)
     _versions=(old)
     _workloads=(ycsb_d)
     _parameters_file="old_ycsb_a_d_parameters.txt"
     ;;
 
-  8)
+  11)
     _versions=(old)
     _workloads=(ycsb_e)
     _parameters_file="old_ycsb_e_parameters.txt"
     ;;
 
-  9)
+  12)
     _methods=(ROUND_ROBIN)
     _partitions=(1 8)
     _versions=(old)
@@ -80,7 +101,7 @@ case $node in
     _parameters_file="rr_parameters.txt"
     ;;
 
-  10)
+  13)
     _methods=(ROUND_ROBIN)
     _partitions=(1 8)
     _versions=(old)
@@ -88,7 +109,7 @@ case $node in
     _parameters_file="rr_parameters.txt"
     ;;
 
-  11)
+  14)
     _methods=(ROUND_ROBIN)
     _partitions=(1 8)
     _versions=(old)

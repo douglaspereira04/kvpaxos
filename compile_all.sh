@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#./async_imb_0_10000 configs/config.toml 2 100000 1000000 METIS ycsb_a_100000_requests.txt 0 167227088 1000 0.05
+#./async_imb_0_0 configs/config.toml 2 100000 1000000 METIS ycsb_a_100000_requests.txt 0 167227088 1000 0.05
 track_length=(0 1000 100000)
-q_size=(0 1000 100000)
+q_size=(0)
 schedule_queue_size=50000000
-schedulers=(OLD ASYNC ASYNC_IMB)
+schedulers=(IMB ASYNC_IMB)
 
 
 for track_length_ in "${track_length[@]}"; do

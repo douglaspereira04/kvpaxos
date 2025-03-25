@@ -62,6 +62,9 @@
 #elif defined(ASYNC_IMB)
 	#include "scheduler/async_imb_scheduler.hpp"
 	typedef kvpaxos::AsyncImbScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS> Scheduler;
+#elif defined(IMB)
+	#include "scheduler/old_imb_scheduler.hpp"
+	typedef kvpaxos::OldImbScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS> Scheduler;
 #else
 	#include "scheduler/scheduler.hpp"
 	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;

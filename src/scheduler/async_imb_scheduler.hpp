@@ -34,7 +34,7 @@
 namespace kvpaxos {
 
 
-template <typename T, size_t TL = 0, size_t WorkerCapacity = 0, interval_type IntervalType = interval_type::OPERATIONS, size_t MaxSucessiveImbalances = 5>
+template <typename T, size_t TL = 0, size_t WorkerCapacity = 0, interval_type IntervalType = interval_type::OPERATIONS, size_t MaxSucessiveImbalances = 100>
 class AsyncImbScheduler : public FreeScheduler<T, TL, WorkerCapacity, IntervalType> {
 
 public:
@@ -73,6 +73,8 @@ public:
         this->data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
         this->updated_data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
+        AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::clear_imbalance_count();
+
         this->repartitioning_.store(false, std::memory_order_seq_cst);
         this->update_.store(false, std::memory_order_seq_cst);
         this->repartition_.store(false, std::memory_order_seq_cst);
@@ -98,13 +100,15 @@ public:
 
     }
 
-    inline void clear_imbalance_count(){
+    inline void clear_imbalance_count() const{
         for (int i = 0; i < this->n_partitions_; i++) {
-            this->sucessive_imbalance_[i] = 0b1;
+            this->sucessive_imbalance_[i] = 0;//0b1;
         }
     }
 
     bool imbalance() const{
+        bool imbalance = false;
+
         size_t sum = 0;
         int i = 0;
         for (auto& kv: this->partitions_) {
@@ -119,20 +123,18 @@ public:
         float threshold = avg * this->balance_threshold_;
         for (i = 0; i < this->n_partitions_; i++) {
             if (std::abs(this->in_queue_amount_[i] - avg) > threshold){
-                this->sucessive_imbalance_[i] = this->sucessive_imbalance_[i] << 1;
-                if (this->sucessive_imbalance_[i] & (0b1 << MaxSucessiveImbalances)){
-                    return true;
+                this->sucessive_imbalance_[i] = this->sucessive_imbalance_[i] + 1; //<< 1;
+                if (this->sucessive_imbalance_[i] > MaxSucessiveImbalances){//& (0b1 << MaxSucessiveImbalances)){
+                    imbalance = true;
+                    AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::clear_imbalance_count();
+                    break;
                 }
             } else {
-                this->sucessive_imbalance_[i] = (this->sucessive_imbalance_[i] >> 1) | 0b1;
+                this->sucessive_imbalance_[i] = 0; // (this->sucessive_imbalance_[i] >> 1) | 0b1;
             }
         }
-        return false;
 
-    }
-
-    void set_balance_threshold(float balance_threshold){
-        this->balance_threshold_ = balance_threshold;
+        return imbalance;
     }
 
     void scheduling_loop() {
@@ -212,12 +214,12 @@ public:
                             FreeScheduler<T, TL, WorkerCapacity, IntervalType>::order_partitioning();
                             AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::clear_imbalance_count();
                         }
-                    } else {
-                        if constexpr(IntervalType == interval_type::MICROSECONDS){
-                            this->time_start_ = utils::now();
-                        } else if constexpr(IntervalType == interval_type::OPERATIONS){
-                            this->operation_start_ = this->n_processed_requests_;
-                        }
+                    }
+
+                    if constexpr(IntervalType == interval_type::MICROSECONDS){
+                        this->time_start_ = utils::now();
+                    } else if constexpr(IntervalType == interval_type::OPERATIONS){
+                        this->operation_start_ = this->n_processed_requests_;
                     }
                 }
             }
