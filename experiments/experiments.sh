@@ -20,6 +20,7 @@ experiments () {
     arrival_rate_seed=$9
     parameters_file=${10}
     reps=${11}
+    experiment_name=${12}
 
 
     for w in "${workloads[@]}"; do
@@ -51,8 +52,8 @@ experiments () {
                                                 echo ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold}
                                                 ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold} > ${output_dir}/${output_file}.csv
                                                 mv details.csv ${output_dir}/details_${output_file}
-                                                mkdir -p /users/douglasp/dez2/output
-                                                cp -r output /users/douglasp/dez2/
+                                                mkdir -p /users/douglasp/${experiment_name}/output
+                                                cp -r output /users/douglasp/${experiment_name}/
                                             fi
                                         done;
                                     done;
