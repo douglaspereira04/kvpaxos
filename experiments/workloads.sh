@@ -1,6 +1,6 @@
 #!/bin/bash
 
-versions=(OLD NON_STOP ASYNC BATCH)
+versions=(OLD NON_STOP ASYNC BATCH ASYNC_IMB IMB)
 
 for file in workloads/*; do
 	filename=$(basename -- "$file")

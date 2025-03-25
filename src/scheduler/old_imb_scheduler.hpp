@@ -37,25 +37,29 @@ public:
 
     OldImbScheduler() {}
     OldImbScheduler(int repartition_interval,
-                int n_partitions,
-                model::CutMethod repartition_method,
-                size_t queue_head_distance
-    ) {
+                    int n_partitions,
+                    model::CutMethod repartition_method,
+                    size_t queue_head_distance,
+                    float balance_threshold
+    )
+    {
         this->n_partitions_ = n_partitions;
         this->repartition_method_ = repartition_method;
-        
 
         this->sucessive_imbalance_ = new uint32_t[n_partitions];
         this->in_queue_amount_ = new size_t[this->n_partitions_];
+        OldImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::set_balance_threshold(balance_threshold);
+        OldImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::clear_imbalance_count();
+
         this->scheduling_queue_ = model::Queue<client_message>(queue_head_distance);
+
         if constexpr(IntervalType == interval_type::MICROSECONDS){
             this->time_start_ = utils::now();
             this->time_interval_ = std::chrono::microseconds(repartition_interval);
         } else if constexpr(IntervalType == interval_type::OPERATIONS){
-            this->operation_start_ = 0;
             this->operation_interval_ = repartition_interval;
+            this->operation_start_ = 0;
         }
-
         this->round_robin_counter_ = 0;
         this->sync_counter_ = 0;
         this->n_dispatched_requests_ = 0;
@@ -65,7 +69,6 @@ public:
             this->partitions_.emplace(i, partition);
         }
         this->data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
-        OldImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::clear_imbalance_count();
 
         pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
 
@@ -73,7 +76,7 @@ public:
         utils::set_affinity(2,this->scheduling_thread_, this->scheduler_cpu_set_);
 
         this->graph_thread_ = std::thread(&Scheduler<T, TL, WorkerCapacity, IntervalType>::update_graph_loop, this);
-	    utils::set_affinity(3, this->graph_thread_, this->graph_cpu_set_);
+        utils::set_affinity(3, this->graph_thread_, this->graph_cpu_set_);
 
         this->note_ = false;
 
@@ -144,56 +147,53 @@ public:
     }
 
     void schedule_and_answer(struct client_message& request) {
+
         Scheduler<T, TL, WorkerCapacity, IntervalType>::dispatch(request);
         this->n_dispatched_requests_++;
 
         if (this->repartition_method_ != model::ROUND_ROBIN) {
-            bool interval_achieved;
-            time_point now_ = utils::now();
+            bool interval_achieved = false;
             if constexpr(IntervalType == interval_type::MICROSECONDS){
-                interval_achieved = utils::to_us(now_ - this->time_start_) >= this->time_interval_;
+                auto interval = utils::to_us(utils::now() - this->time_start_);
+                interval_achieved = interval >= this->time_interval_;
             } else if constexpr(IntervalType == interval_type::OPERATIONS){
                 interval_achieved = this->n_dispatched_requests_ - this->operation_start_ >= this->operation_interval_;
             }
-            if (interval_achieved) {
-                bool start_repartitioning = OldImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::imbalance();
+            if (interval_achieved && OldImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::imbalance()){
+                if constexpr(utils::ENABLE_INFO){
+                    this->repartition_request_timestamp_.push_back(utils::now());
+                }
+                
+                this->note_ = true;
+                this->scheduling_queue_.template free<1>();
+                pthread_barrier_wait(&this->repartition_barrier_);
 
-                if (start_repartitioning) {
-                    if constexpr(utils::ENABLE_INFO){
-                        this->repartition_request_timestamp_.push_back(utils::now());
-                    }
-                    
-                    this->note_ = true;
-                    this->scheduling_queue_.template free<1>();
-                    pthread_barrier_wait(&this->repartition_barrier_);
-
-                    time_point begin;
-                    if constexpr(utils::ENABLE_INFO){
-                        begin = utils::now();
-                    }
-                    auto input_graph = InputGraph<T>(this->workload_graph_);
-                    pthread_barrier_wait(&this->repartition_barrier_);
+                time_point begin;
+                if constexpr(utils::ENABLE_INFO){
+                    begin = utils::now();
+                }
+                auto input_graph = InputGraph<T>(this->workload_graph_);
+                pthread_barrier_wait(&this->repartition_barrier_);
 
 
-                    if constexpr(utils::ENABLE_INFO){
-                        this->graph_copy_duration_.push_back(utils::now() - begin);
-                    }
+                if constexpr(utils::ENABLE_INFO){
+                    this->graph_copy_duration_.push_back(utils::now() - begin);
+                }
 
-                    auto temp = Scheduler<T, TL, WorkerCapacity, IntervalType>::partitioning(input_graph);
+                auto temp = Scheduler<T, TL, WorkerCapacity, IntervalType>::partitioning(input_graph);
 
-                    delete this->data_to_partition_;
-                    this->data_to_partition_ = temp;
+                delete this->data_to_partition_;
+                this->data_to_partition_ = temp;
 
-                    Scheduler<T, TL, WorkerCapacity, IntervalType>::sync_all_partitions();
+                Scheduler<T, TL, WorkerCapacity, IntervalType>::sync_all_partitions();
 
-                    if constexpr(utils::ENABLE_INFO){
-                        this->repartition_apply_timestamp_.push_back(utils::now());
-                    }
+                if constexpr(utils::ENABLE_INFO){
+                    this->repartition_apply_timestamp_.push_back(utils::now());
                 }
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
                     this->time_start_ = utils::now();
                 } else if constexpr(IntervalType == interval_type::OPERATIONS){
-                    this->operation_start_ = this->n_dispatched_requests_;
+                    this->operation_start_ = this->n_dispatched_requests;
                 }
             }
         }

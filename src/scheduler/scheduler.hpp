@@ -240,11 +240,9 @@ public:
                 auto input_graph = InputGraph<T>(workload_graph_);
                 pthread_barrier_wait(&repartition_barrier_);
 
-
                 if constexpr(utils::ENABLE_INFO){
                     graph_copy_duration_.push_back(utils::now() - begin);
                 }
-
                 auto temp = partitioning(input_graph);
 
                 delete data_to_partition_;
@@ -365,7 +363,7 @@ public:
 
         while(true) {
             scheduling_queue_.template wait<1>();
-            if (note_ && scheduling_queue_.template is_ahead<0>()){
+            if (note_ && !scheduling_queue_.template is_ahead<0>()){
                 note_ = false;
                 pthread_barrier_wait(&repartition_barrier_);
                 pthread_barrier_wait(&repartition_barrier_);

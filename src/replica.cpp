@@ -148,7 +148,7 @@ initialize_scheduler(const toml_config& config)
 	float q_head_distance = atoi(params[QUEUE_HEAD_DISTANCE]);
 	float balance_threshold = atof(params[BALANCE_THRESHOLD]);
 
-#if defined(ASYNC_IMB)
+#if defined(ASYNC_IMB) || defined(IMB)
 	auto* scheduler = new Scheduler(
 		repartition_interval, n_partitions,
 		repartition_method,

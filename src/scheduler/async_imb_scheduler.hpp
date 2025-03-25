@@ -73,6 +73,7 @@ public:
         this->data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
         this->updated_data_to_partition_ = new std::unordered_map<T, Partition<T, WorkerCapacity>*>();
 
+        AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::set_balance_threshold(balance_threshold);
         AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::clear_imbalance_count();
 
         this->repartitioning_.store(false, std::memory_order_seq_cst);
@@ -135,6 +136,10 @@ public:
         }
 
         return imbalance;
+    }
+
+    void set_balance_threshold(float balance_threshold){
+        this->balance_threshold_ = balance_threshold;
     }
 
     void scheduling_loop() {
