@@ -80,19 +80,6 @@ public:
         return curr_value;
     }
 
-    template <size_t Head>
-    bool is_ahead(){
-        int vals[2];
-        if(sem_getvalue(&semaphores[0], &vals[0]) != 0){
-            return false;
-        }
-        if(sem_getvalue(&semaphores[1], &vals[1]) != 0){
-            return false;
-        }
-
-        return vals[Head] < vals[(Head+1)%2];
-    }
-
 
 private:
     sem_t semaphores[2];

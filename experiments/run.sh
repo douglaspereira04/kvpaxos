@@ -7,7 +7,7 @@ _methods=(METIS)
 _partitions=(8)
 _n_initial_keys=(1000000)
 _queue_heads_distance=(10000 50000000)
-_imbalance_thresholds=(0.2 0.1 0.05)
+_imbalance_thresholds=(0.1 0.05 0.01)
 _arrival_rates=(0)
 _reps=1
 
@@ -53,18 +53,22 @@ case $node in
     ;;
 
   6)
+    _imbalance_thresholds=(0)
     _versions=(async)
     _workloads=(ycsb_a)
     _parameters_file="async_ycsb_a_d_parameters.txt"
     ;;
 
   7)
+    _imbalance_thresholds=(0)
     _versions=(async)
     _workloads=(ycsb_d)
     _parameters_file="async_ycsb_a_d_parameters.txt"
     ;;
 
   8)
+
+    _imbalance_thresholds=(0)
     _versions=(async)
     _workloads=(ycsb_e)
     _parameters_file="async_ycsb_e_parameters.txt"

@@ -159,36 +159,38 @@ public:
             } else if constexpr(IntervalType == interval_type::OPERATIONS){
                 interval_achieved = this->n_dispatched_requests_ - this->operation_start_ >= this->operation_interval_;
             }
-            if (interval_achieved && OldImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::imbalance()){
-                if constexpr(utils::ENABLE_INFO){
-                    this->repartition_request_timestamp_.push_back(utils::now());
-                }
-                
-                this->note_ = true;
-                this->scheduling_queue_.template free<1>();
-                pthread_barrier_wait(&this->repartition_barrier_);
-
-                time_point begin;
-                if constexpr(utils::ENABLE_INFO){
-                    begin = utils::now();
-                }
-                auto input_graph = InputGraph<T>(this->workload_graph_);
-                pthread_barrier_wait(&this->repartition_barrier_);
-
-
-                if constexpr(utils::ENABLE_INFO){
-                    this->graph_copy_duration_.push_back(utils::now() - begin);
-                }
-
-                auto temp = Scheduler<T, TL, WorkerCapacity, IntervalType>::partitioning(input_graph);
-
-                delete this->data_to_partition_;
-                this->data_to_partition_ = temp;
-
-                Scheduler<T, TL, WorkerCapacity, IntervalType>::sync_all_partitions();
-
-                if constexpr(utils::ENABLE_INFO){
-                    this->repartition_apply_timestamp_.push_back(utils::now());
+            if (interval_achieved){
+                if (OldImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::imbalance()){
+                    if constexpr(utils::ENABLE_INFO){
+                        this->repartition_request_timestamp_.push_back(utils::now());
+                    }
+                    
+                    this->note_ = true;
+                    this->scheduling_queue_.template free<1>();
+                    pthread_barrier_wait(&this->repartition_barrier_);
+    
+                    time_point begin;
+                    if constexpr(utils::ENABLE_INFO){
+                        begin = utils::now();
+                    }
+                    auto input_graph = InputGraph<T>(this->workload_graph_);
+                    pthread_barrier_wait(&this->repartition_barrier_);
+    
+    
+                    if constexpr(utils::ENABLE_INFO){
+                        this->graph_copy_duration_.push_back(utils::now() - begin);
+                    }
+    
+                    auto temp = Scheduler<T, TL, WorkerCapacity, IntervalType>::partitioning(input_graph);
+    
+                    delete this->data_to_partition_;
+                    this->data_to_partition_ = temp;
+    
+                    Scheduler<T, TL, WorkerCapacity, IntervalType>::sync_all_partitions();
+    
+                    if constexpr(utils::ENABLE_INFO){
+                        this->repartition_apply_timestamp_.push_back(utils::now());
+                    }
                 }
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
                     this->time_start_ = utils::now();

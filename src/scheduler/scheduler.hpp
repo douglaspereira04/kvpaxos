@@ -363,7 +363,7 @@ public:
 
         while(true) {
             scheduling_queue_.template wait<1>();
-            if (note_ && !scheduling_queue_.template is_ahead<0>()){
+            if (note_ && n_processed_requests_+1 >= n_dispatched_requests_){
                 note_ = false;
                 pthread_barrier_wait(&repartition_barrier_);
                 pthread_barrier_wait(&repartition_barrier_);
@@ -379,6 +379,7 @@ public:
                     graph_deletion_queue_.pop_front();
                     Scheduler<T, TL, WorkerCapacity, IntervalType>::expire(expired_request);
                 }
+                n_processed_requests_++;
             }
         }
     }
@@ -497,6 +498,8 @@ public:
     time_point schedule_end_;
 
     model::Queue<client_message> scheduling_queue_;
+
+    size_t n_processed_requests_ = 0;
 
     bool note_;
 };

@@ -183,6 +183,7 @@ public:
 
     void update_graph_loop() {
         while(true) {
+            this->n_processed_requests_++;
             this->scheduling_queue_.template wait<1>();
             client_message request = this->scheduling_queue_.template pop<1>();
 
@@ -195,7 +196,6 @@ public:
                 this->graph_deletion_queue_.pop_front();
                 Scheduler<T, TL, WorkerCapacity, IntervalType>::expire(expired_request);
             }
-            n_processed_requests_++;
 
             if(!this->repartitioning_.load(std::memory_order_acquire)){
                 bool interval_achieved;
@@ -231,7 +231,6 @@ public:
 
         }
     }
-    size_t n_processed_requests_ = 0;
     std::atomic_bool repartition_;
     int operation_start_ = 0;
 
