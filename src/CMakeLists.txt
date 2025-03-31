@@ -42,6 +42,7 @@ ENDIF()
 add_definitions( -DTRACK_LENGTH=${TRACK_LENGTH} )
 add_definitions( -DQ_SIZE=${Q_SIZE} )
 add_definitions( -DSCHEDULE_QUEUE_SIZE=${SCHEDULE_QUEUE_SIZE} )
+add_definitions( -DMAX_SUCESSIVE_IMBALANCE=${MAX_SUCESSIVE_IMBALANCE} )
 
 target_sources(
     replica

@@ -4,14 +4,22 @@
 track_length=(0 1000 100000)
 q_size=(0 1000 100000)
 schedule_queue_size=50000000
-schedulers=(IMB)
+schedulers=()
+imb_schedulers=(ASYNC_IMB IMB)
+max_sucessive_imbalances=(10 100)
 
 
 for track_length_ in "${track_length[@]}"; do
     for q_size_ in "${q_size[@]}"; do
         for scheduler in "${schedulers[@]}"; do
-            ./compile.sh ${scheduler} ${track_length_} ${q_size_} ${schedule_queue_size}
+            ./compile.sh ${scheduler} ${track_length_} ${q_size_} ${schedule_queue_size} 0
             mv ./build/bin/replica ./build/bin/${scheduler,,}_${track_length_}_${q_size_}
+        done;
+        for imb_scheduler in "${imb_schedulers[@]}"; do
+            for max_sucessive_imbalance in "${max_sucessive_imbalances[@]}"; do
+                ./compile.sh ${imb_scheduler} ${track_length_} ${q_size_} ${schedule_queue_size} ${max_sucessive_imbalance}
+                mv ./build/bin/replica ./build/bin/${imb_scheduler,,}_${track_length_}_${q_size_}_${max_sucessive_imbalance}
+            done;
         done;
     done;
 done;

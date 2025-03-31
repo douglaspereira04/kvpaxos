@@ -12,15 +12,17 @@ experiments () {
     local -n methods=$1
     local -n partitions=$2
     local -n versions=$3
-    local -n workloads=$4
-    local -n n_initial_keys=$5
-    local -n arrival_rates=$6
-    local -n q_heads_ds=$7
-    local -n imbalance_thresholds=$8
-    arrival_rate_seed=$9
-    parameters_file=${10}
-    reps=${11}
-    experiment_name=${12}
+    local -n imb_versions=$4
+    local -n workloads=$5
+    local -n n_initial_keys=$6
+    local -n arrival_rates=$7
+    local -n q_heads_ds=$8
+    local -n imbalance_thresholds=$9
+    local -n _max_sucessive_imbalances=$10
+    arrival_rate_seed=$11
+    parameters_file=${12}
+    reps=${13}
+    experiment_name=${14}
 
 
     for w in "${workloads[@]}"; do
@@ -40,21 +42,37 @@ experiments () {
                     while read -r interval window queue; do
                         for m in "${methods[@]}"; do
                             for w in "${workloads[@]}"; do
-                                for v in "${versions[@]}"; do
-                                    for q_heads_d in "${q_heads_ds[@]}"; do
+                                for q_heads_d in "${q_heads_ds[@]}"; do
+                                    for v in "${versions[@]}"; do
+                                        output_dir="output"
+                                        output_file="${arrival_rate}_${initial}_${w}_${m}_${p}_${v}_${window}_${queue}_${interval}_${q_heads_d}_0"
+                                        mkdir -p $output_dir
+                                        echo ${output_file}
+                                        if [ ! -f "${output_dir}/details_${output_file}" ]; then
+                                            rm -f -- ${output_dir}/${output_file}.csv
+                                            echo ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} 0
+                                            ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} 0 > ${output_dir}/${output_file}.csv
+                                            mv details.csv ${output_dir}/details_${output_file}
+                                            mkdir -p /users/douglasp/${experiment_name}/output
+                                            cp -r output /users/douglasp/${experiment_name}/
+                                        fi
+                                    done;
+                                    for v in "${imb_versions[@]}"; do
                                         for imbalance_threshold in "${imbalance_thresholds[@]}"; do
-                                            output_dir="output"
-                                            output_file="${arrival_rate}_${initial}_${w}_${m}_${p}_${v}_${window}_${queue}_${interval}_${q_heads_d}_${imbalance_threshold}"
-                                            mkdir -p $output_dir
-                                            echo ${output_file}
-                                            if [ ! -f "${output_dir}/details_${output_file}" ]; then
-                                                rm -f -- ${output_dir}/${output_file}.csv
-                                                echo ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold}
-                                                ./${v}_${window}_${queue} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold} > ${output_dir}/${output_file}.csv
-                                                mv details.csv ${output_dir}/details_${output_file}
-                                                mkdir -p /users/douglasp/${experiment_name}/output
-                                                cp -r output /users/douglasp/${experiment_name}/
-                                            fi
+                                            for max_sucessive_imbalance in "${_max_sucessive_imbalances[@]}"; do
+                                                output_dir="output"
+                                                output_file="${arrival_rate}_${initial}_${w}_${m}_${p}_${v}_${window}_${queue}_${interval}_${q_heads_d}_${imbalance_threshold}_${max_sucessive_imbalance}"
+                                                mkdir -p $output_dir
+                                                echo ${output_file}
+                                                if [ ! -f "${output_dir}/details_${output_file}" ]; then
+                                                    rm -f -- ${output_dir}/${output_file}.csv
+                                                    echo ./${v}_${window}_${queue}_${max_sucessive_imbalance} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold}
+                                                    ./${v}_${window}_${queue}_${max_sucessive_imbalance} configs/config.toml ${p} ${initial} ${interval} ${m} ${w}_${initial}_requests.txt ${arrival_rate} ${arrival_rate_seed} ${q_heads_d} ${imbalance_threshold} > ${output_dir}/${output_file}.csv
+                                                    mv details.csv ${output_dir}/details_${output_file}
+                                                    mkdir -p /users/douglasp/${experiment_name}/output
+                                                    cp -r output /users/douglasp/${experiment_name}/
+                                                fi
+                                            done;
                                         done;
                                     done;
                                 done;

@@ -8,46 +8,48 @@ _partitions=(8)
 _n_initial_keys=(1000000)
 _queue_heads_distance=(10000 50000000)
 _imbalance_thresholds=(0.1 0.05)
+_max_sucessive_imbalances=(10)
 _arrival_rates=(0)
 _reps=1
-
+_versions=()
+_imb_versions=()
 
 _arrival_rate_seed=1672270886
 
 case $node in
 
   0)
-    _versions=(async_imb)
+    _imb_versions=(async_imb)
     _workloads=(ycsb_a)
     _parameters_file="async_imb_parameters.txt"
     ;;
 
   1)
-    _versions=(async_imb)
+    _imb_versions=(async_imb)
     _workloads=(ycsb_d)
     _parameters_file="async_imb_parameters.txt"
     ;;
 
   2)
-    _versions=(async_imb)
+    _imb_versions=(async_imb)
     _workloads=(ycsb_e)
     _parameters_file="async_imb_parameters.txt"
     ;;
 
   3)
-    _versions=(imb)
+    _imb_versions=(imb)
     _workloads=(ycsb_a)
     _parameters_file="old_imb_parameters.txt"
     ;;
 
   4)
-    _versions=(imb)
+    _imb_versions=(imb)
     _workloads=(ycsb_d)
     _parameters_file="old_imb_parameters.txt"
     ;;
 
   5)
-    _versions=(imb)
+    _imb_versions=(imb)
     _workloads=(ycsb_e)
     _parameters_file="old_imb_parameters.txt"
     ;;
@@ -155,4 +157,4 @@ else
   fi
 fi
 '
-experiments _methods _partitions _versions _workloads _n_initial_keys _arrival_rates _queue_heads_distance _imbalance_thresholds $_arrival_rate_seed $_parameters_file $_reps $_experiment_name
+experiments _methods _partitions _versions _imb_versions _workloads _n_initial_keys _arrival_rates _queue_heads_distance _imbalance_thresholds _max_sucessive_imbalances $_arrival_rate_seed $_parameters_file $_reps $_experiment_name
