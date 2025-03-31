@@ -18,8 +18,8 @@ experiments () {
     local -n arrival_rates=$7
     local -n q_heads_ds=$8
     local -n imbalance_thresholds=$9
-    local -n _max_sucessive_imbalances=$10
-    arrival_rate_seed=$11
+    local -n max_sucessive_imbalances=${10}
+    arrival_rate_seed=${11}
     parameters_file=${12}
     reps=${13}
     experiment_name=${14}
@@ -27,12 +27,24 @@ experiments () {
 
     for w in "${workloads[@]}"; do
         for initial in "${n_initial_keys[@]}"; do
-            if [ ! -f "${w}_${initial}_requests.txt" ]; then
-                ./${versions[0]}_0_0 workloads/${w}_${initial}.toml
-                mv requests.txt ${w}_${initial}_requests.txt
-            fi
+            while read -r interval window queue; do
+                for v in "${versions[@]}"; do
+                    if [ ! -f "${w}_${initial}_requests.txt" ]; then
+                        ./${v}_${window}_${queue} workloads/${w}_${initial}.toml
+                        mv requests.txt ${w}_${initial}_requests.txt
+                    fi
+                done;
+                for v in "${imb_versions[@]}"; do
+                    if [ ! -f "${w}_${initial}_requests.txt" ]; then
+                        ./${v}_${window}_${queue}_${max_sucessive_imbalance} workloads/${w}_${initial}.toml
+                        mv requests.txt ${w}_${initial}_requests.txt
+                    fi
+                done;
+            done;
         done;
     done;
+
+
 
     for i in $(seq $reps); do
         echo rep ${i}
@@ -59,7 +71,7 @@ experiments () {
                                     done;
                                     for v in "${imb_versions[@]}"; do
                                         for imbalance_threshold in "${imbalance_thresholds[@]}"; do
-                                            for max_sucessive_imbalance in "${_max_sucessive_imbalances[@]}"; do
+                                            for max_sucessive_imbalance in "${max_sucessive_imbalances[@]}"; do
                                                 output_dir="output"
                                                 output_file="${arrival_rate}_${initial}_${w}_${m}_${p}_${v}_${window}_${queue}_${interval}_${q_heads_d}_${imbalance_threshold}_${max_sucessive_imbalance}"
                                                 mkdir -p $output_dir
