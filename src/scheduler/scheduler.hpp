@@ -200,13 +200,15 @@ public:
 
         auto partitions = std::move(involved_partitions(request));
         auto arbitrary_partition = *begin(partitions);
-        if (partitions.size() > 1) {
+        bool is_cross_partition = partitions.size() > 1;
+        if (is_cross_partition) {
             sync_partitions(partitions);
             arbitrary_partition->push_request(request);
             sync_partitions(partitions);
         } else {
             arbitrary_partition->push_request(request);
         }
+        cross_partition_count_ += is_cross_partition;
     }
 
     void schedule_and_answer(struct client_message& request) {
@@ -500,6 +502,8 @@ public:
     model::Queue<client_message> scheduling_queue_;
 
     size_t n_processed_requests_ = 0;
+
+    size_t cross_partition_count_ = 0;
 
     bool note_;
 };

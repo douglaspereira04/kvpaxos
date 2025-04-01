@@ -55,10 +55,13 @@ public:
         if constexpr(IntervalType == interval_type::MICROSECONDS){
             this->time_start_ = utils::now();
             this->time_interval_ = std::chrono::microseconds(repartition_interval);
+            this->operation_start_ = 0;
+            this->cross_operation_start_ = 0;
         } else if constexpr(IntervalType == interval_type::OPERATIONS){
             this->operation_start_ = 0;
             this->operation_interval_ = repartition_interval;
         }
+        this->cross_partition_count_ = 0;
         this->repartition_method_ = repartition_method;
 
         this->round_robin_counter_ = 0;
@@ -107,9 +110,33 @@ public:
         }
     }
 
-    bool imbalance() const{
-        bool imbalance = false;
+    inline bool is_cross_partition_intensive() {
+        bool cross_partition_intensive = false;
+        if ( this->n_dispatched_requests_ > this->operation_start_){
+            float cross_partition_ratio = (this->cross_partition_count_ - this->cross_operation_start_)/ static_cast<float>(this->n_dispatched_requests_ - this->operation_start_);
+            if (cross_partition_ratio > this->balance_threshold_){
+                this->sucessive_cross_partition_intensive_ += 1;
+                if (this->sucessive_cross_partition_intensive_ > MaxSucessiveImbalances){
+                    cross_partition_intensive = true;
+                }
+            } else {
+                this->sucessive_cross_partition_intensive_ = 0; //this->sucessive_cross_partition_intensive_  - (this->sucessive_cross_partition_intensive_ > 0);
+            }
+        }
+        return cross_partition_intensive;
+    }
 
+    bool imbalance() {
+
+        bool is_cross_partition_intensive = AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::is_cross_partition_intensive();
+
+        if (is_cross_partition_intensive){
+            this->sucessive_cross_partition_intensive_ = 0;
+            AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::clear_imbalance_count();
+            return true;
+        }
+
+        bool imbalance = false;
         size_t sum = 0;
         int i = 0;
         for (auto& kv: this->partitions_) {
@@ -127,6 +154,7 @@ public:
                 this->sucessive_imbalance_[i] = this->sucessive_imbalance_[i] + 1; //<< 1;
                 if (this->sucessive_imbalance_[i] > MaxSucessiveImbalances){//& (0b1 << MaxSucessiveImbalances)){
                     imbalance = true;
+                    this->sucessive_cross_partition_intensive_ = 0;
                     AsyncImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::clear_imbalance_count();
                     break;
                 }
@@ -172,9 +200,11 @@ public:
 
                 if constexpr(IntervalType == interval_type::MICROSECONDS){
                     this->time_start_ = utils::now();
-                } else if constexpr(IntervalType == interval_type::OPERATIONS){
-                    this->operation_start_ = this->n_dispatched_requests_;
-                }
+                } /*else if constexpr(IntervalType == interval_type::OPERATIONS){
+                    this->_operation_start_ = this->n_dispatched_requests_;
+                }*/
+                this->operation_start_ = this->n_dispatched_requests_;
+                this->cross_operation_start_ = this->cross_partition_count_;
                 this->repartitioning_.store(false, std::memory_order_release);
                 
             }
@@ -231,6 +261,10 @@ public:
 
         }
     }
+public:
+    int cross_operation_start_ = 0;
+    size_t sucessive_cross_partition_intensive_ = 0;
+
     std::atomic_bool repartition_;
     int operation_start_ = 0;
 
