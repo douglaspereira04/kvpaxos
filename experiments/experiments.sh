@@ -40,7 +40,7 @@ experiments () {
                         mv requests.txt ${w}_${initial}_requests.txt
                     fi
                 done;
-            done;
+            done < "$parameters_file";
         done;
     done;
 
