@@ -122,7 +122,7 @@ public:
                     break;
                 }
             } else {
-                this->sucessive_imbalance_[i] = this->sucessive_imbalance_[i] - (this->sucessive_imbalance_[i] > 0); // (this->sucessive_imbalance_[i] >> 1) | 0b1;
+                this->sucessive_imbalance_[i] = 0; //this->sucessive_imbalance_[i] - (this->sucessive_imbalance_[i] > 0); // (this->sucessive_imbalance_[i] >> 1) | 0b1;
             }
         }
 
