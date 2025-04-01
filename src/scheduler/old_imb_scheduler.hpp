@@ -72,7 +72,7 @@ public:
 
         pthread_barrier_init(&this->repartition_barrier_, NULL, 2);
 
-        this->scheduling_thread_ = std::thread(&OldImbScheduler<T, TL, WorkerCapacity, IntervalType>::scheduling_loop, this);
+        this->scheduling_thread_ = std::thread(&OldImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::scheduling_loop, this);
         utils::set_affinity(2,this->scheduling_thread_, this->scheduler_cpu_set_);
 
         this->graph_thread_ = std::thread(&Scheduler<T, TL, WorkerCapacity, IntervalType>::update_graph_loop, this);
@@ -140,7 +140,7 @@ public:
             if (message.type == END){
                 break;
             }
-            OldImbScheduler<T, TL, WorkerCapacity, IntervalType>::schedule_and_answer(message);
+            OldImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::schedule_and_answer(message);
         }
         
         this->schedule_end_ = utils::now();
