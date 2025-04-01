@@ -35,10 +35,12 @@ experiments () {
                     fi
                 done;
                 for v in "${imb_versions[@]}"; do
-                    if [ ! -f "${w}_${initial}_requests.txt" ]; then
-                        ./${v}_${window}_${queue}_${max_sucessive_imbalance} workloads/${w}_${initial}.toml
-                        mv requests.txt ${w}_${initial}_requests.txt
-                    fi
+                    for max_sucessive_imbalance in "${max_sucessive_imbalances[@]}"; do
+                        if [ ! -f "${w}_${initial}_requests.txt" ]; then
+                            ./${v}_${window}_${queue}_${max_sucessive_imbalance} workloads/${w}_${initial}.toml
+                            mv requests.txt ${w}_${initial}_requests.txt
+                        fi
+                    done;
                 done;
             done < "$parameters_file";
         done;
