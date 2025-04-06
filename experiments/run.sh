@@ -6,7 +6,7 @@ node=$(get_node_id)
 _methods=(METIS)
 _partitions=(8)
 _n_initial_keys=(1000000)
-_queue_heads_distance=(10000 50000000)
+_queue_heads_distance=(100 10000 100000 50000000)
 _imbalance_thresholds=(0.1 0.05)
 _max_sucessive_imbalances=(10 100)
 _arrival_rates=(0)
@@ -15,7 +15,7 @@ _versions=()
 _imb_versions=()
 
 _arrival_rate_seed=1672270886
-
+node=$((node+6))
 case $node in
 
   0)
