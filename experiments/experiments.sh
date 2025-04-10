@@ -59,7 +59,7 @@ experiments () {
                                 for q_heads_d in "${q_heads_ds[@]}"; do
                                     for v in "${versions[@]}"; do
                                         output_dir="output"
-                                        output_file="${arrival_rate}_${initial}_${w}_${m}_${p}_${v}_${window}_${queue}_${interval}_${q_heads_d}_0"
+                                        output_file="${arrival_rate}_${initial}_${w}_${m}_${p}_${v}_${window}_${queue}_${interval}_${q_heads_d}_0_0"
                                         mkdir -p $output_dir
                                         echo ${output_file}
                                         if [ ! -f "${output_dir}/details_${output_file}" ]; then
