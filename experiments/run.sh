@@ -15,7 +15,7 @@ _versions=()
 _imb_versions=()
 
 _arrival_rate_seed=1672270886
-node=$((node+6))
+node=$((node+9))
 case $node in
 
   0)
