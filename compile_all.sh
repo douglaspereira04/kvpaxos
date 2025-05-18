@@ -6,7 +6,7 @@ q_size=(0 1000 100000)
 schedule_queue_size=50000000
 schedulers=()
 imb_schedulers=(IMB ASYNC_IMB)
-max_sucessive_imbalances=()
+max_sucessive_imbalances=(10 100)
 
 
 for track_length_ in "${track_length[@]}"; do
