@@ -44,7 +44,11 @@ public:
     ) : n_partitions_{n_partitions},
         repartition_method_{repartition_method}
     {
-        scheduling_queue_ = model::Queue<client_message>(queue_head_distance);
+        if (queue_head_distance == 0) { //uses old tracking
+            scheduling_queue_ = model::Queue<client_message>(SEM_VALUE_MAX, 0);
+        } else {
+            scheduling_queue_ = model::Queue<client_message>(queue_head_distance);
+        }
 
         if constexpr(IntervalType == interval_type::MICROSECONDS){
             time_start_ = utils::now();

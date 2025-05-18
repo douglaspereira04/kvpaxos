@@ -51,7 +51,11 @@ public:
         OldImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::set_balance_threshold(balance_threshold);
         OldImbScheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::clear_imbalance_count();
 
-        this->scheduling_queue_ = model::Queue<client_message>(queue_head_distance);
+        if (queue_head_distance == 0) { //uses old tracking
+            this->scheduling_queue_ = model::Queue<client_message>(SEM_VALUE_MAX, 0);
+        } else {
+            this->scheduling_queue_ = model::Queue<client_message>(queue_head_distance);
+        }
 
         if constexpr(IntervalType == interval_type::MICROSECONDS){
             this->time_start_ = utils::now();

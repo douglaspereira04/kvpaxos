@@ -29,6 +29,7 @@
 #include "utils/utils.h"
 #include "queue/queue.hpp"
 #include "linked_queue/linked_queue.hpp"
+#include <limits.h>
 
 
 namespace kvpaxos {
@@ -51,7 +52,11 @@ public:
         this->n_partitions_ = n_partitions;
         this->sucessive_imbalance_ = new uint32_t[n_partitions];
         this->in_queue_amount_ = new size_t[this->n_partitions_];
-        this->scheduling_queue_ = model::Queue<client_message>(queue_head_distance);
+        if (queue_head_distance == 0) { //uses old tracking
+            this->scheduling_queue_ = model::Queue<client_message>(SEM_VALUE_MAX, 0);
+        } else {
+            this->scheduling_queue_ = model::Queue<client_message>(queue_head_distance);
+        }
         if constexpr(IntervalType == interval_type::MICROSECONDS){
             this->time_start_ = utils::now();
             this->time_interval_ = std::chrono::microseconds(repartition_interval);

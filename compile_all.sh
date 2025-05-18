@@ -4,8 +4,8 @@
 track_length=(0 1000 100000)
 q_size=(0 1000 100000)
 schedule_queue_size=50000000
-schedulers=(OLD ASYNC)
-imb_schedulers=()
+schedulers=()
+imb_schedulers=(IMB ASYNC_IMB)
 max_sucessive_imbalances=()
 
 

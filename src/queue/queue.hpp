@@ -31,8 +31,8 @@ public:
         sem_init(&semaphores[0], 0, 0);
         sem_init(&semaphores[1], 0, 0);
 
-        sem_init(&ahead_sems[0], 0, ahead_1);
-        sem_init(&ahead_sems[1], 0, ahead_0);
+        sem_init(&ahead_sems[0], 0, ahead_0);
+        sem_init(&ahead_sems[1], 0, ahead_1);
 
         queues[0] = std::queue<T>();
         queues[1] = std::queue<T>();
