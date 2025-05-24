@@ -6,15 +6,9 @@
 	passing.
 */
 
-#ifndef _KVPAXOS_TYPES_H_
-#define _KVPAXOS_TYPES_H_
-
-
 #include <chrono>
-#include <mutex>
-#include <unordered_map>
-#include <unordered_set>
-#include <tbb/concurrent_unordered_map.h>
+#ifndef _GEN_TYPES_H_
+#define _GEN_TYPES_H_
 
 
 typedef std::chrono::_V2::system_clock::time_point time_point;

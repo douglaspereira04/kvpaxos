@@ -7,9 +7,3 @@ target_sources(
         PRIVATE
             types.cpp
 )
-
-target_link_libraries(
-    types
-        PUBLIC
-            CONAN_PKG::tbb
-)
