@@ -9,28 +9,77 @@
 
 
 namespace workload {
+using namespace std;
 
 class Request {
 public:
+    Request(){}
 
-    Request(request_type type, int key, std::string args):
-        type_{type},
-        key_{key},
-        args_{args}
+    Request(RequestType type):
+        __type{type}
     {}
 
-    request_type type() const {return type_;}
-    int key() const {return key_;}
-    const std::string& args() const {return args_;}
+    Request(RequestType type, int key):
+        __type{type},
+        __key{key}
+    {}
+
+    Request(RequestType type, int key, size_t len):
+        __type{type},
+        __key{key},
+        __args_len{len}
+    {}
+
+    Request(RequestType type, int key, const string &args):
+        __type{type},
+        __key{key},
+        __args_len{args.length()}
+    {
+        __args = new char[args.length() + 1];
+        strcpy(__args, args.c_str());
+        
+    }
+
+    ~Request(){
+        if (__type == WRITE){
+            delete[] __args;
+        }
+    }
+    Request(Request& other) {
+        __type = other.__type;
+        __key = other.__key;
+        __args_len = other.__args_len;
+        if (__type == WRITE){
+            __args = new char[__args_len + 1];
+            strcpy(__args, other.__args);
+        }
+    }
+    Request * no_value_copy(){
+        return new Request(__type, __key, __args_len);
+    }
+    Request(Request&& other) = default;
+
+    inline RequestType type() const {return __type;}
+    inline int key() const {return __key;}
+    inline char* args() const {return __args;}
+    inline size_t args_len() const {return __args_len;}
+
+    inline void barrier(pthread_barrier_t* barrier){
+        __args = reinterpret_cast<char*>(barrier);
+    }
+
+    inline pthread_barrier_t* barrier(){
+        return reinterpret_cast<pthread_barrier_t*>(__args);
+    }
 
 private:
-    request_type type_;
-    int key_;
-    std::string args_;
+    RequestType __type;
+    int __key;
+    size_t __args_len;
+    char* __args = nullptr;
 };
 
-    Request import_cs_request(std::ifstream &file);
-    Request make_request(int &type_buffer, int &key_buffer, int &arg_buffer);
+    void read_request(Request* &request, ifstream &file);
 }
 
 #endif

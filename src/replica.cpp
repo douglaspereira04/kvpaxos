@@ -51,10 +51,12 @@
 #include "request/request.hpp"
 
 #include "scheduler/scheduler.hpp"
-typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS, MAX_SUCESSIVE_IMBALANCE> Scheduler;
+using namespace workload;
+
+typedef kvpaxos::Scheduler<int, true, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS, MAX_SUCESSIVE_IMBALANCE> Scheduler;
 
 
-typedef boost::lockfree::spsc_queue<client_message*, boost::lockfree::capacity<SCHEDULE_QUEUE_SIZE>> scheduling_queue_t;
+typedef boost::lockfree::spsc_queue<Request*, boost::lockfree::capacity<SCHEDULE_QUEUE_SIZE>> scheduling_queue_t;
 
 
 static int verbose = 0;
@@ -76,51 +78,50 @@ static char* *params;
 
 static int arrived = 0;
 
-static int client_message_id = 0;
-
 static long request_rate;
 static long request_rate_seed;
 static sem_t schedule_sem;
 
+
 void
 metrics_loop(int sleep_duration, size_t n_requests, Scheduler* scheduler)
 {
-	std::cout << "Executed,Arrivals,Graph Vertices,Graph Edges";
+	cout << "Executed,Arrivals,Graph Vertices,Graph Edges";
 	int n_partitions =  atoi(params[N_PARTITIONS]);
 	for (int i = 0; i < n_partitions; i++)
 	{
-		std::cout << ", In Queue " << i;
+		cout << ", In Queue " << i;
 	}
-	std::cout << std::endl;
+	cout << endl;
 	size_t executed_requests = 0;
 	while (RUNNING && executed_requests < n_requests) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
+		this_thread::sleep_for(chrono::milliseconds(sleep_duration));
 		executed_requests = scheduler->n_executed_requests();
-		std::cout << executed_requests << ",";
+		cout << executed_requests << ",";
 
 		if constexpr(utils::ENABLE_INFO){
-			std::cout << arrived << ",";
+			cout << arrived << ",";
 
-			std::cout << scheduler->graph_vertices() << ",";
-			std::cout << scheduler->graph_edges() << ",";
+			cout << scheduler->graph_vertices() << ",";
+			cout << scheduler->graph_edges() << ",";
 
-			std::vector<size_t> in_queue = scheduler->in_queue_amount();
+			vector<size_t> in_queue = scheduler->in_queue_amount();
 			for (int i = 0; i < n_partitions; i++)
 			{
-				std::cout << in_queue[i] << ", ";
+				cout << in_queue[i] << ",";
 			}
 		}
 
-		std::cout << std::endl;
+		cout << endl;
 	}
 }
 
 static Scheduler*
-initialize_scheduler()
+initialize_scheduler(ifstream &requests_file)
 {
 	auto n_partitions = atoi(params[N_PARTITIONS]);
 	auto repartition_interval = atoi(params[REPARTITION_INTERVAL]);
-	std::string repartition_method_s = params[REPARTITION_METHOD];
+	string repartition_method_s = params[REPARTITION_METHOD];
 
 	auto repartition_method = model::string_to_cut_method.at(
 		repartition_method_s
@@ -137,61 +138,56 @@ initialize_scheduler()
 	);
 
 	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
-
-	//process initial keys
+	if (n_initial_keys > 0) {
+		for (size_t i = 0; i < n_initial_keys; i++)
+		{
+			Request *request;
+			read_request(request, requests_file);
+			scheduler->submit(request);
+		}
+		
+		while(scheduler->n_executed_requests() < n_initial_keys){
+			this_thread::sleep_for(chrono::milliseconds(100));
+		}
+	}
 
 	scheduler->run();
 	return scheduler;
 }
-struct client_message build_client_message(
-	workload::Request& request)
-{
-	struct client_message client_message;
-	client_message.sin_port = htons(0);
-	client_message.id = client_message_id;
-	client_message.type = request.type();
-	client_message.key = request.key();
-	for (auto i = 0; i < request.args().size(); i++) {
-		client_message.args[i] = request.args()[i];
-	}
-	client_message.args[request.args().size()] = 0;
-	client_message.size = request.args().size();
-	client_message_id++;
-	return client_message;
-}
 
 void
-workload_loop(std::string requests_path, Scheduler *scheduler)
+workload_loop(ifstream &requests_file, Scheduler *scheduler)
 {
 	size_t n_requests = atol(params[N_REQUESTS]);
 
-	std::ifstream requests_file(requests_path);
-
-	std::mt19937 generator(request_rate_seed);
-	std::poisson_distribution<long> interval_distribution(1);
+	mt19937 generator(request_rate_seed);
+	poisson_distribution<long> interval_distribution(1);
 	if(request_rate>0){
-		interval_distribution = std::poisson_distribution<long>(1.0E9/request_rate);
+		interval_distribution = poisson_distribution<long>(1.0E9/request_rate);
 
 		auto begin = utils::now();
 		while (requests_file.peek() != EOF) {
-			workload::Request request= workload::import_cs_request(requests_file);
-			client_message message = build_client_message(request);
-			scheduler->submit(message);
+			Request *request;
+			read_request(request, requests_file);
+			scheduler->submit(request);
 			sem_post(&schedule_sem);
 
 			if constexpr(utils::ENABLE_INFO){
 				arrived++;
 			}
-			auto duration = std::chrono::nanoseconds(interval_distribution(generator));
+			auto duration = chrono::nanoseconds(interval_distribution(generator));
 			auto now = utils::now();
 			while(now < begin + duration){now = utils::now();}
 			begin = now;
 		}
 	} else {
 		while (requests_file.peek() != EOF) {
-			workload::Request request= workload::import_cs_request(requests_file);
-			client_message message = build_client_message(request);
-			scheduler->submit(message);
+			Request *request;
+			read_request(request, requests_file);
+
+			//printf("%d, %d, %ld, %.*s\n", static_cast<int>(request->type()), request->key(), request->args_len(), static_cast<int>(request->args_len()), request->args());
+			//continue;
+			scheduler->submit(request);
 			sem_post(&schedule_sem);
 
 			if constexpr(utils::ENABLE_INFO){
@@ -199,11 +195,10 @@ workload_loop(std::string requests_path, Scheduler *scheduler)
 			}
 		}
 	}
-	requests_file.close();
-	client_message end_message;
-	end_message.type = END;
-	scheduler->submit(end_message);
-	sem_post(&schedule_sem);
+	//requests_file.close();
+	//Request end_request(END);
+	//scheduler->submit(end_request);
+	//sem_post(&schedule_sem);
 }
 
 
@@ -214,18 +209,19 @@ run()
 	size_t n_requests = atol(params[N_REQUESTS]);
 	request_rate = atol(params[REQUEST_RATE]);
 	request_rate_seed = atol(params[REQUEST_RATE_SEED]);
-	std::string requests_path = params[REQUESTS_PATH];
+	string requests_path = params[REQUESTS_PATH];
+	ifstream requests_file(requests_path);
 
-	auto* scheduler = initialize_scheduler();
+	auto* scheduler = initialize_scheduler(requests_file);
 	
-	auto throughput_thread = std::thread(
+	auto throughput_thread = thread(
 		metrics_loop, SLEEP, n_requests, scheduler
 	);
 	cpu_set_t throughput_cpu_set;
 	utils::set_affinity(0,throughput_thread, throughput_cpu_set);
 	
 	auto start_execution_timestamp = utils::now();
-	auto workload_thread = std::thread(workload_loop, requests_path, scheduler);
+	auto workload_thread = thread(workload_loop, ref(requests_file), scheduler);
 	cpu_set_t workload_cpu_set;
 	utils::set_affinity(1,workload_thread, workload_cpu_set);
 
@@ -239,13 +235,13 @@ run()
 
 	auto makespan = end_execution_timestamp - start_execution_timestamp;
 
-    std::ofstream ofs("details.csv", std::ofstream::out);
+    ofstream ofs("details.csv", ofstream::out);
 	ofs << "Scheduling End," << (end_scheduling - start_execution_timestamp).count()/pow(10,9) << "\n";
 	ofs << "Makespan," << makespan.count()/pow(10,9) << "\n";
 	ofs << "Error Count," << scheduler->error_count() << "\n";
 	if constexpr(utils::ENABLE_INFO){
 		auto& repartition_times = scheduler->repartition_timestamps();
-		ofs << "Repartition Request, Graph Copy Duration, Repartition Begin, Repartition End, Reconstruction Duration, Apply Time" << std::endl;
+		ofs << "Repartition Request, Graph Copy Duration, Repartition Begin, Repartition End, Reconstruction Duration, Apply Time" << endl;
 		
 		auto copy_time_it = scheduler->graph_copy_duration().begin();
 		auto repartition_end_it = scheduler->repartition_end_timestamps().begin();
@@ -287,20 +283,20 @@ run()
 
 			ofs << repartition_request_time << ","<< copy_time << "," << repartition_begin_time << "," << end_time << ","<< reconstruction_duration << ","<< repartition_apply_time;
 
-			ofs << std::endl;
+			ofs << endl;
 
 		}
 	}
 
-	ofs << std::endl;
+	ofs << endl;
 	ofs.flush();
     ofs.close();
 }
 
 static void
-usage(std::string prog)
+usage(string prog)
 {
-	std::cout << "Usage: " << prog << " config\n";
+	cout << "Usage: " << prog << " config\n";
 }
 
 
@@ -308,14 +304,12 @@ int
 main(int argc, char const *argv[])
 {
 	if (argc < 2) {
-		usage(std::string(argv[0]));
+		usage(string(argv[0]));
 		exit(1);
 	}
 
 
 	params = const_cast<char**>(argv);
-
-
 	run();
 	
 }

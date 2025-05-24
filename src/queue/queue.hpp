@@ -43,13 +43,13 @@ public:
     }
     ~Queue(){}
 
-    void push(T &value){
+    void push(T value_0, T value_1){
         q_mutex[0]->lock();
-        queues[0].push(value);
+        queues[0].push(value_0);
         q_mutex[0]->unlock();
 
         q_mutex[1]->lock();
-        queues[1].push(value);
+        queues[1].push(value_1);
         q_mutex[1]->unlock();
     }
 
@@ -73,7 +73,7 @@ public:
     template <size_t Head>
     T pop(){
         q_mutex[Head]->lock();
-        T curr_value = std::move(queues[Head].front());
+        T curr_value = queues[Head].front();
         queues[Head].pop();
         q_mutex[Head]->unlock();
         sem_post(&ahead_sems[(Head+1)%2]);

@@ -28,11 +28,12 @@
 #include <boost/lockfree/spsc_queue.hpp>
 #include <iostream>
 #include "utils/utils.h"
-
+#include <fstream>
 
 namespace kvpaxos {
 using namespace kvstorage;
 using namespace std;
+using namespace workload;
 
 template <typename T, size_t Capacity = 0>
 class Partition {
@@ -40,15 +41,15 @@ typedef unordered_map<T, Partition<T, Capacity>*> partition_map_t;
 public:
     Partition(int id)
         : __id{id},
-          n_executed_requests_{0},
-          executing_{true}
+          __n_executed_requests{0},
+          __executing{true}
     {
         storage[__id] = Storage();
-        socket_fd_ = socket(AF_INET, SOCK_DGRAM, 0);
+        output_file = ofstream("partition_output_" + to_string(__id));
     }
 
     ~Partition() {
-        executing_ = false;
+        __executing = false;
         if (worker_thread_.joinable()) {
             sem_post(&semaphore_);
             worker_thread_.join();
@@ -78,60 +79,42 @@ public:
         return error_count_;
     }
 
-    void push_request(struct client_message request) {
+    void push_request(Request *request) {
         if constexpr(Capacity > 0){
             sem_wait(&remaining_space_);
             __bounded_requests_queue.push(request);
         }else{
             __queue_mutex.lock();
-                __requests_queue.push(move(request));
+                __requests_queue.push(request);
             __queue_mutex.unlock();
         }
         sem_post(&semaphore_);
     }
 
-    struct client_message pop_request() {
-        struct client_message request;
+    Request * pop_request() {
+        Request *request;
         sem_wait(&semaphore_);
 
         if constexpr(Capacity > 0){
-            request = move(__bounded_requests_queue.front());
+            request = __bounded_requests_queue.front();
             __bounded_requests_queue.pop();
             sem_post(&remaining_space_);
         }else{
             __queue_mutex.lock();
-                request = move(__requests_queue.front());
+                request = __requests_queue.front();
                 __requests_queue.pop();
             __queue_mutex.unlock();
         }
         return request;
     }
 
-    void insert_data(const T& data, int weight = 0) {
-        weight_[data] = weight;
-        total_weight_ += weight;
-    }
-
-    void remove_data(const T& data) {
-        total_weight_ -= weight_.at(data);
-        weight_.erase(data);
-    }
-
-    void increase_weight(const T& data, int weight = 1) {
-        weight_[data] += weight;
-        total_weight_ += weight;
-    }
-
-    int weight() const {
-        return total_weight_;
-    }
 
     int id() const {
         return __id;
     }
 
     size_t n_executed_requests() const {
-        return n_executed_requests_;
+        return __n_executed_requests;
     }
 
 
@@ -148,8 +131,9 @@ public:
 private:
 
 
-    string *read(int key){
-        string* val = storage[__id].read(key);
+    size_t read(int key, char* &val){
+        val = nullptr;
+        size_t len = storage[__id].read(key, val);
         Storage* past_storage = nullptr;
         if (val == nullptr){
             for (size_t i = version_count-1; i >= 0; i--)
@@ -160,8 +144,10 @@ private:
                 if (partition != map->end()){
                     int past_id = partition->second->__id;
                     past_storage = &previous_storage[i][past_id];
-                    val = past_storage->read(key);
-                    break;
+                    len = past_storage->read(key, val);
+                    if (val != nullptr){
+                        break;
+                    }
                 }
                 version_maps_mtx.unlock_shared();
             }
@@ -169,22 +155,21 @@ private:
         }
         if (val != nullptr && past_storage != nullptr) {
             past_storage->del(key);
-            storage[__id].write(key, *val);
+            storage[__id].write(key, val, len);
         }
-        return val;
+        return len;
     }
 
     void thread_loop() {
-        while (executing_) {
+        while (__executing) {
 
-            struct client_message request = pop_request();
-            if (!executing_) {
+            Request *request = pop_request();
+            if (!__executing) {
                 return;
             }
 
-            auto type = static_cast<request_type>(request.type);
-            auto key = request.key;
-            auto request_args = string(request.args);
+            RequestType type = request->type();
+            auto key = request->key();
             int coordinator = 0;
             pthread_barrier_t * barrier;
             string answer;
@@ -192,32 +177,44 @@ private:
             {
             case READ:
             {   
-                read(key);
+                char *value;
+                size_t len = read(key, value);
+                output_file << "read( " << key << " ): ";
+                output_file.write(value, len);
+                output_file << "\n";
+                delete[] value;
                 break;
             }
 
             case WRITE:
             {
-                storage[__id].write(key, request_args);
+                storage[__id].write(key, request->args(), request->args_len());
+                output_file << "write( " << key << ", ";
+                output_file.write(request->args(), request->args_len());
+                output_file << " ) " << "\n";
                 break;
             }
 
             case SCAN:
             {
-                barrier = (pthread_barrier_t*) request.s_addr;
+                barrier = request->barrier();
                 coordinator = pthread_barrier_wait(barrier);
                 if (coordinator) {
-                    auto length = stoi(request_args);
-                    vector<string> values;
+                    auto length = request->args_len();
+                    output_file << "scan( " << key << ", "<< length << " ): [";
                     for (auto key_i = key; key_i < key+length; key_i++) {
-                        auto value = read(key_i);
+                        char *value;
+                        size_t len = read(key, value);
                         if (value == nullptr){
                             error_count_++;
                             break;
                         }
-                        values.push_back(string(*value));
-                        delete value;
+                        output_file.write(value, len);
+                        output_file << ", ";
+
+                        delete[] value;
                     }
+                    output_file << "]\n";
                 }
                 coordinator = pthread_barrier_wait(barrier);
                 if (coordinator) {
@@ -230,21 +227,11 @@ private:
             case DEL:
             {
                 storage[__id].del(key);
+                output_file << "del( " << key << " )\n";
                 break;
             }
-
-            case SYNC:
-            {
-                barrier = (pthread_barrier_t*) request.s_addr;
-                coordinator = pthread_barrier_wait(barrier);
-                if (coordinator) {
-                    pthread_barrier_destroy(barrier);
-                    delete barrier;
-                }
-                continue;
-            }
             case REPARTITION:
-                barrier = (pthread_barrier_t*) request.s_addr;
+                barrier = request->barrier();
                 coordinator = pthread_barrier_wait(barrier);
                 if (coordinator) {
                     previous_storage.push_back(storage);
@@ -265,24 +252,24 @@ private:
                 break;
             }
 
-            n_executed_requests_++;
+            __n_executed_requests++;
+            
+            output_file.flush();
+            delete request;
         }
     }
 
-    int __id, socket_fd_;
-    size_t n_executed_requests_;
+    int __id;
+    size_t __n_executed_requests;
     static Storage *storage;
     cpu_set_t cpu_set;
 
-    bool executing_;
+    bool __executing;
     thread worker_thread_;
     sem_t semaphore_;
-    queue<struct client_message> __requests_queue;
-    boost::lockfree::spsc_queue<struct client_message, boost::lockfree::capacity<Capacity>> __bounded_requests_queue;
+    queue<Request*> __requests_queue;
+    boost::lockfree::spsc_queue<Request, boost::lockfree::capacity<Capacity>> __bounded_requests_queue;
     mutex __queue_mutex;
-
-    int total_weight_ = 0;
-    unordered_map<T, int> weight_;
 
     sem_t remaining_space_;
 
@@ -292,6 +279,8 @@ private:
     size_t version_count;
     static vector<partition_map_t*> version_maps;
     static shared_mutex version_maps_mtx;
+
+    ofstream output_file;
 
 
 };

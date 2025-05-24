@@ -13,7 +13,6 @@
 #include <string.h>
 #include <thread>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 #include <atomic>
 #include <assert.h>
@@ -29,15 +28,17 @@
 #include "utils/utils.h"
 #include <algorithm>
 #include <limits.h>
+#include <utility>
 
 
 namespace kvpaxos {
 
 using namespace kvstorage;
 using namespace std;
+using namespace workload;
 
 
-template <typename T, size_t TL = 0, size_t WorkerCapacity = 0, interval_type IntervalType = interval_type::OPERATIONS, size_t MaxSucessiveImbalances = 100>
+template <typename T, bool Rebalance, size_t TL = 0, size_t WorkerCapacity = 0, interval_type IntervalType = interval_type::OPERATIONS, size_t MaxSucessiveImbalances = 100>
 class Scheduler{
 typedef Partition<T, WorkerCapacity> partition_t;
 typedef unordered_map<T, partition_t*> partition_map_t;
@@ -51,24 +52,11 @@ public:
                 float balance_threshold
     ) {
         __n_partitions = n_partitions;
-        sucessive_imbalance = new uint32_t[__n_partitions];
-        __in_queue_amount = new size_t[__n_partitions];
-        if (queue_head_distance == 0) { //uses old tracking
-            scheduling_queue = model::Queue<client_message>(SEM_VALUE_MAX, 0);
+        if (queue_head_distance == 0) {
+            scheduling_queue = model::Queue<Request*>(SEM_VALUE_MAX, 0);
         } else {
-            scheduling_queue = model::Queue<client_message>(queue_head_distance);
+            scheduling_queue = model::Queue<Request*>(queue_head_distance);
         }
-        if constexpr(IntervalType == interval_type::MICROSECONDS){
-            time_start = utils::now();
-            time_interval = chrono::microseconds(repartition_interval);
-            operation_start = 0;
-            cross_operation_start = 0;
-        } else if constexpr(IntervalType == interval_type::OPERATIONS){
-            operation_start = 0;
-            operation_interval = repartition_interval;
-        }
-        cross_partition_count = 0;
-        repartition_method = repartition_method;
 
         round_robin_counter = 0;
         sync_counter = 0;
@@ -77,42 +65,61 @@ public:
         partition_t::create_storage(__n_partitions);
         for (auto i = 0; i < __n_partitions; i++) {
             auto* partition = new partition_t(i);
-            partitions_.emplace(i, partition);
-            sucessive_imbalance[i] = 0b1;
+            __partitions.emplace(i, partition);
         }
         data_to_partition = new partition_map_t();
-        updated_data_to_partition = new partition_map_t();
 
-        set_balance_threshold(balance_threshold);
-        clear_imbalance_count();
-
-        repartitioning.store(false, memory_order_seq_cst);
-        update.store(false, memory_order_seq_cst);
-        repartition.store(false, memory_order_seq_cst);
-
-        scheduling_thread = thread(&Scheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::scheduling_loop, this);
+        scheduling_thread = thread(&Scheduler<T, Rebalance, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::scheduling_loop, this);
         utils::set_affinity(2,scheduling_thread, scheduler_cpu_set);
 
-        graph_thread = thread(&Scheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::update_graph_loop, this);
-	    utils::set_affinity(3, graph_thread, graph_cpu_set);
+        if constexpr(Rebalance) {
+            __in_queue_amount = new size_t[__n_partitions];
+            sucessive_imbalance = new uint32_t[__n_partitions];
+            for (auto i = 0; i < __n_partitions; i++) {
+                sucessive_imbalance[i] = 0b1;
+            }
 
-        sem_init(&repart_semaphore, 0, 0);
-        reparting_thread = thread(&Scheduler<T, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::partitioning_loop, this);
-	    utils::set_affinity(4, reparting_thread, reparting_cpu_set);
+            if constexpr(IntervalType == interval_type::MICROSECONDS){
+                time_start = utils::now();
+                time_interval = chrono::microseconds(repartition_interval);
+                operation_start = 0;
+                cross_operation_start = 0;
+            } else if constexpr(IntervalType == interval_type::OPERATIONS){
+                operation_start = 0;
+                operation_interval = repartition_interval;
+            }
+            cross_partition_count = 0;
+            repartition_method = repartition_method;
 
-        client_message dummy;
-        dummy.type = DUMMY;
-        if constexpr(TL > 0){
-            for (size_t i = 0; i < TL; i++)
-            {
-                graph_deletion_queue.push_back(dummy);
+            updated_data_to_partition = new partition_map_t();
+
+            set_balance_threshold(balance_threshold);
+            clear_imbalance_count();
+
+            repartitioning.store(false, memory_order_seq_cst);
+            update.store(false, memory_order_seq_cst);
+            repartition.store(false, memory_order_seq_cst);
+
+            graph_thread = thread(&Scheduler<T, Rebalance, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::update_graph_loop, this);
+            utils::set_affinity(3, graph_thread, graph_cpu_set);
+
+            sem_init(&repart_semaphore, 0, 0);
+            reparting_thread = thread(&Scheduler<T, Rebalance, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::partitioning_loop, this);
+            utils::set_affinity(4, reparting_thread, reparting_cpu_set);
+
+            Request *dummy = new Request(DUMMY);
+            if constexpr(TL > 0){
+                for (size_t i = 0; i < TL; i++)
+                {
+                    graph_deletion_queue.push_back(dummy);
+                }
             }
         }
 
     }
 
     void run() {
-        for (auto& kv : partitions_) {
+        for (auto& kv : __partitions) {
             kv.second->start_worker_thread();
         }
     }
@@ -159,7 +166,7 @@ public:
         bool imbalance = false;
         size_t sum = 0;
         int i = 0;
-        for (auto& kv: partitions_) {
+        for (auto& kv: __partitions) {
             auto* partition = kv.second;
             size_t si = partition->request_queue_size();
             __in_queue_amount[i] = si;
@@ -187,44 +194,44 @@ public:
     }
 
     unordered_set<partition_t*> involved_partitions(
-        const struct client_message& request)
+        Request* request)
     {
         unordered_set<partition_t*> partitions;
-        auto type = static_cast<request_type>(request.type);
+        auto type = request->type();
 
         auto range = 1;
         if (type == SCAN) {
-            range = stoi(request.args);
+            range = request->args_len();
         }
 
 
         bool new_mapping = false;
         for (auto i = 0; i < range; i++) {
 
-            if(!mapped(request.key + i)){
-                map_key(request.key + i, round_robin_counter);
+            if(!mapped(request->key() + i)){
+                map_key(request->key() + i, round_robin_counter);
                 new_mapping = true;
             } else {
-                partitions.insert(data_to_partition->at(request.key + i));
+                partitions.insert(data_to_partition->at(request->key() + i));
             }
         }
 
         if(new_mapping){
-            partitions.insert(partitions_.at(round_robin_counter));
+            partitions.insert(__partitions.at(round_robin_counter));
             round_robin_counter = (round_robin_counter+1) % __n_partitions;
         }
 
         return partitions;
     }
     
-    void dispatch(struct client_message& request){
+    void dispatch(Request* request){
 
         auto partitions = move(involved_partitions(request));
         bool is_cross_partition = partitions.size() > 1;
         if (is_cross_partition) {
             auto* barrier = new pthread_barrier_t();
             pthread_barrier_init(barrier, NULL, partitions.size());
-            request.s_addr = (unsigned long) barrier;
+            request->barrier(barrier);
             for (auto partition : partitions) {
                 partition->push_request(request);
             }
@@ -234,11 +241,11 @@ public:
         }
         cross_partition_count += is_cross_partition;
     }
-    void schedule_and_answer(struct client_message& request) {
+    void schedule_and_answer(Request* request) {
         dispatch(request);
         __n_dispatched_requests++;
 
-        if (repartition_method != model::ROUND_ROBIN) {
+        if constexpr(Rebalance) {
 
             if(update.load(memory_order_acquire) == true){
                 update_partition_scheme();
@@ -264,60 +271,44 @@ public:
     void scheduling_loop() {
         while(true){
             scheduling_queue.template wait<0>();
-            client_message message = scheduling_queue.template pop<0>();
-            if (message.type == END){
+            Request *request = scheduling_queue.template pop<0>();
+            if (request->type() == END){
+                for (auto& kv: __partitions) {
+                    auto* partition = kv.second;
+                    partition->push_request(request);
+                }
                 break;
             }
-            schedule_and_answer(message);
+            schedule_and_answer(request);
         }
         
         __schedule_end = utils::now();
     }
 
 
-
-    struct client_message create_sync_request(int n_partitions) {
-        struct client_message sync_message;
-        sync_message.id = sync_counter;
-        sync_message.type = SYNC;
+    void sync_repartition(partition_map_t * old_partition_map) {
+        Request *sync_request = new Request(REPARTITION);
 
         auto* barrier = new pthread_barrier_t();
-        pthread_barrier_init(barrier, NULL, n_partitions);
-        sync_message.s_addr = (unsigned long) barrier;
+        pthread_barrier_init(barrier, NULL, __partitions.size());
+        sync_request->barrier(barrier);
 
-        return sync_message;
-    }
-
-    void sync_partitions(const unordered_set<partition_t*>& partitions) {
-        auto sync_message = move(
-            create_sync_request(partitions.size())
-        );
-        for (auto partition : partitions) {
-            partition->push_request(sync_message);
-        }
-    }
-
-    void sync_repartition(partition_map_t * old_partition_map) {
-        auto sync_message = move(
-            create_sync_request(partitions_.size())
-        );
-        sync_message.type = REPARTITION;
-        for (auto& kv: partitions_) {
+        for (auto& kv: __partitions) {
             auto* partition = kv.second;
             partition_t::add_old_partition_map(old_partition_map);
-            partition->push_request(sync_message);
+            partition->push_request(sync_request);
         }
     }
 
     void map_key(T key) {
         auto partition_id = round_robin_counter;
-        data_to_partition->emplace(key, partitions_.at(partition_id));
+        data_to_partition->emplace(key, __partitions.at(partition_id));
 
         round_robin_counter = (round_robin_counter+1) % __n_partitions;
     }
 
     void map_key(T key, int partition_id) {
-        data_to_partition->emplace(key, partitions_.at(partition_id));
+        data_to_partition->emplace(key, __partitions.at(partition_id));
     }
 
     bool mapped(T key) const {
@@ -325,8 +316,9 @@ public:
     }
 
 
-    void submit(client_message &message){
-        scheduling_queue.push(message);
+    void submit(Request* request){
+        Request* request_copy = request->no_value_copy();
+        scheduling_queue.push(request, request_copy);
         scheduling_queue.template notify<0>();
         scheduling_queue.template notify<1>();
     }
@@ -359,16 +351,17 @@ public:
         while(true) {
             n_processed_requests++;
             scheduling_queue.template wait<1>();
-            client_message request = scheduling_queue.template pop<1>();
+            Request *request = scheduling_queue.template pop<1>();
 
             update_graph(request);
 
             if constexpr(TL > 0){
                 graph_deletion_queue.push_back(request);
 
-                auto expired_request = move(graph_deletion_queue.front());
+                Request *expired_request = graph_deletion_queue.front();
                 graph_deletion_queue.pop_front();
                 expire(expired_request);
+                delete expired_request;
             }
 
             if(!repartitioning.load(memory_order_acquire)){
@@ -413,39 +406,39 @@ public:
         }
     }
 
-    void update_graph(const client_message& message) {
+    void update_graph(Request* request) {
         size_t data_size = 1;
-        if (message.type == SCAN) {
-            data_size = stoi(message.args);
+        if (request->type() == SCAN) {
+            data_size = request->args_len();
         }
 
         for (auto i = 0; i < data_size; i++) {
-            workload_graph.add_vertice(message.key+i);
-            workload_graph.increment_vertice_weight(message.key+i, 1);
+            workload_graph.add_vertice(request->key()+i);
+            workload_graph.increment_vertice_weight(request->key()+i, 1);
 
             for (auto j = i+1; j < data_size; j++) {
-                workload_graph.add_vertice(message.key+j);
-                workload_graph.add_edge(message.key+i, message.key+j);
-                workload_graph.increment_edge_weight(message.key+i, message.key+j, 1);
+                workload_graph.add_vertice(request->key()+j);
+                workload_graph.add_edge(request->key()+i, request->key()+j);
+                workload_graph.increment_edge_weight(request->key()+i, request->key()+j, 1);
             }
         }
     }
 
-    void expire(const client_message& message) {
-        if(message.type != DUMMY){
+    void expire(Request* request) {
+        if(request->type() != DUMMY){
             int data_size = 1;
-            if (message.type == SCAN) {
-                data_size = stoi(message.args);
+            if (request->type() == SCAN) {
+                data_size = request->args_len();
             }
 
             for (int i = data_size-1; i >= 0; i--) {
                 for (int j = data_size-1; j >= i+1; j--) {
-                    workload_graph.increment_edge_weight(message.key+i, message.key+j, -1);
-                    workload_graph.remove_weightless_edge(message.key+i, message.key+j);
-                    workload_graph.remove_weightless_vertice(message.key+j);
+                    workload_graph.increment_edge_weight(request->key()+i, request->key()+j, -1);
+                    workload_graph.remove_weightless_edge(request->key()+i, request->key()+j);
+                    workload_graph.remove_weightless_vertice(request->key()+j);
                 }
-                workload_graph.increment_vertice_weight(message.key+i, -1);
-                workload_graph.remove_weightless_vertice(message.key+i);
+                workload_graph.increment_vertice_weight(request->key()+i, -1);
+                workload_graph.remove_weightless_vertice(request->key()+i);
             }
         }
     }
@@ -463,7 +456,7 @@ public:
                 graph.x_edges, 
                 graph.edges, 
                 graph.edges_weight,
-                partitions_.size(), 
+                __partitions.size(), 
                 repartition_method
             )
         );
@@ -478,13 +471,12 @@ public:
         for (auto& it : graph.vertice_to_pos) {
             T key = it.first;
             int position = it.second;
-            //position indicates the position of the key in partition scheme
             int partition = partition_scheme[position];  
             if (partition >= __n_partitions) {
                 printf("ERROR: partition was %d!\n", partition);
                 fflush(stdout);
             }
-            data_to_partition->emplace(key, partitions_.at(partition));
+            data_to_partition->emplace(key, __partitions.at(partition));
         }
 
         if constexpr(utils::ENABLE_INFO){
@@ -495,7 +487,7 @@ public:
 
     size_t n_executed_requests() const{
         size_t n_executed_requests = 0;
-        for (auto& kv: partitions_) {
+        for (auto& kv: __partitions) {
             auto* partition = kv.second;
             n_executed_requests += partition->n_executed_requests();
         }
@@ -504,7 +496,7 @@ public:
 
     size_t n_enqueued_requests() const{
         size_t n_enqueued_requests = 0;
-        for (auto& kv: partitions_) {
+        for (auto& kv: __partitions) {
             auto* partition = kv.second;
             n_enqueued_requests += partition->request_queue_size();
         }
@@ -513,7 +505,7 @@ public:
 
     vector<size_t> in_queue_amount() const{
         vector<size_t> in_queue;
-        for (auto& kv: partitions_) {
+        for (auto& kv: __partitions) {
             auto* partition = kv.second;
             size_t amount = partition->request_queue_size();
             in_queue.push_back(amount);
@@ -539,7 +531,7 @@ public:
 
     int error_count(){
         int count = 0;
-        for (auto& kv: partitions_) {
+        for (auto& kv: __partitions) {
             auto* partition = kv.second;
             count += partition->error_count();
         }
@@ -577,7 +569,7 @@ public:
     int sync_counter = 0;
     int __n_dispatched_requests = 0;
 
-    unordered_map<int, partition_t*> partitions_;
+    unordered_map<int, partition_t*> __partitions;
     partition_map_t* data_to_partition;
 
     thread graph_thread;
@@ -586,7 +578,7 @@ public:
     thread scheduling_thread;
     cpu_set_t scheduler_cpu_set;
 
-    deque<struct client_message> graph_deletion_queue;
+    deque<Request*> graph_deletion_queue;
 
     model::Graph<T> workload_graph;
     model::CutMethod repartition_method;
@@ -605,7 +597,7 @@ public:
     vector<duration> __reconstruction_duration;
     time_point __schedule_end;
 
-    model::Queue<client_message> scheduling_queue;
+    model::Queue<Request*> scheduling_queue;
 
     size_t n_processed_requests = 0;
 

@@ -18,8 +18,8 @@ class Storage {
 public:
     Storage() = default;
 
-    std::string* read(int key);
-    void write(int key, const std::string& value);
+    size_t read(int key, char* &value);
+    void write(int key, const char *value, size_t len);
     void del(int key);
 
 

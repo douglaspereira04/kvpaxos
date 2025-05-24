@@ -2,24 +2,31 @@
 
 
 namespace workload {
-    Request make_request(int &type_buffer, int &key_buffer, int &arg_buffer) {
-        auto type = static_cast<request_type>(type_buffer);
-        auto key = key_buffer;
-        auto arg = std::to_string(arg_buffer);
+    using namespace std;
 
-        return Request(type, key, arg);
-    }
-
-    Request import_cs_request(std::ifstream &file)
+    void read_request(Request* &request, ifstream &file)
     {    
-        std::string line;
-        int type, key, arg;
-        std::getline(file, line);
-        sscanf(line.c_str(), "%d,%d,%d", &type,&key,&arg);
-        return make_request(
-            type,
-            key,
-            arg
-        );
+        string chars;
+        int key;
+        getline(file, chars, ',');
+        RequestType type = static_cast<RequestType>(atoi(chars.c_str()));
+        if (type == READ){
+            getline(file, chars);
+            key = atoi(chars.c_str());
+            request = new Request(type, key);
+        } else if(type == WRITE) {
+            getline(file, chars, ',');
+            key = atoi(chars.c_str());
+            getline(file, chars);
+            request = new Request(type, key, chars);
+        } else if(type == SCAN) {
+            getline(file, chars, ',');
+            key = atoi(chars.c_str());
+            getline(file, chars);
+            size_t len = atol(chars.c_str());
+            request = new Request(type, key, len);
+        } else {
+            request = new Request();
+        }
     }
 }
