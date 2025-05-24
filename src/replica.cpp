@@ -45,42 +45,23 @@
 #include <random>
 #include <assert.h>
 #include <boost/lockfree/spsc_queue.hpp>
-#include "request/request_generation.h"
 #include "types/types.h"
 #include "utils/utils.h"
 #include "graph/graph.hpp"
+#include "request/request.hpp"
 
-#if defined(FREE)
-	#include "scheduler/free_scheduler.hpp"
-	typedef kvpaxos::FreeScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
-#elif defined(NON_STOP)
-	#include "scheduler/non_stop_scheduler.hpp"
-	typedef kvpaxos::NonStopScheduler<int, TRACK_LENGTH, Q_SIZE> Scheduler;
-#elif defined(ASYNC)
-	#include "scheduler/async_scheduler.hpp"
-	typedef kvpaxos::AsyncScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
-#elif defined(ASYNC_IMB)
-	#include "scheduler/async_imb_scheduler.hpp"
-	typedef kvpaxos::AsyncImbScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS, MAX_SUCESSIVE_IMBALANCE> Scheduler;
-#elif defined(IMB)
-	#include "scheduler/old_imb_scheduler.hpp"
-	typedef kvpaxos::OldImbScheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS, MAX_SUCESSIVE_IMBALANCE> Scheduler;
-#else
-	#include "scheduler/scheduler.hpp"
-	typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
-#endif
+#include "scheduler/scheduler.hpp"
+typedef kvpaxos::Scheduler<int, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS, MAX_SUCESSIVE_IMBALANCE> Scheduler;
+
 
 typedef boost::lockfree::spsc_queue<client_message*, boost::lockfree::capacity<SCHEDULE_QUEUE_SIZE>> scheduling_queue_t;
 
-
-using toml_config = toml::basic_value<
-	toml::discard_comments, std::unordered_map, std::vector
->;
 
 static int verbose = 0;
 static int SLEEP = 1000;
 static bool RUNNING = true;
 
+static const int N_REQUESTS = 1;
 static const int N_PARTITIONS = 2;
 static const int N_INITIAL_KEYS = 3;
 static const int REPARTITION_INTERVAL = 4;
@@ -135,7 +116,7 @@ metrics_loop(int sleep_duration, size_t n_requests, Scheduler* scheduler)
 }
 
 static Scheduler*
-initialize_scheduler(const toml_config& config)
+initialize_scheduler()
 {
 	auto n_partitions = atoi(params[N_PARTITIONS]);
 	auto repartition_interval = atoi(params[REPARTITION_INTERVAL]);
@@ -148,28 +129,16 @@ initialize_scheduler(const toml_config& config)
 	float q_head_distance = atoi(params[QUEUE_HEAD_DISTANCE]);
 	float balance_threshold = atof(params[BALANCE_THRESHOLD]);
 
-#if defined(ASYNC_IMB) || defined(IMB)
 	auto* scheduler = new Scheduler(
 		repartition_interval, n_partitions,
 		repartition_method,
 		q_head_distance,
 		balance_threshold
 	);
-#else
-	auto* scheduler = new Scheduler(
-		repartition_interval, n_partitions,
-		repartition_method,
-		q_head_distance
-	);
-#endif
+
 	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
 
-	for (auto i = 0; i <= n_initial_keys; i++) {
-		struct client_message client_message;
-		client_message.type = WRITE; 
-		client_message.key = i;
-		scheduler->process_populate_request(client_message);
-	}
+	//process initial keys
 
 	scheduler->run();
 	return scheduler;
@@ -192,10 +161,11 @@ struct client_message build_client_message(
 }
 
 void
-workload_loop(std::vector<client_message> *messages, Scheduler *scheduler)
+workload_loop(std::string requests_path, Scheduler *scheduler)
 {
-	size_t message_it = 0;
-	size_t n_requests = messages->size();
+	size_t n_requests = atol(params[N_REQUESTS]);
+
+	std::ifstream requests_file(requests_path);
 
 	std::mt19937 generator(request_rate_seed);
 	std::poisson_distribution<long> interval_distribution(1);
@@ -203,8 +173,10 @@ workload_loop(std::vector<client_message> *messages, Scheduler *scheduler)
 		interval_distribution = std::poisson_distribution<long>(1.0E9/request_rate);
 
 		auto begin = utils::now();
-		while(message_it < n_requests){
-			scheduler->submit(messages->at(message_it++));
+		while (requests_file.peek() != EOF) {
+			workload::Request request= workload::import_cs_request(requests_file);
+			client_message message = build_client_message(request);
+			scheduler->submit(message);
 			sem_post(&schedule_sem);
 
 			if constexpr(utils::ENABLE_INFO){
@@ -216,8 +188,10 @@ workload_loop(std::vector<client_message> *messages, Scheduler *scheduler)
 			begin = now;
 		}
 	} else {
-		while(message_it < n_requests){
-			scheduler->submit(messages->at(message_it++));
+		while (requests_file.peek() != EOF) {
+			workload::Request request= workload::import_cs_request(requests_file);
+			client_message message = build_client_message(request);
+			scheduler->submit(message);
 			sem_post(&schedule_sem);
 
 			if constexpr(utils::ENABLE_INFO){
@@ -225,6 +199,7 @@ workload_loop(std::vector<client_message> *messages, Scheduler *scheduler)
 			}
 		}
 	}
+	requests_file.close();
 	client_message end_message;
 	end_message.type = END;
 	scheduler->submit(end_message);
@@ -233,22 +208,15 @@ workload_loop(std::vector<client_message> *messages, Scheduler *scheduler)
 
 
 static void
-run(const toml_config& config)
+run()
 {
+	
+	size_t n_requests = atol(params[N_REQUESTS]);
 	request_rate = atol(params[REQUEST_RATE]);
 	request_rate_seed = atol(params[REQUEST_RATE_SEED]);
 	std::string requests_path = params[REQUESTS_PATH];
-	
-	std::ifstream requests_file(requests_path);
-	std::vector<client_message> *messages = new std::vector<client_message>();
-	while (requests_file.peek() != EOF) {
-		workload::Request request= workload::import_cs_request(requests_file);
-		client_message message = build_client_message(request);
-		messages->push_back(message);
-	}
-	requests_file.close();
-	size_t n_requests = messages->size();
-	auto* scheduler = initialize_scheduler(config);
+
+	auto* scheduler = initialize_scheduler();
 	
 	auto throughput_thread = std::thread(
 		metrics_loop, SLEEP, n_requests, scheduler
@@ -257,7 +225,7 @@ run(const toml_config& config)
 	utils::set_affinity(0,throughput_thread, throughput_cpu_set);
 	
 	auto start_execution_timestamp = utils::now();
-	auto workload_thread = std::thread(workload_loop, messages, scheduler);
+	auto workload_thread = std::thread(workload_loop, requests_path, scheduler);
 	cpu_set_t workload_cpu_set;
 	utils::set_affinity(1,workload_thread, workload_cpu_set);
 
@@ -267,8 +235,6 @@ run(const toml_config& config)
 
 	auto end_scheduling = scheduler->schedule_end();
 	auto end_execution_timestamp = utils::now();
-
-	delete messages;
 
 
 	auto makespan = end_execution_timestamp - start_execution_timestamp;
@@ -350,21 +316,6 @@ main(int argc, char const *argv[])
 	params = const_cast<char**>(argv);
 
 
-	const auto config = toml::parse(argv[1]);
-
-    const auto should_export_requests = toml::find<bool>(
-        config, "export"
-    );
-
-    if (should_export_requests) {
-        auto export_path = toml::find<std::string>(
-			config, "output", "requests", "export_path"
-		);
-		workload::create_requests(argv[1]);
-	
-
-    }else{
-		run(config);
-	}
+	run();
 	
 }

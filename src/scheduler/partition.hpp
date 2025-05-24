@@ -31,15 +31,19 @@
 
 
 namespace kvpaxos {
+using namespace kvstorage;
+using namespace std;
 
 template <typename T, size_t Capacity = 0>
 class Partition {
+typedef unordered_map<T, Partition<T, Capacity>*> partition_map_t;
 public:
     Partition(int id)
-        : id_{id},
+        : __id{id},
           n_executed_requests_{0},
           executing_{true}
     {
+        storage[__id] = Storage();
         socket_fd_ = socket(AF_INET, SOCK_DGRAM, 0);
     }
 
@@ -51,37 +55,21 @@ public:
         }
     }
 
-    static void populate_storage(const std::vector<workload::Request>& requests) {
-        for (auto& request : requests) {
-            if (request.type() != WRITE) {
-                continue;
-            }
-
-            storage_.write(request.key(), request.args());
-        }
-    }
-
-    static void populate_storage(struct client_message& request) {
-        auto key = request.key;
-        std::string request_args = "";
-        storage_.write(key, request_args);
-    }
-
     void start_worker_thread() {
         sem_init(&semaphore_, 0, 0);
         if constexpr(Capacity > 0){
             sem_init(&remaining_space_, 0, Capacity);
         }
 
-        worker_thread_ = std::thread(&Partition<T, Capacity>::thread_loop, this);
-        utils::set_affinity(id_+5, worker_thread_, cpu_set);
+        worker_thread_ = thread(&Partition<T, Capacity>::thread_loop, this);
+        utils::set_affinity(__id+5, worker_thread_, cpu_set);
     }
 
     size_t request_queue_size() const {
         if constexpr(Capacity > 0){
-            return bounded_requests_queue.read_available();
+            return __bounded_requests_queue.read_available();
         } else {
-            size_t size = requests_queue_.size();
+            size_t size = __requests_queue.size();
             return size;
         }
     }
@@ -93,11 +81,11 @@ public:
     void push_request(struct client_message request) {
         if constexpr(Capacity > 0){
             sem_wait(&remaining_space_);
-            bounded_requests_queue.push(request);
+            __bounded_requests_queue.push(request);
         }else{
-            queue_mutex_.lock();
-                requests_queue_.push(std::move(request));
-            queue_mutex_.unlock();
+            __queue_mutex.lock();
+                __requests_queue.push(move(request));
+            __queue_mutex.unlock();
         }
         sem_post(&semaphore_);
     }
@@ -107,14 +95,14 @@ public:
         sem_wait(&semaphore_);
 
         if constexpr(Capacity > 0){
-            request = std::move(bounded_requests_queue.front());
-            bounded_requests_queue.pop();
+            request = move(__bounded_requests_queue.front());
+            __bounded_requests_queue.pop();
             sem_post(&remaining_space_);
         }else{
-            queue_mutex_.lock();
-                request = std::move(requests_queue_.front());
-                requests_queue_.pop();
-            queue_mutex_.unlock();
+            __queue_mutex.lock();
+                request = move(__requests_queue.front());
+                __requests_queue.pop();
+            __queue_mutex.unlock();
         }
         return request;
     }
@@ -139,98 +127,99 @@ public:
     }
 
     int id() const {
-        return id_;
+        return __id;
     }
 
     size_t n_executed_requests() const {
         return n_executed_requests_;
     }
 
+
+    static void add_old_partition_map(partition_map_t* version_map){
+        version_maps_mtx.lock();
+        version_maps.push_back(version_map);
+        version_maps_mtx.unlock();
+    }
+
+    static void create_storage(size_t partitions_){
+        partitions = partitions_;
+        storage = new Storage[partitions];
+    }
 private:
-    /*
-    void on_event(struct bufferevent* bev, short ev, void *arg)
-    {
-        if (ev & BEV_EVENT_EOF || ev & BEV_EVENT_ERROR) {
-            bufferevent_free(bev);
-        }
-    }
 
-    struct sockaddr_in get_client_addr(unsigned long ip, unsigned short port)
-    {
-        struct sockaddr_in addr;
-        addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = ip;
-        addr.sin_port = port;
-        return addr;
-    }
 
-    void answer_client(const char* answer, size_t length,
-        client_message& message)
-    {
-        auto client_addr = get_client_addr(message.s_addr, message.sin_port);
-        auto bytes_written = sendto(
-            socket_fd_, answer, length, 0,
-            (const struct sockaddr *) &client_addr, sizeof(client_addr)
-        );
-        if (bytes_written < 0) {
-            printf("Failed to send answer\n");
+    string *read(int key){
+        string* val = storage[__id].read(key);
+        Storage* past_storage = nullptr;
+        if (val == nullptr){
+            for (size_t i = version_count-1; i >= 0; i--)
+            {
+                version_maps_mtx.lock_shared();
+                partition_map_t *map = version_maps.at(i);
+                auto partition = map->find(key);
+                if (partition != map->end()){
+                    int past_id = partition->second->__id;
+                    past_storage = &previous_storage[i][past_id];
+                    val = past_storage->read(key);
+                    break;
+                }
+                version_maps_mtx.unlock_shared();
+            }
+            
         }
+        if (val != nullptr && past_storage != nullptr) {
+            past_storage->del(key);
+            storage[__id].write(key, *val);
+        }
+        return val;
     }
-    */
 
     void thread_loop() {
         while (executing_) {
 
             struct client_message request = pop_request();
-            if (not executing_) {
+            if (!executing_) {
                 return;
             }
 
             auto type = static_cast<request_type>(request.type);
             auto key = request.key;
-            auto request_args = std::string(request.args);
-
-            std::string answer;
+            auto request_args = string(request.args);
+            int coordinator = 0;
+            pthread_barrier_t * barrier;
+            string answer;
             switch (type)
             {
             case READ:
-            {
-                answer = std::move(storage_.read(key));
+            {   
+                read(key);
                 break;
             }
 
             case WRITE:
             {
-                storage_.write(key, request_args);
-                answer = request_args;
+                storage[__id].write(key, request_args);
                 break;
             }
 
             case SCAN:
             {
-                auto length = std::stoi(request_args);
-                std::vector<std::string> values;
-                try{
-                    values = std::move(storage_.scan(key, length));
-                } catch (...){
-                    error_count_++;
-                    answer = "ERROR";
-                    break;
+                barrier = (pthread_barrier_t*) request.s_addr;
+                coordinator = pthread_barrier_wait(barrier);
+                if (coordinator) {
+                    auto length = stoi(request_args);
+                    vector<string> values;
+                    for (auto key_i = key; key_i < key+length; key_i++) {
+                        auto value = read(key_i);
+                        if (value == nullptr){
+                            error_count_++;
+                            break;
+                        }
+                        values.push_back(string(*value));
+                        delete value;
+                    }
                 }
-
-                std::ostringstream oss;
-                std::copy(values.begin(), values.end(), std::ostream_iterator<std::string>(oss, ","));
-                answer = std::string(oss.str());
-
-                std::vector<T> keys(length);
-                std::iota(keys.begin(), keys.end(), 1);
-                break;
-            }
-
-            case SYNC:
-            {
-                auto barrier = (pthread_barrier_t*) request.s_addr;
-                auto coordinator = pthread_barrier_wait(barrier);
+                coordinator = pthread_barrier_wait(barrier);
                 if (coordinator) {
                     pthread_barrier_destroy(barrier);
                     delete barrier;
@@ -238,6 +227,37 @@ private:
                 break;
             }
 
+            case DEL:
+            {
+                storage[__id].del(key);
+                break;
+            }
+
+            case SYNC:
+            {
+                barrier = (pthread_barrier_t*) request.s_addr;
+                coordinator = pthread_barrier_wait(barrier);
+                if (coordinator) {
+                    pthread_barrier_destroy(barrier);
+                    delete barrier;
+                }
+                continue;
+            }
+            case REPARTITION:
+                barrier = (pthread_barrier_t*) request.s_addr;
+                coordinator = pthread_barrier_wait(barrier);
+                if (coordinator) {
+                    previous_storage.push_back(storage);
+                    storage = new Storage[partitions];
+                }
+                coordinator = pthread_barrier_wait(barrier);
+                if (coordinator) {
+                    pthread_barrier_destroy(barrier);
+                    delete barrier;
+                }
+                storage[__id] = Storage();
+                version_count++;
+                break;
             case ERROR:
                 answer = "ERROR";
                 break;
@@ -245,36 +265,50 @@ private:
                 break;
             }
 
-            if (type == SYNC) {
-                continue;
-            }
-
             n_executed_requests_++;
         }
     }
 
-    int id_, socket_fd_;
+    int __id, socket_fd_;
     size_t n_executed_requests_;
-    static kvstorage::Storage storage_;
+    static Storage *storage;
     cpu_set_t cpu_set;
 
     bool executing_;
-    std::thread worker_thread_;
+    thread worker_thread_;
     sem_t semaphore_;
-    std::queue<struct client_message> requests_queue_;
-    boost::lockfree::spsc_queue<struct client_message, boost::lockfree::capacity<Capacity>> bounded_requests_queue;
-    std::mutex queue_mutex_;
+    queue<struct client_message> __requests_queue;
+    boost::lockfree::spsc_queue<struct client_message, boost::lockfree::capacity<Capacity>> __bounded_requests_queue;
+    mutex __queue_mutex;
 
     int total_weight_ = 0;
-    std::unordered_map<T, int> weight_;
+    unordered_map<T, int> weight_;
 
     sem_t remaining_space_;
 
     size_t error_count_ = 0;
+    static size_t partitions;
+    static vector<Storage*> previous_storage;
+    size_t version_count;
+    static vector<partition_map_t*> version_maps;
+    static shared_mutex version_maps_mtx;
+
+
 };
+template<typename T, size_t Capacity>
+vector<Storage*> Partition<T, Capacity>::previous_storage;
 
 template<typename T, size_t Capacity>
-kvstorage::Storage Partition<T, Capacity>::storage_;
+size_t Partition<T, Capacity>::partitions = 0;
+
+template<typename T, size_t Capacity>
+Storage* Partition<T, Capacity>::storage;
+
+template<typename T, size_t Capacity>
+vector<unordered_map<T, Partition<T, Capacity>*>*> Partition<T, Capacity>::version_maps;
+
+template<typename T, size_t Capacity>
+shared_mutex Partition<T, Capacity>::version_maps_mtx;
 
 }
 

@@ -21,7 +21,6 @@ target_link_libraries(
     scheduler
         PUBLIC
             graph
-            linked_queue
             storage
             request
             types

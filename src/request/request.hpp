@@ -5,6 +5,7 @@
 #include <unordered_set>
 
 #include "types/types.h"
+#include <fstream>
 
 
 namespace workload {
@@ -28,6 +29,8 @@ private:
     std::string args_;
 };
 
+    Request import_cs_request(std::ifstream &file);
+    Request make_request(int &type_buffer, int &key_buffer, int &arg_buffer);
 }
 
 #endif

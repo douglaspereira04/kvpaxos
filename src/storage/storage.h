@@ -18,9 +18,10 @@ class Storage {
 public:
     Storage() = default;
 
-    std::string read(int key);
+    std::string* read(int key);
     void write(int key, const std::string& value);
-    std::vector<std::string> scan(int start, int length);
+    void del(int key);
+
 
 private:
     storage_t storage_ = storage_t();

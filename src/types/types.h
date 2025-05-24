@@ -46,7 +46,9 @@ enum request_type
 	ERROR,
 	UPDATE,
 	DUMMY,
-	END
+	END,
+	DEL,
+	REPARTITION,
 };
 
 enum interval_type
