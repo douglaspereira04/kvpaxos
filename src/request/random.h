@@ -13,13 +13,15 @@ typedef std::function<long()> RandFunction;
 typedef std::function<double()> DoubleRandFunction;
 
 enum Distribution {FIXED, UNIFORM, BINOMIAL, ZIPFIAN, LATEST};
-const std::unordered_map<std::string, Distribution> string_to_distribution({
+const std::unordered_map<std::string, Distribution> __STR_TO_DIST({
     {"FIXED", Distribution::FIXED},
     {"UNIFORM", Distribution::UNIFORM},
     {"BINOMIAL", Distribution::BINOMIAL},
     {"ZIPFIAN", Distribution::ZIPFIAN},
     {"LATEST", Distribution::LATEST}
 });
+
+Distribution str_to_dist(std::string str);
 
 RandFunction uniform_distribution_rand(long min_value, long max_value, long seed = std::mt19937::default_seed);
 DoubleRandFunction uniform_double_distribution_rand(double min_value, double max_value, long seed = std::mt19937::default_seed);

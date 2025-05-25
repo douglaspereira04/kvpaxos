@@ -9,11 +9,13 @@
 #include <unordered_set>
 #include <vector>
 #include "types/types.h"
+#include "random.h"
 
 #include <toml11/toml.hpp>
 #include "random.h"
 
 namespace workload {
+    using namespace rfunc;
 
 typedef toml::basic_value<toml::discard_comments, std::unordered_map> toml_config;
 
@@ -23,6 +25,23 @@ request_type next_operation(
     std::vector<std::pair<request_type,double>> values, 
     rfunc::DoubleRandFunction *generator
 );
+
+class CharGenerator{
+public:
+    CharGenerator(long seed = std::mt19937::default_seed){
+        __generator = uniform_distribution_rand(0, __CHARSET_LEN-1, seed);
+    }
+    inline char operator()(){
+        return __CHARSET[__generator()];
+    }
+private:
+    static const char __CHARSET[];
+    static const size_t __CHARSET_LEN;
+    RandFunction __generator;
+};
+
+size_t gen_value(char* out_str, CharGenerator *char_generator, RandFunction *len_generator, size_t min_len, size_t max_len);
+
 
 }
 

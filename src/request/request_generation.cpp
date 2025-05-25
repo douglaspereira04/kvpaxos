@@ -8,12 +8,35 @@
 #include <unistd.h>
 #include "types/types.h"
 
-namespace workload {
+#include <string>
+#include <random>
+#include <algorithm>
+#include <assert.h>
 
+namespace workload {
+using namespace std;
+using namespace rfunc;
+
+static const size_t MAX_VALUE_LEN = 10240;
+
+const char CharGenerator::__CHARSET[] ="     ,;:.!?0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+const size_t CharGenerator::__CHARSET_LEN = 73;
+
+
+long gen_value(char* out_str, CharGenerator *char_generator, RandFunction *len_generator) {
+    long length = (*len_generator)();
+    for (long i = 0; i < length; i++)
+    {
+        out_str[i] = (*char_generator)();
+    }
+    out_str[length] = '\0';
+    return length;
+}
 
 request_type next_operation(
-    std::vector<std::pair<request_type,double>> values, 
-    rfunc::DoubleRandFunction *generator
+    vector<pair<request_type,double>> values, 
+    DoubleRandFunction *generator
 ) {
     double sum = 0;
     
@@ -32,133 +55,156 @@ request_type next_operation(
         val -= vw;
     }
 
-    throw std::invalid_argument("Something went wrong");
+    throw invalid_argument("Something went wrong");
 
 }
 
 void generate_export_requests(
-    const toml_config& config
+    string config_path, const toml_config& config
 ) {
-    std::vector<std::pair<request_type, double>> operation_proportions;
+    cout << "Generating " << config_path << " ..."  << endl; 
+    vector<pair<request_type, double>> operation_proportions;
     long long n_requests = 0;
-    auto export_path = toml::find<std::string>(
+    string export_path = toml::find<string>(
         config, "output", "requests", "export_path"
     );
 
-    const auto key_seed = toml::find<long>(
+    bool gen_values = toml::find<bool>(
+        config, "workload", "gen_values"
+    );
+
+    long value_min_size  = toml::find<long>(
+        config, "workload", "value_min_size"
+    );
+
+    long value_max_size  = toml::find<long>(
+        config, "workload", "value_max_size"
+    );
+
+    const long key_seed = toml::find<long>(
         config, "workload", "key_seed"
     );
 
-    const auto operation_seed = toml::find<long>(
+    const long operation_seed = toml::find<long>(
         config, "workload", "operation_seed"
     );
 
-    const auto n_records = toml::find<int>(
+    const int n_records = toml::find<int>(
         config, "workload", "n_records"
     );
     acknowledged_counter<long> *insertkeysequence = new acknowledged_counter<long>(n_records);
     
-    const auto n_operations = toml::find<int>(
+    const int n_operations = toml::find<int>(
         config, "workload", "n_operations"
     );
     n_requests = n_operations;
 
-    const auto data_distribution_str = toml::find<std::string>(
+    const string data_distribution_str = toml::find<string>(
         config, "workload", "data_distribution"
     );
 
-    const auto read_proportion = toml::find<double>(
+    const double read_proportion = toml::find<double>(
         config, "workload", "read_proportion"
     );
     if(read_proportion>0){
-        operation_proportions.push_back(std::make_pair(request_type::READ,read_proportion));
+        operation_proportions.push_back(make_pair(request_type::READ,read_proportion));
     }
 
-    const auto scan_proportion = toml::find<double>(
+    const double scan_proportion = toml::find<double>(
         config, "workload", "scan_proportion"
     );
 
-    const auto update_proportion = toml::find<double>(
+    const double update_proportion = toml::find<double>(
         config, "workload", "update_proportion"
     );
     if(update_proportion>0){
-        operation_proportions.push_back(std::make_pair(request_type::UPDATE,update_proportion));
+        operation_proportions.push_back(make_pair(request_type::UPDATE,update_proportion));
     }
 
-    const auto insert_proportion = toml::find<double>(
+    const double insert_proportion = toml::find<double>(
         config, "workload", "insert_proportion"
     );
     if(insert_proportion>0){
-        operation_proportions.push_back(std::make_pair(request_type::WRITE,insert_proportion));
+        operation_proportions.push_back(make_pair(request_type::WRITE,insert_proportion));
     }
 
-    auto data_distribution = rfunc::string_to_distribution.at(
-        data_distribution_str
-    );
+    Distribution data_distribution = str_to_dist(data_distribution_str);
 
-    rfunc::RandFunction data_generator;
-    if (data_distribution == rfunc::UNIFORM) {
-        data_generator = rfunc::uniform_distribution_rand(
+    RandFunction data_generator;
+    if (data_distribution == UNIFORM) {
+        data_generator = uniform_distribution_rand(
             0, n_records, key_seed
         );
-    } else if (data_distribution == rfunc::ZIPFIAN) {
+    } else if (data_distribution == ZIPFIAN) {
         int expectednewkeys = (int) ((n_operations) * insert_proportion * 2.0);
-        data_generator = rfunc::scrambled_zipfian_distribution(0, n_records + expectednewkeys, key_seed);
-    }  else if (data_distribution == rfunc::LATEST) {
-        auto zip = new zipfian_int_distribution<long>(0, insertkeysequence->last_value());
-        data_generator = rfunc::skewed_latest_distribution(insertkeysequence, zip, key_seed);
+        data_generator = scrambled_zipfian_distribution(0, n_records + expectednewkeys, key_seed);
+    }  else if (data_distribution == LATEST) {
+        zipfian_int_distribution<long>* zip = new zipfian_int_distribution<long>(0, insertkeysequence->last_value());
+        data_generator = skewed_latest_distribution(insertkeysequence, zip, key_seed);
         //leaking
     }
 
-    rfunc::RandFunction scan_length_generator;
+    RandFunction scan_length_generator;
     if(scan_proportion > 0){
 
-        const auto scan_seed = toml::find<long>(
+        const long scan_seed = toml::find<long>(
             config, "workload", "scan_seed"
         );
 
-        operation_proportions.push_back(std::make_pair(request_type::SCAN,scan_proportion));
+        operation_proportions.push_back(make_pair(request_type::SCAN,scan_proportion));
     
-        const auto scan_length_distribution_str = toml::find<std::string>(
+        const string scan_length_distribution_str = toml::find<string>(
             config, "workload", "scan_length_distribution"
         );
         
-        const auto min_scan_length = toml::find<int>(
+        const int min_scan_length = toml::find<int>(
             config, "workload", "min_scan_length"
         );
 
-        const auto max_scan_length = toml::find<int>(
+        const int max_scan_length = toml::find<int>(
             config, "workload", "max_scan_length"
         );
-        auto scan_length_distribution = rfunc::string_to_distribution.at(
-            scan_length_distribution_str
-        );
+        Distribution scan_length_distribution = str_to_dist(scan_length_distribution_str);
 
-        if (scan_length_distribution == rfunc::UNIFORM) {
-            scan_length_generator = rfunc::uniform_distribution_rand(
+        if (scan_length_distribution == UNIFORM) {
+            scan_length_generator = uniform_distribution_rand(
                 min_scan_length, max_scan_length, scan_seed
             );
-        } else if (scan_length_distribution == rfunc::ZIPFIAN) {
+        } else if (scan_length_distribution == ZIPFIAN) {
             int expectednewkeys = (int) ((n_operations) * insert_proportion * 2.0);
-            scan_length_generator = rfunc::scrambled_zipfian_distribution(0, n_records, scan_seed);
+            scan_length_generator = scrambled_zipfian_distribution(0, n_records, scan_seed);
         }
 
     }
 
-    rfunc::DoubleRandFunction operation_generator = rfunc::uniform_double_distribution_rand(
+    DoubleRandFunction operation_generator = uniform_double_distribution_rand(
         0.0, 1.0, operation_seed
     );
 
+    CharGenerator char_generator;
+    RandFunction len_generator;
+    if (gen_values){
+        char_generator = CharGenerator();
 
-    std::ofstream ofs(export_path, std::ofstream::out);
+        len_generator = uniform_distribution_rand(value_min_size, value_max_size);
+        
+    }
+
+    char value[MAX_VALUE_LEN+1];
+
+    ofstream ofs(export_path, ofstream::out);
     for (size_t i = 0; i < n_records; i++)
     {
-        ofs << static_cast<int>(WRITE) << "," << i << std::endl;
+        ofs << static_cast<int>(WRITE) << "," << i;
+        if (gen_values) {
+            gen_value(value, &char_generator, &len_generator);
+            ofs << "," << value;
+        }
+        ofs << endl;
     }
     
-    for (auto i = 0; i < n_operations; i++) {
+    for (int i = 0; i < n_operations; i++) {
         request_type type = next_operation(operation_proportions, &operation_generator);
-        std::string value = "";
         int key, size;
         if(type == request_type::READ || type == request_type::UPDATE){
             do{
@@ -179,21 +225,27 @@ void generate_export_requests(
         }
 
         if (type == request_type::READ) {
-            ofs << type << "," << key << std::endl;
+            ofs << type << "," << key << endl;
         } else if (type == request_type::WRITE) {
-            ofs << type << "," << key << std::endl;
+            ofs << type << "," << key;
+            if (gen_values) {
+                gen_value(value, &char_generator, &len_generator);
+                ofs << "," << value;
+            }
+            ofs << endl;
         } else if (type == request_type::SCAN) {
-            ofs << type << "," << key << "," << size << std::endl;
+            ofs << type << "," << key << "," << size << endl;
         }
        
     }
-    std::cout << "n_requests: " << n_requests << std::endl; 
-
+    cout << "number of writes/reads to keys: " << n_requests << endl; 
+    cout << "Generated into " << export_path  << endl; 
+    ofs.flush();
     ofs.close();
 }
 
 void create_requests(
-    std::string config_path
+    string config_path
 ) {
     const auto config = toml::parse(config_path);
 
@@ -202,7 +254,7 @@ void create_requests(
     );
 
     if(is_one_distribution){
-        generate_export_requests(config);
+        generate_export_requests(config_path, config);
     }else{
     }
 }

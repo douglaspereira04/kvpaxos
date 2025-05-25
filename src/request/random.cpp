@@ -7,6 +7,11 @@
 
 namespace rfunc {
 
+Distribution str_to_dist(std::string str){
+    return __STR_TO_DIST.at(str);
+}
+
+
 RandFunction uniform_distribution_rand(long min_value, long max_value, long seed) {
     std::mt19937 generator(seed);
     std::uniform_int_distribution<long> distribution(min_value, max_value);
