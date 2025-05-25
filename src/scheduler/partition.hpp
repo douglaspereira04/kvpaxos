@@ -236,6 +236,7 @@ private:
                 if (coordinator) {
                     previous_storage.push_back(storage);
                     storage = new Storage[partitions];
+                    output_file << "repartition()\n";
                 }
                 coordinator = pthread_barrier_wait(barrier);
                 if (coordinator) {

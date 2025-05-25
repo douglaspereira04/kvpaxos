@@ -184,9 +184,6 @@ workload_loop(ifstream &requests_file, Scheduler *scheduler)
 		while (requests_file.peek() != EOF) {
 			Request *request;
 			read_request(request, requests_file);
-
-			//printf("%d, %d, %ld, %.*s\n", static_cast<int>(request->type()), request->key(), request->args_len(), static_cast<int>(request->args_len()), request->args());
-			//continue;
 			scheduler->submit(request);
 			sem_post(&schedule_sem);
 
@@ -195,10 +192,10 @@ workload_loop(ifstream &requests_file, Scheduler *scheduler)
 			}
 		}
 	}
-	//requests_file.close();
-	//Request end_request(END);
-	//scheduler->submit(end_request);
-	//sem_post(&schedule_sem);
+	requests_file.close();
+	Request end_request(END);
+	scheduler->submit(end_request);
+	sem_post(&schedule_sem);
 }
 
 
