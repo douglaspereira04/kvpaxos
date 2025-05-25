@@ -36,11 +36,11 @@ enum request_type
 	READ,
 	WRITE,
 	SCAN,
-	SYNC,
-	ERROR,
-	UPDATE,
+	DEL,
+	REPARTITION,
+	END,
 	DUMMY,
-	END
+	ERROR
 };
 
 enum interval_type

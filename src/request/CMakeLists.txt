@@ -4,11 +4,9 @@ target_sources(
     request
         PUBLIC
             request_generation.h
-            request.hpp
             random.h
         PRIVATE
             request_generation.cpp
-            request.cpp
             random.cpp
 )
 

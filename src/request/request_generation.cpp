@@ -9,26 +9,7 @@
 
 namespace workload {
 
-Request make_request(int &type_buffer, int &key_buffer, int &arg_buffer) {
-    auto type = static_cast<request_type>(type_buffer);
-    auto key = key_buffer;
-    auto arg = std::to_string(arg_buffer);
 
-    return Request(type, key, arg);
-}
-
-Request import_cs_request(std::ifstream &file)
-{    
-    std::string line;
-    int type, key, arg;
-    std::getline(file, line);
-    sscanf(line.c_str(), "%d,%d,%d", &type,&key,&arg);
-    return make_request(
-        type,
-        key,
-        arg
-    );
-}
 
 
 request_type next_operation(
@@ -171,12 +152,15 @@ void generate_export_requests(
 
 
     std::ofstream ofs(export_path, std::ofstream::out);
+    for (size_t i = 0; i < n_records; i++)
+    {
+        ofs << static_cast<int>(WRITE) << "," << i << "," << request.args() << "," << std::endl;
+    }
     
     for (auto i = 0; i < n_operations; i++) {
         request_type type = next_operation(operation_proportions, &operation_generator);
-        
-        int key;
-        std::string size = "";
+        std::string value = "";
+        int key, size;
         if(type == request_type::READ || type == request_type::UPDATE){
             do{
                 key = data_generator();
@@ -185,42 +169,43 @@ void generate_export_requests(
                 type = request_type::WRITE;
             }
         }else if(type == request_type::SCAN){
-            int size_value = scan_length_generator();
-            size = std::to_string(size_value);
-            n_requests += (size_value-1);
+            size = scan_length_generator();
+            n_requests += (size-1);
             do{
                 key = data_generator();
-            } while(key+size_value >= insertkeysequence->last_value());
+            } while(key+size >= insertkeysequence->last_value());
         } else if(type == request_type::WRITE){
             key = insertkeysequence->next();
             insertkeysequence->acknowledge(key);
         }
 
-        auto request = Request(type, key, size);
-        ofs << static_cast<int>(request.type()) << "," << request.key() << "," << request.args() << "," << std::endl;
+        if (type == READ) {
+            ofs << type << "," << key << std::endl;
+        } else if (type == WRITE) {
+            ofs << type << "," << key << "," << value << std::endl;
+        } else if (type == SCAN) {
+            ofs << type << "," << key << "," << size << std::endl;
+        }
+       
     }
     std::cout << "n_requests: " << n_requests << std::endl; 
 
     ofs.close();
 }
 
-std::vector<Request> create_requests(
+void create_requests(
     std::string config_path
 ) {
     const auto config = toml::parse(config_path);
 
-    const auto is_one_distribution = toml::find<bool>(
+    const bool is_one_distribution = toml::find<bool>(
         config, "workload", "single_distribution"
     );
-
-    std::vector<workload::Request> requests;
 
     if(is_one_distribution){
         generate_export_requests(config);
     }else{
     }
-
-    return requests;
 }
 
 
