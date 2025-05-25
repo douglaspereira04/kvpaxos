@@ -8,6 +8,7 @@
 #include <sstream>
 #include <unordered_set>
 #include <vector>
+#include "types/types.h"
 
 #include <toml11/toml.hpp>
 #include "random.h"

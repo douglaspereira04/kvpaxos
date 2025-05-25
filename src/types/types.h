@@ -37,10 +37,8 @@ enum request_type
 	WRITE,
 	SCAN,
 	DEL,
-	REPARTITION,
-	END,
-	DUMMY,
-	ERROR
+	UPDATE,
+
 };
 
 enum interval_type

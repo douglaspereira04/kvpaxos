@@ -6,10 +6,9 @@
 #include <unordered_map>
 #include <stdio.h>
 #include <unistd.h>
+#include "types/types.h"
 
 namespace workload {
-
-
 
 
 request_type next_operation(
@@ -154,7 +153,7 @@ void generate_export_requests(
     std::ofstream ofs(export_path, std::ofstream::out);
     for (size_t i = 0; i < n_records; i++)
     {
-        ofs << static_cast<int>(WRITE) << "," << i << "," << request.args() << "," << std::endl;
+        ofs << static_cast<int>(WRITE) << "," << i << std::endl;
     }
     
     for (auto i = 0; i < n_operations; i++) {
@@ -179,11 +178,11 @@ void generate_export_requests(
             insertkeysequence->acknowledge(key);
         }
 
-        if (type == READ) {
+        if (type == request_type::READ) {
             ofs << type << "," << key << std::endl;
-        } else if (type == WRITE) {
-            ofs << type << "," << key << "," << value << std::endl;
-        } else if (type == SCAN) {
+        } else if (type == request_type::WRITE) {
+            ofs << type << "," << key << std::endl;
+        } else if (type == request_type::SCAN) {
             ofs << type << "," << key << "," << size << std::endl;
         }
        
