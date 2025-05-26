@@ -1,34 +1,24 @@
 #ifndef _KVPAXOS_SCHEDULER_H_
 #define _KVPAXOS_SCHEDULER_H_
 
-#include <condition_variable>
 #include <memory>
-#include <netinet/tcp.h>
 #include <pthread.h>
-#include <queue>
 #include <deque>
 #include <semaphore.h>
-#include <shared_mutex>
 #include <string>
-#include <string.h>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 #include <atomic>
-#include <assert.h>
 #include "input_graph.hpp"
 #include "graph/graph.hpp"
 #include "graph/partitioning.h"
 #include "partition.hpp"
 #include "request/request.hpp"
 #include "queue/queue.hpp"
-#include "storage/storage.h"
 #include "types/types.h"
 #include <iostream>
 #include "utils/utils.h"
-#include <algorithm>
-#include <limits.h>
-#include <utility>
 
 
 namespace kvpaxos {

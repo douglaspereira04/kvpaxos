@@ -2,10 +2,7 @@
 #define MODEL_QUEUE_H
 
 
-#include <algorithm>
-#include <map>
 #include <queue>
-#include <atomic>
 #include <mutex>
 #include <semaphore.h>
 

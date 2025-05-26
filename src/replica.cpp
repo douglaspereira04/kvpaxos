@@ -26,28 +26,13 @@
  */
 
 
-#include <algorithm>
 #include <chrono>
 #include <iostream>
-#include <iterator>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string>
-#include <string.h>
-#include <sstream>
-#include <signal.h>
-#include <mutex>
-#include <netinet/tcp.h>
+#include <fstream>
 #include <thread>
-#include <unordered_map>
-#include <utility>
-#include <vector>
 #include <random>
-#include <assert.h>
-#include <boost/lockfree/spsc_queue.hpp>
 #include "types/types.h"
 #include "utils/utils.h"
-#include "graph/graph.hpp"
 #include "request/request.hpp"
 
 #include "scheduler/scheduler.hpp"
@@ -218,6 +203,10 @@ run()
 	cpu_set_t workload_cpu_set;
 	utils::set_affinity(1,workload_thread, workload_cpu_set);
 
+
+    ofstream ofs1("potato.csv");
+	ofs1 << "Scheduling End," << endl;
+    ofstream ofs("details.csv");
 	scheduler->join();
 	workload_thread.join();
 	throughput_thread.join();
@@ -228,11 +217,9 @@ run()
 
 
 	auto makespan = end_execution_timestamp - start_execution_timestamp;
-
-    ofstream ofs("details.csv", ofstream::out);
-	ofs << "Scheduling End," << (end_scheduling - start_execution_timestamp).count()/pow(10,9) << "\n";
-	ofs << "Makespan," << makespan.count()/pow(10,9) << "\n";
-	ofs << "Error Count," << scheduler->error_count() << "\n";
+	ofs << "Scheduling End," << (end_scheduling - start_execution_timestamp).count()/pow(10,9) << endl;
+	ofs << "Makespan," << makespan.count()/pow(10,9) << endl;
+	ofs << "Error Count," << scheduler->error_count() << endl;
 	if constexpr(utils::ENABLE_INFO){
 		auto& repartition_times = scheduler->repartition_timestamps();
 		ofs << "Repartition Request, Graph Copy Duration, Repartition Begin, Repartition End, Reconstruction Duration, Apply Time" << endl;
@@ -285,20 +272,13 @@ run()
 	ofs << endl;
 	ofs.flush();
     ofs.close();
+	
 }
-
-static void
-usage(string prog)
-{
-	cout << "Usage: " << prog << " config\n";
-}
-
 
 int
 main(int argc, char const *argv[])
 {
 	if (argc < 2) {
-		usage(string(argv[0]));
 		exit(1);
 	}
 
