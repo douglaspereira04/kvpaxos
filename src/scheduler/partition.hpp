@@ -41,15 +41,13 @@ typedef unordered_map<T, Partition<T, Capacity>*> partition_map_t;
 public:
     Partition(int id)
         : __id{id},
-          __n_executed_requests{0},
-          __executing{true}
+          __n_executed_requests{0}
     {
         storage[__id] = Storage();
-        output_file = ofstream("partition_output_" + to_string(__id));
+        __output_file = ofstream("partition_output_" + to_string(__id));
     }
 
     ~Partition() {
-        __executing = false;
         if (worker_thread_.joinable()) {
             sem_post(&semaphore_);
             worker_thread_.join();
@@ -132,66 +130,89 @@ private:
 
 
     size_t read(int key, char* &val){
-        val = nullptr;
-        size_t len = storage[__id].read(key, val);
-        Storage* past_storage = nullptr;
-        if (val == nullptr){
+        int len = storage[__id].read(key, val);
+        int len_old = -1;
+        Storage* past_storage;
+        int past_id;
+        if (len < 0){
             for (size_t i = version_count-1; i >= 0; i--)
             {
                 version_maps_mtx.lock_shared();
                 partition_map_t *map = version_maps.at(i);
                 auto partition = map->find(key);
                 if (partition != map->end()){
-                    int past_id = partition->second->__id;
-                    past_storage = &previous_storage[i][past_id];
-                    len = past_storage->read(key, val);
-                    if (val != nullptr){
+                    past_id = partition->second->__id;
+                    past_storage = previous_storage[i];
+                    len_old = past_storage[past_id].read(key, val);
+                    if (len_old > 0 && val == nullptr){
+                        cout << "ERR 2" << endl;
+                        exit(1);
+                    }
+                    if (len_old >= 0){
+                        version_maps_mtx.unlock_shared();
                         break;
                     }
+                }else {
                 }
                 version_maps_mtx.unlock_shared();
             }
             
         }
-        if (val != nullptr && past_storage != nullptr) {
-            past_storage->del(key);
-            storage[__id].write(key, val, len);
+
+        if (len < 0 && len_old >= 0) {
+            past_storage[past_id].del(key);
+            storage[__id].write(key, val, len_old);
+            return len_old;
+        }
+        if (len < 0 && len_old < 0){
+            exit(1);
         }
         return len;
     }
 
     void thread_loop() {
-        while (__executing) {
+        while (true) {
 
             Request *request = pop_request();
-            if (!__executing) {
-                return;
-            }
 
             RequestType type = request->type();
             auto key = request->key();
             int coordinator = 0;
             pthread_barrier_t * barrier;
-            string answer;
             switch (type)
             {
             case READ:
             {   
                 char *value;
                 size_t len = read(key, value);
-                output_file << "read( " << key << " ): ";
-                output_file.write(value, len);
-                output_file << "\n";
-                delete[] value;
+                __output_file << "read( " << key << " ): ";
+                __output_file.flush();
+                for (size_t i = 0; i < len; i++)
+                {
+                    __output_file << value[i];
+                }
+                __output_file << endl;
+                if (len >= 0) {
+                    delete[] value;
+                }
+                delete request;
+                __n_executed_requests++;
                 break;
             }
 
             case WRITE:
             {
-                storage[__id].write(key, request->args(), request->args_len());
-                output_file << "write( " << key << ", ";
-                output_file.write(request->args(), request->args_len());
-                output_file << " ) " << "\n";
+                size_t len = request->args_len();
+                char *value = request->args();
+                storage[__id].write(key, value, len);
+                __output_file << "write( " << key << ", ";
+                for (size_t i = 0; i < len; i++)
+                {
+                    __output_file << value[i];
+                }
+                __output_file << " ) " << endl;
+                delete request;
+                __n_executed_requests++;
                 break;
             }
 
@@ -201,33 +222,40 @@ private:
                 coordinator = pthread_barrier_wait(barrier);
                 if (coordinator) {
                     auto length = request->args_len();
-                    output_file << "scan( " << key << ", "<< length << " ): [";
+                    __output_file << "scan( " << key << ", "<< length << " ): [";
                     for (auto key_i = key; key_i < key+length; key_i++) {
                         char *value;
                         size_t len = read(key, value);
-                        if (value == nullptr){
+                        if (len < 0){
                             error_count_++;
-                            break;
+                            continue;
                         }
-                        output_file.write(value, len);
-                        output_file << ", ";
+                        for (size_t i = 0; i < len; i++)
+                        {
+                            __output_file << value[i];
+                        }
+                        __output_file << ", ";
 
                         delete[] value;
                     }
-                    output_file << "]\n";
+                    __output_file << "]" << endl;
                 }
                 coordinator = pthread_barrier_wait(barrier);
                 if (coordinator) {
                     pthread_barrier_destroy(barrier);
                     delete barrier;
                 }
+                delete request;
+                __n_executed_requests++;
                 break;
             }
 
             case DEL:
             {
                 storage[__id].del(key);
-                output_file << "del( " << key << " )\n";
+                __output_file << "del( " << key << " )"  << endl;
+                delete request;
+                __n_executed_requests++;
                 break;
             }
             case REPARTITION:
@@ -235,28 +263,32 @@ private:
                 coordinator = pthread_barrier_wait(barrier);
                 if (coordinator) {
                     previous_storage.push_back(storage);
+                    version_count++;
                     storage = new Storage[partitions];
-                    output_file << "repartition()\n";
+                    __output_file << "repartition()" << endl;
                 }
                 coordinator = pthread_barrier_wait(barrier);
                 if (coordinator) {
                     pthread_barrier_destroy(barrier);
                     delete barrier;
+                    delete request;
                 }
                 storage[__id] = Storage();
-                version_count++;
                 break;
             case ERROR:
-                answer = "ERROR";
+                __output_file << "err()" << endl;
+                delete request;
                 break;
             default:
+                delete request;
+                __output_file.flush();
+                __output_file.close();
+                return;
                 break;
             }
 
-            __n_executed_requests++;
             
-            output_file.flush();
-            delete request;
+            __output_file.flush();
         }
     }
 
@@ -265,7 +297,6 @@ private:
     static Storage *storage;
     cpu_set_t cpu_set;
 
-    bool __executing;
     thread worker_thread_;
     sem_t semaphore_;
     queue<Request*> __requests_queue;
@@ -277,16 +308,19 @@ private:
     size_t error_count_ = 0;
     static size_t partitions;
     static vector<Storage*> previous_storage;
-    size_t version_count;
+    static size_t version_count;
     static vector<partition_map_t*> version_maps;
     static shared_mutex version_maps_mtx;
 
-    ofstream output_file;
+    ofstream __output_file;
 
 
 };
 template<typename T, size_t Capacity>
 vector<Storage*> Partition<T, Capacity>::previous_storage;
+
+template<typename T, size_t Capacity>
+size_t Partition<T, Capacity>::version_count = 0;
 
 template<typename T, size_t Capacity>
 size_t Partition<T, Capacity>::partitions = 0;

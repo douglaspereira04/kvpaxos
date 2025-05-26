@@ -18,8 +18,8 @@ class Storage {
 public:
     Storage() = default;
 
-    size_t read(int key, char* &value);
-    void write(int key, const char *value, size_t len);
+    int read(int key, char* &value);
+    void write(int key, const char *value, int len);
     void del(int key);
 
 

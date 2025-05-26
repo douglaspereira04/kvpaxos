@@ -118,6 +118,23 @@ public:
 
     }
 
+    ~Scheduler(){
+        scheduling_thread.join();
+        if constexpr(Rebalance) {
+            graph_thread.join();
+            reparting_thread.join();
+            delete __in_queue_amount;
+            delete sucessive_imbalance;
+            delete data_to_partition;
+            delete updated_data_to_partition;
+        }
+
+        for (auto& kv: __partitions) {
+            auto* partition = kv.second;
+            delete partition;
+        }
+    }
+
     void run() {
         for (auto& kv : __partitions) {
             kv.second->start_worker_thread();
@@ -267,16 +284,21 @@ public:
         }
     }
 
+    void end_signal(Request* request){
+        for (auto& kv: __partitions) {
+            auto* partition = kv.second;
+            partition->push_request(request->no_value_copy());
+        }
+        delete request;
+    }
+
 
     void scheduling_loop() {
         while(true){
             scheduling_queue.template wait<0>();
             Request *request = scheduling_queue.template pop<0>();
             if (request->type() == END){
-                for (auto& kv: __partitions) {
-                    auto* partition = kv.second;
-                    partition->push_request(request);
-                }
+                end_signal(request);
                 break;
             }
             schedule_and_answer(request);
@@ -292,10 +314,10 @@ public:
         auto* barrier = new pthread_barrier_t();
         pthread_barrier_init(barrier, NULL, __partitions.size());
         sync_request->barrier(barrier);
+        partition_t::add_old_partition_map(old_partition_map);
 
         for (auto& kv: __partitions) {
             auto* partition = kv.second;
-            partition_t::add_old_partition_map(old_partition_map);
             partition->push_request(sync_request);
         }
     }
@@ -315,8 +337,9 @@ public:
         return data_to_partition->find(key) != data_to_partition->end();
     }
 
-
+    int submited = 0;
     void submit(Request* request){
+        submited++;
         Request* request_copy = request->no_value_copy();
         scheduling_queue.push(request, request_copy);
         scheduling_queue.template notify<0>();
@@ -352,7 +375,10 @@ public:
             n_processed_requests++;
             scheduling_queue.template wait<1>();
             Request *request = scheduling_queue.template pop<1>();
-
+            if (request->type() == END){
+                stop.store(true, memory_order_relaxed);
+                sem_post(&repart_semaphore);
+            }
             update_graph(request);
 
             if constexpr(TL > 0){
@@ -398,10 +424,11 @@ public:
     void partitioning_loop(){
         while(true){
             sem_wait(&repart_semaphore);
+            if (stop.load(memory_order_relaxed)){
+                break;
+            }
 
-            auto temp = partitioning(input_graph);
-
-            updated_data_to_partition = temp;
+            updated_data_to_partition = partitioning(input_graph);
             update.store(true, memory_order_release);
         }
     }
@@ -614,6 +641,7 @@ public:
 
     atomic_bool repartitioning;
     atomic_bool update;
+    atomic_bool stop = false;
 
     int cross_operation_start = 0;
     size_t sucessive_cross_partition_intensive = 0;

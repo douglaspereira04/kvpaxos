@@ -80,12 +80,13 @@ static int arrived = 0;
 
 static long request_rate;
 static long request_rate_seed;
-static sem_t schedule_sem;
 
 
 void
-metrics_loop(int sleep_duration, size_t n_requests, Scheduler* scheduler)
+metrics_loop(int sleep_duration, Scheduler* scheduler)
 {
+	size_t n_requests = atol(params[N_REQUESTS]);
+	size_t n_initial_keys = atol(params[N_INITIAL_KEYS]);
 	cout << "Executed,Arrivals,Graph Vertices,Graph Edges";
 	int n_partitions =  atoi(params[N_PARTITIONS]);
 	for (int i = 0; i < n_partitions; i++)
@@ -94,7 +95,7 @@ metrics_loop(int sleep_duration, size_t n_requests, Scheduler* scheduler)
 	}
 	cout << endl;
 	size_t executed_requests = 0;
-	while (RUNNING && executed_requests < n_requests) {
+	while (RUNNING && executed_requests < (n_requests + n_initial_keys)) {
 		this_thread::sleep_for(chrono::milliseconds(sleep_duration));
 		executed_requests = scheduler->n_executed_requests();
 		cout << executed_requests << ",";
@@ -137,9 +138,11 @@ initialize_scheduler(ifstream &requests_file)
 		balance_threshold
 	);
 
+	scheduler->run();
+
 	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
 	if (n_initial_keys > 0) {
-		for (size_t i = 0; i < n_initial_keys; i++)
+		for (int i = 0; i < n_initial_keys; i++)
 		{
 			Request *request;
 			read_request(request, requests_file);
@@ -150,8 +153,6 @@ initialize_scheduler(ifstream &requests_file)
 			this_thread::sleep_for(chrono::milliseconds(100));
 		}
 	}
-
-	scheduler->run();
 	return scheduler;
 }
 
@@ -159,7 +160,6 @@ void
 workload_loop(ifstream &requests_file, Scheduler *scheduler)
 {
 	size_t n_requests = atol(params[N_REQUESTS]);
-
 	mt19937 generator(request_rate_seed);
 	poisson_distribution<long> interval_distribution(1);
 	if(request_rate>0){
@@ -170,7 +170,6 @@ workload_loop(ifstream &requests_file, Scheduler *scheduler)
 			Request *request;
 			read_request(request, requests_file);
 			scheduler->submit(request);
-			sem_post(&schedule_sem);
 
 			if constexpr(utils::ENABLE_INFO){
 				arrived++;
@@ -185,17 +184,14 @@ workload_loop(ifstream &requests_file, Scheduler *scheduler)
 			Request *request;
 			read_request(request, requests_file);
 			scheduler->submit(request);
-			sem_post(&schedule_sem);
 
 			if constexpr(utils::ENABLE_INFO){
 				arrived++;
 			}
 		}
 	}
-	requests_file.close();
-	Request end_request(END);
+	Request *end_request = new Request(END);
 	scheduler->submit(end_request);
-	sem_post(&schedule_sem);
 }
 
 
@@ -209,10 +205,10 @@ run()
 	string requests_path = params[REQUESTS_PATH];
 	ifstream requests_file(requests_path);
 
-	auto* scheduler = initialize_scheduler(requests_file);
+	auto* scheduler = initialize_scheduler(ref(requests_file));
 	
 	auto throughput_thread = thread(
-		metrics_loop, SLEEP, n_requests, scheduler
+		metrics_loop, SLEEP, scheduler
 	);
 	cpu_set_t throughput_cpu_set;
 	utils::set_affinity(0,throughput_thread, throughput_cpu_set);
@@ -225,6 +221,7 @@ run()
 	scheduler->join();
 	workload_thread.join();
 	throughput_thread.join();
+	requests_file.close();
 
 	auto end_scheduling = scheduler->schedule_end();
 	auto end_execution_timestamp = utils::now();

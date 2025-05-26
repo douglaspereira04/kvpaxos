@@ -9,28 +9,30 @@ int VALUE_SIZE = 4096;
 string template_value(VALUE_SIZE, '*');
 
 
-size_t Storage::read(int key, char* &value) {
+int Storage::read(int key, char* &value) {
+    string val;
     try {
-        string val = storage_.at(key);
-        string decompressed = decompress(val);
-        size_t len = decompressed.length();
-        value = new char[len];
-        strcpy(value, decompressed.c_str());
-        return len;
+        val = storage_.at(key);
     } catch(...) {
         value = nullptr;
         return -1;
     }
+    string decompressed = decompress(val);
+    int len = decompressed.length();
+    value = new char[len+1];
+    strcpy(value, decompressed.c_str());
+    return len;
 }
 
-void Storage::write(int key, const char* chars, size_t len) {
-    string value = string(chars, len);
-    auto compressed_value = compress(template_value);
+void Storage::write(int key, const char* chars, int len) {
+    string value(chars, len);
+    auto compressed_value = compress(value);
     storage_[key] = compressed_value;
 }
 
 void Storage::del(int key) {
-    storage_[key] = string();
+    char null_str[] = "null";
+    write(key, null_str, sizeof(null_str)-1);
 }
 
 };
