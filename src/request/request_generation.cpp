@@ -12,6 +12,16 @@
 #include <random>
 #include <algorithm>
 #include <assert.h>
+#define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
+#define PBWIDTH 60
+
+void print_progress(float percentage) {
+    int val = (int) (percentage * 100);
+    int lpad = (int) (percentage * PBWIDTH);
+    int rpad = PBWIDTH - lpad;
+    printf("\r%.2f%% [%.*s%*s]", percentage*100, lpad, PBSTR, rpad, "");
+    fflush(stdout);
+}
 
 namespace workload {
 using namespace std;
@@ -191,6 +201,8 @@ void generate_export_requests(
     }
 
     char value[MAX_VALUE_LEN+1];
+    float total = n_records + n_operations;
+    float progress = 0;
 
     ofstream ofs(export_path, ofstream::out);
     for (size_t i = 0; i < n_records; i++)
@@ -201,6 +213,8 @@ void generate_export_requests(
             ofs << "," << value;
         }
         ofs << endl;
+        progress = i/total;
+        print_progress(progress);
     }
     
     for (int i = 0; i < n_operations; i++) {
@@ -236,6 +250,11 @@ void generate_export_requests(
         } else if (type == request_type::SCAN) {
             ofs << type << "," << key << "," << size << endl;
         }
+
+
+        progress = (i+n_records)/total;
+        print_progress(progress);
+
        
     }
     cout << "number of writes/reads to keys: " << n_requests << endl; 

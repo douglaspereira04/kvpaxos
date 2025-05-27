@@ -35,18 +35,10 @@
 #include "request/request_generation.h"
 #include "types/types.h"
 
-static void
-usage(std::string prog)
-{
-	std::cout << "Usage: " << prog << " config\n";
-}
-
-
 int
 main(int argc, char const *argv[])
 {
 	if (argc < 2) {
-		usage(std::string(argv[0]));
 		exit(1);
 	}
 

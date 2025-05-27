@@ -1,5 +1,5 @@
-workload.n_records = 1000
-workload.n_operations = 10000
+workload.n_records = 100000
+workload.n_operations = 1000000
 
 workload.key_seed = 1908944376
 workload.operation_seed = 1836524827
@@ -14,8 +14,8 @@ workload.update_proportion = 0.5
 workload.scan_proportion = 0.0
 workload.insert_proportion = 0.0
 
-workload.min_scan_length = 2
-workload.max_scan_length = 8
+workload.min_scan_length = 1
+workload.max_scan_length = 10
 
 workload.gen_values = true
 workload.value_min_size = 3840
