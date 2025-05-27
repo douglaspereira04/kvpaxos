@@ -215,13 +215,14 @@ private:
             {   
                 char *value;
                 size_t len = read(key, value);
-                __output_file << "read( " << key << " ): ";
-                __output_file.flush();
-                for (size_t i = 0; i < len; i++)
-                {
-                    __output_file << value[i];
+                if constexpr(utils::ENABLE_ANSWER){
+                    __output_file << "read( " << key << " ): ";
+                    for (size_t i = 0; i < len; i++)
+                    {
+                        __output_file << value[i];
+                    }
+                    __output_file << "\n";
                 }
-                __output_file << "\n";
                 if (len >= 0) {
                     delete[] value;
                 }
@@ -235,12 +236,14 @@ private:
                 size_t len = request->args_len();
                 char *value = request->args();
                 storage[__id].write(key, value, len);
-                __output_file << "write( " << key << ", ";
-                for (size_t i = 0; i < len; i++)
-                {
-                    __output_file << value[i];
+                if constexpr(utils::ENABLE_ANSWER){
+                    __output_file << "write( " << key << ", ";
+                    for (size_t i = 0; i < len; i++)
+                    {
+                        __output_file << value[i];
+                    }
+                    __output_file << " )\n";
                 }
-                __output_file << " )\n";
                 delete request;
                 __n_executed_requests++;
                 break;
@@ -258,18 +261,19 @@ private:
                     scan_some(request, key, length, values, values_lengths);
                     coordinator = pthread_barrier_wait(barrier);
                     if (coordinator) {
-                        __output_file << "scan( " << key << ", "<< length << " ): [";
-                        for (size_t i = 0; i < length; i++)
-                        {
-                            __output_file << "\"";
-                            for (size_t j = 0; j < values_lengths[i]; j++)
+                        if constexpr(utils::ENABLE_ANSWER){
+                            __output_file << "scan( " << key << ", "<< length << " ): [";
+                            for (size_t i = 0; i < length; i++)
                             {
-                                __output_file << values[i][j];
+                                __output_file << "\"";
+                                for (size_t j = 0; j < values_lengths[i]; j++)
+                                {
+                                    __output_file << values[i][j];
+                                }
+                                __output_file << "\",";
                             }
-                            __output_file << "\",";
+                            __output_file << "]\n";
                         }
-                        __output_file << "]\n";
-                        
                         pthread_barrier_destroy(barrier);
                         delete request;
                     }
@@ -284,7 +288,9 @@ private:
             case DEL:
             {
                 storage[__id].del(key);
-                __output_file << "del( " << key << " )\n";
+                if constexpr(utils::ENABLE_ANSWER){
+                    __output_file << "del( " << key << " )\n";
+                }
                 delete request;
                 __n_executed_requests++;
                 break;
@@ -296,7 +302,9 @@ private:
                     previous_storage.push_back(storage);
                     version_count++;
                     storage = new Storage[partitions];
-                    __output_file << "repartition() \n";
+                    if constexpr(utils::ENABLE_ANSWER){
+                        __output_file << "repartition() \n";
+                    }
                 }
                 coordinator = pthread_barrier_wait(barrier);
                 if (coordinator) {
@@ -306,7 +314,9 @@ private:
                 storage[__id] = Storage();
                 break;
             case ERROR:
-                __output_file << "err() \n";
+                if constexpr(utils::ENABLE_ANSWER){
+                    __output_file << "err() \n";
+                }
                 delete request;
                 break;
             default:

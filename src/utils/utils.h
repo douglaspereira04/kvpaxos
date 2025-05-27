@@ -27,6 +27,12 @@ void set_affinity(size_t cpu, std::thread &thread, cpu_set_t &cpu_set);
     static const bool ENABLE_INFO = false;
 #endif
 
+#if defined(ANSWER)
+	static const bool ENABLE_ANSWER = true;
+#else
+    static const bool ENABLE_ANSWER = false;
+#endif
+
 }
 
 #endif

@@ -6,6 +6,7 @@ include(cmake/project_options.cmake)
 include(cmake/conan.cmake)
 
 option(INF "description" ON)
+option(ANSWER "description" ON)
 set(TRACK_LENGTH "0" CACHE STRING "PATTERN TRACKER GRAPH SIZE (0 for INFINITY)")
 set(Q_SIZE "0" CACHE STRING "WORKER THREADS QUEUE SIZE (0 for INFINITY)")
 set(MAX_SUCESSIVE_IMBALANCE "100" CACHE STRING "ONLY FOR IMBALANCE DETECTION")
