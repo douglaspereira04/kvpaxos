@@ -4,7 +4,6 @@ add_subdirectory(types)
 add_subdirectory(utils)
 add_subdirectory(storage)
 add_subdirectory(scheduler)
-add_subdirectory(graph)
 
 find_package(Boost REQUIRED)
 
@@ -17,10 +16,7 @@ ENDIF()
 IF(${ANSWER} STREQUAL "ON")
     target_compile_definitions(replica PUBLIC ANSWER)
 ENDIF()
-add_definitions( -DTRACK_LENGTH=${TRACK_LENGTH} )
 add_definitions( -DQ_SIZE=${Q_SIZE} )
-add_definitions( -DSCHEDULE_QUEUE_SIZE=${SCHEDULE_QUEUE_SIZE} )
-add_definitions( -DMAX_SUCESSIVE_IMBALANCE=${MAX_SUCESSIVE_IMBALANCE} )
 
 target_sources(
     replica

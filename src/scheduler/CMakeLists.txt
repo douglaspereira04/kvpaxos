@@ -3,10 +3,8 @@ add_library(scheduler)
 target_sources(
     scheduler
         PUBLIC
-            scheduler.hpp
             partition.hpp
         PRIVATE
-            scheduler.cpp
             partition.cpp
 )
 
@@ -20,7 +18,6 @@ target_include_directories(
 target_link_libraries(
     scheduler
         PUBLIC
-            graph
             storage
             request
             types

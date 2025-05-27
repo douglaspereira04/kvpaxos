@@ -7,10 +7,7 @@ include(cmake/conan.cmake)
 
 option(INF "description" ON)
 option(ANSWER "description" ON)
-set(TRACK_LENGTH "0" CACHE STRING "PATTERN TRACKER GRAPH SIZE (0 for INFINITY)")
 set(Q_SIZE "0" CACHE STRING "WORKER THREADS QUEUE SIZE (0 for INFINITY)")
-set(MAX_SUCESSIVE_IMBALANCE "100" CACHE STRING "ONLY FOR IMBALANCE DETECTION")
-set(SCHEDULE_QUEUE_SIZE "0" CACHE STRING "SCHEDULE QUEUE SIZE SHOULD BE COMPATIBLE TO WORKLOAD")
 
 conan(
     PACKAGES
@@ -19,8 +16,5 @@ conan(
         tbb/2020.1
 )
 
-
-include(cmake/add_libkahip.cmake)
-include(cmake/add_libmetis.cmake)
 
 add_subdirectory(src)
