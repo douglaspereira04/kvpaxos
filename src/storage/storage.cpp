@@ -3,21 +3,16 @@
 
 
 namespace kvstorage {
-using namespace std;
-
-int VALUE_SIZE = 4096;
-string template_value(VALUE_SIZE, '*');
-
 
 int Storage::read(int key, char* &value) {
-    string val;
+    std::string val;
     try {
         val = storage_.at(key);
     } catch(...) {
         value = nullptr;
         return -1;
     }
-    string decompressed = decompress(val);
+    std::string decompressed = decompress(val);
     int len = decompressed.length();
     value = new char[len+1];
     strcpy(value, decompressed.c_str());
@@ -25,7 +20,7 @@ int Storage::read(int key, char* &value) {
 }
 
 void Storage::write(int key, const char* chars, int len) {
-    string value(chars, len);
+    std::string value(chars, len);
     auto compressed_value = compress(value);
     storage_[key] = compressed_value;
 }

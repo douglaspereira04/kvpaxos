@@ -30,40 +30,40 @@ public:
     }
 
 
-    void add_vertice(T data) {
+    inline void add_vertice(T data) {
         if(vertex_weight_.find(data) == vertex_weight_.end()){
-            vertex_weight_[data] = 0;
+            vertex_weight_[data] = 1;
             edges_weight_[data] = vertex_weight_t();
         }
     }
 
-    void increment_vertice_weight(T data, int weight) {
+    inline void increment_vertice_weight(T data, int weight) {
         vertex_weight_[data] += weight;
         total_vertex_weight_ += weight;
     }
 
-    void remove_weightless_vertice(T vertice) {
+    inline void remove_weightless_vertice(T vertice) {
         if(vertex_weight_[vertice] == 0){
             vertex_weight_.erase(vertice);
             edges_weight_.erase(vertice);
         }
     }
 
-    void add_edge(T from, T to) {
+    inline void add_edge(T from, T to) {
         if (edges_weight_[from].find(to) == edges_weight_[from].end()) {
-            edges_weight_[from][to] = 0;
-            edges_weight_[to][from] = 0;
+            edges_weight_[from][to] = 1;
+            edges_weight_[to][from] = 1;
             n_edges_++;
         }
     }
 
-    void increment_edge_weight(T from, T to, int value) {
+    inline void increment_edge_weight(T from, T to, int value) {
         edges_weight_[from][to] += value;
         edges_weight_[to][from] += value;
         total_edges_weight_ += value;
     }
 
-    void remove_weightless_edge(T from, T to){
+    inline void remove_weightless_edge(T from, T to){
         if(edges_weight_[from][to] == 0){
             n_edges_--;
             edges_weight_[to].erase(from);

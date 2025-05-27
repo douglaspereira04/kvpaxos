@@ -3,13 +3,13 @@
 
 #include <string>
 #include <unordered_set>
+#include <pthread.h>
 
 #include "types/types.h"
 #include <fstream>
 
 
 namespace workload {
-using namespace std;
 
 class Request {
 public:
@@ -30,7 +30,7 @@ public:
         __args_len{len}
     {}
 
-    Request(RequestType type, int key, const string &args):
+    Request(RequestType type, int key, const std::string &args):
         __type{type},
         __key{key},
         __args_len{args.length()}
@@ -41,7 +41,7 @@ public:
     }
 
     ~Request(){
-        if (__type == WRITE){
+        if (__type == WRITE || __type == SCAN || REPARTITION){
             delete[] __args;
         }
     }
@@ -64,12 +64,45 @@ public:
     inline char* args() const {return __args;}
     inline size_t args_len() const {return __args_len;}
 
-    inline void barrier(pthread_barrier_t* barrier){
-        __args = reinterpret_cast<char*>(barrier);
+    inline void init_barrier(size_t n){
+        pthread_barrier_init(reinterpret_cast<pthread_barrier_t*>(__args), NULL, n);
+    }
+
+    template<typename T>
+    inline void init_scan_data(){
+        __args = new char[
+            sizeof(pthread_barrier_t)+
+            (sizeof(size_t)*__args_len)+
+            (sizeof(char*)*__args_len)+
+            (sizeof(T*)*__args_len)
+        ];
+    }
+
+    template<typename T>
+    inline void get_key_to_partition(T &data){
+        data = reinterpret_cast<T>(__args+
+            sizeof(pthread_barrier_t)+
+            (sizeof(size_t)*__args_len)+
+            (sizeof(char*)*__args_len));
+    }
+
+    inline void get_values(char** &data){
+        data = reinterpret_cast<char**>(__args+
+            sizeof(pthread_barrier_t)+
+            (sizeof(size_t)*__args_len));
+    }
+
+    inline void get_value_lengths(size_t* &data){
+        data = reinterpret_cast<size_t*>(__args+
+            sizeof(pthread_barrier_t));
     }
 
     inline pthread_barrier_t* barrier(){
         return reinterpret_cast<pthread_barrier_t*>(__args);
+    }
+
+    inline void barrier(pthread_barrier_t* barrier){
+        __args = reinterpret_cast<char*>(barrier);
     }
 
 private:
@@ -79,7 +112,7 @@ private:
     char* __args = nullptr;
 };
 
-    void read_request(Request* &request, ifstream &file);
+    void read_request(Request* &request, std::ifstream &file);
 }
 
 #endif

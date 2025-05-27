@@ -2,11 +2,10 @@
 
 
 namespace workload {
-    using namespace std;
 
-    void read_request(Request* &request, ifstream &file)
+    void read_request(Request* &request, std::ifstream &file)
     {    
-        string chars;
+        std::string chars;
         int key;
         getline(file, chars, ',');
         RequestType type = static_cast<RequestType>(atoi(chars.c_str()));
