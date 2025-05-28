@@ -116,33 +116,30 @@ public:
 
 private:
 
-    size_t read(int key, char* &val){
-        int len = storage.read(key, val);
-        if (len < 0){
-            exit(EXIT_FAILURE);
-        }
-        return len;
-    }
-
     inline void scan(Request* request, int &key){
         auto length = request->args_len();
-        __output_file << "scan( " << key << ", "<< length << " ): [";
+
+        if constexpr(utils::ENABLE_ANSWER){
+            __output_file << "scan( " << key << ", "<< length << " ): [";
+        }
         for (auto key_i = key; key_i < key+length; key_i++) {
-            char *value;
-            size_t len = read(key, value);
+            std::string *value;
+            int len = storage.read(key, value);
             if (len < 0){
                 error_count_++;
                 continue;
             }
-            for (size_t i = 0; i < len; i++)
-            {
-                __output_file << value[i];
-            }
-            __output_file << ", ";
 
-            delete[] value;
+            if constexpr(utils::ENABLE_ANSWER){
+                 __output_file << "\"" << *value << "\", ";
+            }
+
+            delete value;
         }
-        __output_file << "]\n";
+
+        if constexpr(utils::ENABLE_ANSWER){
+            __output_file << "]\n";
+        }
     }
 
     void thread_loop() {
@@ -156,18 +153,13 @@ private:
             {
             case READ:
             {   
-                char *value;
-                size_t len = read(key, value);
+                std::string *value;
+                int len = storage.read(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
-                    __output_file << "read( " << key << " ): ";
-                    for (size_t i = 0; i < len; i++)
-                    {
-                        __output_file << value[i];
-                    }
-                    __output_file << "\n";
+                    __output_file << "read( " << key << " ): " << *value << "\n";
                 }
                 if (len >= 0) {
-                    delete[] value;
+                    delete value;
                 }
                 delete request;
                 __n_executed_requests++;
@@ -176,16 +168,10 @@ private:
 
             case WRITE:
             {
-                size_t len = request->args_len();
-                char *value = request->args();
-                storage.write(key, value, len);
+                std::string *value = request->get_value_string();
+                storage.write(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
-                    __output_file << "write( " << key << ", ";
-                    for (size_t i = 0; i < len; i++)
-                    {
-                        __output_file << value[i];
-                    }
-                    __output_file << " )\n";
+                    __output_file << "write( " << key << ", " << *value << " )\n";
                 }
                 delete request;
                 __n_executed_requests++;

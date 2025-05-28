@@ -30,19 +30,19 @@ public:
         __args_len{len}
     {}
 
-    Request(RequestType type, int key, const std::string &args):
+    Request(RequestType type, int key, std::string *args):
         __type{type},
-        __key{key},
-        __args_len{args.length()}
+        __key{key}
     {
-        __args = new char[args.length() + 1];
-        strcpy(__args, args.c_str());
+        __args = reinterpret_cast<char*>(args);
         
     }
 
     ~Request(){
-        if (__type == WRITE || __type == SCAN || REPARTITION){
+        if (__type == SCAN || REPARTITION){
             delete[] __args;
+        } else if (__type == WRITE){
+            delete reinterpret_cast<std::string*>(__args);
         }
     }
     Request(Request& other) {
@@ -103,6 +103,10 @@ public:
 
     inline void barrier(pthread_barrier_t* barrier){
         __args = reinterpret_cast<char*>(barrier);
+    }
+
+    inline std::string *get_value_string(){
+        return reinterpret_cast<std::string*>(__args);
     }
 
 private:

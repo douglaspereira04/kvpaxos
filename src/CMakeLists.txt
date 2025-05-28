@@ -23,14 +23,19 @@ target_sources(
         PRIVATE
             replica.cpp
 )
-
 target_link_libraries(
     replica
         PRIVATE
+            rocksdb
             Boost::boost
             CONAN_PKG::toml11
             request
             types
             utils
             scheduler
+)
+target_include_directories(
+    replica
+        PUBLIC
+            "${CMAKE_SOURCE_DIR}/deps/rocksdb/include"
 )

@@ -15,6 +15,5 @@ conan(
         toml11/3.4.0
         tbb/2020.1
 )
-
-
+add_subdirectory(deps/rocksdb)
 add_subdirectory(src)
