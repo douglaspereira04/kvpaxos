@@ -16,8 +16,9 @@ namespace workload {
         } else if(type == WRITE) {
             getline(file, chars, ',');
             key = atoi(chars.c_str());
-            getline(file, chars);
-            request = new Request(type, key, chars);
+            std::string *value = new std::string();
+            getline(file, *value);
+            request = new Request(type, key, value);
         } else if(type == SCAN) {
             getline(file, chars, ',');
             key = atoi(chars.c_str());

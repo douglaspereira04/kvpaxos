@@ -7,9 +7,17 @@
 
 #include "types/types.h"
 #include <fstream>
+#include <atomic>
 
 
 namespace workload {
+
+
+struct scan_data_t{
+    std::atomic_int counter;
+    std::string** values;
+    char** key_to_addr;
+};
 
 class Request {
 public:
@@ -30,19 +38,21 @@ public:
         __args_len{len}
     {}
 
-    Request(RequestType type, int key, const std::string &args):
+    Request(RequestType type, int key, std::string *args):
         __type{type},
-        __key{key},
-        __args_len{args.length()}
+        __key{key}
     {
-        __args = new char[args.length() + 1];
-        strcpy(__args, args.c_str());
+        __args = reinterpret_cast<char*>(args);
         
     }
 
     ~Request(){
-        if (__type == WRITE || __type == SCAN || REPARTITION){
+        if (__type == SCAN) {
+            delete reinterpret_cast<scan_data_t*>(__args);
+        } else if (__type == REPARTITION){
             delete[] __args;
+        } else if (__type == WRITE){
+            delete reinterpret_cast<std::string*>(__args);
         }
     }
     Request(Request& other) {
@@ -62,47 +72,63 @@ public:
     inline RequestType type() const {return __type;}
     inline int key() const {return __key;}
     inline char* args() const {return __args;}
-    inline size_t args_len() const {return __args_len;}
+    inline const size_t & args_len() const {return __args_len;}
 
     inline void init_barrier(size_t n){
+        __args = reinterpret_cast<char*>(new pthread_barrier_t());
         pthread_barrier_init(reinterpret_cast<pthread_barrier_t*>(__args), NULL, n);
     }
 
-    template<typename T>
+    inline void destroy_barrier(){
+        pthread_barrier_destroy(reinterpret_cast<pthread_barrier_t*>(__args));
+    }
+
+    inline int barrier_wait(){
+        return pthread_barrier_wait(reinterpret_cast<pthread_barrier_t*>(__args));
+    }
+
     inline void init_scan_data(){
-        __args = new char[
-            sizeof(pthread_barrier_t)+
-            (sizeof(size_t)*__args_len)+
-            (sizeof(char*)*__args_len)+
-            (sizeof(T*)*__args_len)
-        ];
+        __args = new char[sizeof(scan_data_t)];
+        reinterpret_cast<scan_data_t*>(__args)->key_to_addr = new char*[__args_len];
+        reinterpret_cast<scan_data_t*>(__args)->values = new std::string*[__args_len];
     }
 
-    template<typename T>
-    inline void get_key_to_partition(T &data){
-        data = reinterpret_cast<T>(__args+
-            sizeof(pthread_barrier_t)+
-            (sizeof(size_t)*__args_len)+
-            (sizeof(char*)*__args_len));
+    inline void init_coordination(int involved_partitions){
+        reinterpret_cast<scan_data_t*>(__args)->counter.store(involved_partitions, std::memory_order_relaxed);
     }
 
-    inline void get_values(char** &data){
-        data = reinterpret_cast<char**>(__args+
-            sizeof(pthread_barrier_t)+
-            (sizeof(size_t)*__args_len));
+    inline void set_single_partition(){}
+
+    inline bool is_multi_partition(){
+        return __args != nullptr;
     }
 
-    inline void get_value_lengths(size_t* &data){
-        data = reinterpret_cast<size_t*>(__args+
-            sizeof(pthread_barrier_t));
+    inline char** get_key_to_addr(){
+        return reinterpret_cast<scan_data_t*>(__args)->key_to_addr;
+    }
+    template<typename PartitionT>
+    inline void set_key_to_partition(size_t &idx, PartitionT* &p_addr){
+        reinterpret_cast<scan_data_t*>(__args)->key_to_addr[idx] = reinterpret_cast<char*>(p_addr);
+    }
+    template<typename PartitionT>
+    inline bool key_in_partition(size_t &idx, PartitionT* p_addr){
+        return reinterpret_cast<scan_data_t*>(__args)->key_to_addr[idx] == reinterpret_cast<char*>(p_addr);
     }
 
-    inline pthread_barrier_t* barrier(){
-        return reinterpret_cast<pthread_barrier_t*>(__args);
+    inline std::string** get_scanned_values(){
+        return reinterpret_cast<scan_data_t*>(__args)->values;
+    }
+
+    inline bool is_coordinator(){
+        return 1 == reinterpret_cast<scan_data_t*>(__args)->counter.fetch_add(-1);
     }
 
     inline void barrier(pthread_barrier_t* barrier){
         __args = reinterpret_cast<char*>(barrier);
+    }
+
+    inline std::string *get_write_value(){
+        return reinterpret_cast<std::string*>(__args);
     }
 
 private:

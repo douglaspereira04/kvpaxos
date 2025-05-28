@@ -18,8 +18,8 @@ class Storage {
 public:
     Storage() = default;
 
-    int read(int key, char* &value);
-    void write(int key, const char *value, int len);
+    int read(int key, std::string* &value);
+    void write(int key, std::string *value);
     void del(int key);
 
 
@@ -27,6 +27,29 @@ private:
     storage_t storage_ = storage_t();
 
 };
+
+inline int Storage::read(int key, std::string* &value) {
+    std::string compressed;
+    try {
+         compressed = storage_.at(key);
+    } catch(...) {
+        value = nullptr;
+        return -1;
+    }
+    value = new std::string(std::move(decompress(compressed)));
+    int len = value->length();
+    return len;
+}
+
+inline void Storage::write(int key, std::string *value) {
+    auto compressed_value = compress(*value);
+    storage_[key] = compressed_value;
+}
+
+inline void Storage::del(int key) {
+    std::string null_value("null");
+    write(key, &null_value);
+}
 
 };
 

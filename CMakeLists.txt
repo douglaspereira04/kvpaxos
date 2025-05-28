@@ -19,7 +19,7 @@ conan(
         tbb/2020.1
 )
 
-
+add_subdirectory(deps/rocksdb)
 include(cmake/add_libkahip.cmake)
 include(cmake/add_libmetis.cmake)
 

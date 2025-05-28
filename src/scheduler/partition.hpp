@@ -27,7 +27,6 @@ using namespace workload;
 
 template <typename T, size_t Capacity = 0>
 class Partition {
-typedef std::unordered_map<T, Partition<T, Capacity>*> partition_map_t;
 public:
     Partition(int id)
         : __id{id},
@@ -36,7 +35,7 @@ public:
         storage[__id] = Storage();
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
     }
-
+    
     ~Partition() {
         if (worker_thread_.joinable()) {
             sem_post(&semaphore_);
@@ -108,7 +107,7 @@ public:
     }
 
 
-    static void add_old_partition_map(partition_map_t* version_map){
+    static void add_old_partition_map(std::unordered_map<int, Partition<T, Capacity>*>* version_map){
         version_maps_mtx.lock();
         version_maps.push_back(version_map);
         version_maps_mtx.unlock();
@@ -120,7 +119,7 @@ public:
     }
 private:
 
-    size_t read(int key, char* &val){
+    int read(int key, std::string* &val){
         int len = storage[__id].read(key, val);
         int len_old = -1;
         Storage* past_storage;
@@ -129,7 +128,7 @@ private:
             for (int i = version_count-1; i >= 0; i--)
             {
                 version_maps_mtx.lock_shared();
-                partition_map_t *map = version_maps.at(i);
+                std::unordered_map<int, Partition<T, Capacity>*> *map = version_maps.at(i);
                 version_maps_mtx.unlock_shared();
                 auto partition = map->find(key);
                 if (partition != map->end()){
@@ -137,17 +136,13 @@ private:
                     past_storage = previous_storage[i];
                     len_old = past_storage[past_id].read(key, val);
                     if (len_old >= 0){
-                        break;
+                        past_storage[past_id].del(key);
+                        storage[__id].write(key, val);
+                        return len_old;
                     }
                 }
             }
             
-        }
-
-        if (len < 0 && len_old >= 0) {
-            past_storage[past_id].del(key);
-            storage[__id].write(key, val, len_old);
-            return len_old;
         }
         if (len < 0 && len_old < 0){
             exit(EXIT_FAILURE);
@@ -155,24 +150,16 @@ private:
         return len;
     }
 
-    inline void scan_some(Request* request, int &key, size_t &length, char** &values, size_t* &values_lengths){
-        Partition<T,Capacity>** key_to_partition;
-        request->get_key_to_partition(key_to_partition);
-
-        if (key_to_partition[0] == this){
-            for (size_t i = 0; i < length; i++)
-            {
-                if (key_to_partition[i] == this || key_to_partition[i] == nullptr){
-                    int key_i = key + i;
-                    values_lengths[i] = read(key_i, values[i]);
-                }
-            }
-        } else {
-            for (size_t i = 0; i < length; i++)
-            {
-                if (key_to_partition[i] == this){
-                    int key_i = key + i;
-                    values_lengths[i] = read(key_i, values[i]);
+    inline void scan_some(Request* request, int &key){
+        std::string** values = request->get_scanned_values();
+        for (size_t i = 0; i < request->args_len(); i++)
+        {
+            if (request->key_in_partition(i, this)){
+                int key_i = key + i;
+                int len = read(key_i, values[i]);
+                if (len < 0){
+                    error_count_++;
+                    continue;
                 }
             }
         }
@@ -181,23 +168,28 @@ private:
     }
     inline void scan(Request* request, int &key){
         auto length = request->args_len();
-        __output_file << "scan( " << key << ", "<< length << " ): [";
+
+        if constexpr(utils::ENABLE_ANSWER){
+            __output_file << "scan( " << key << ", "<< length << " ): [";
+        }
         for (auto key_i = key; key_i < key+length; key_i++) {
-            char *value;
-            size_t len = read(key, value);
+            std::string *value;
+            int len = read(key, value);
             if (len < 0){
                 error_count_++;
                 continue;
             }
-            for (size_t i = 0; i < len; i++)
-            {
-                __output_file << value[i];
-            }
-            __output_file << ", ";
 
-            delete[] value;
+            if constexpr(utils::ENABLE_ANSWER){
+                 __output_file << "\"" << *value << "\", ";
+            }
+
+            delete value;
         }
-        __output_file << "]\n";
+
+        if constexpr(utils::ENABLE_ANSWER){
+            __output_file << "]\n";
+        }
     }
 
     void thread_loop() {
@@ -208,23 +200,20 @@ private:
             RequestType type = request->type();
             auto key = request->key();
             int coordinator = 0;
-            pthread_barrier_t * barrier;
             switch (type)
             {
             case READ:
             {   
-                char *value;
-                size_t len = read(key, value);
+                std::string *value;
+                int len = read(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
-                    __output_file << "read( " << key << " ): ";
-                    for (size_t i = 0; i < len; i++)
-                    {
-                        __output_file << value[i];
-                    }
-                    __output_file << "\n";
+                    __output_file << "read( " << key << " ): " << *value << "\n";
                 }
                 if (len >= 0) {
-                    delete[] value;
+                    delete value;
+                } else {
+                    error_count_++;
+                    continue;
                 }
                 delete request;
                 __n_executed_requests++;
@@ -233,16 +222,10 @@ private:
 
             case WRITE:
             {
-                size_t len = request->args_len();
-                char *value = request->args();
-                storage[__id].write(key, value, len);
+                std::string *value = request->get_write_value();
+                storage[__id].write(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
-                    __output_file << "write( " << key << ", ";
-                    for (size_t i = 0; i < len; i++)
-                    {
-                        __output_file << value[i];
-                    }
-                    __output_file << " )\n";
+                    __output_file << "write( " << key << ", " << *value << " )\n";
                 }
                 delete request;
                 __n_executed_requests++;
@@ -251,37 +234,29 @@ private:
 
             case SCAN:
             {
-                barrier = request->barrier();
-                size_t length = request->args_len();
-                char** values;
-                size_t* values_lengths;
-                request->get_values(values);
-                request->get_value_lengths(values_lengths);
-                if (barrier != nullptr){
-                    scan_some(request, key, length, values, values_lengths);
-                    coordinator = pthread_barrier_wait(barrier);
-                    if (coordinator) {
+                if (request->is_multi_partition()){
+                    scan_some(request, key);
+                    if (request->is_coordinator()) {
+                        std::string** values = request->get_scanned_values();
                         if constexpr(utils::ENABLE_ANSWER){
-                            __output_file << "scan( " << key << ", "<< length << " ): [";
-                            for (size_t i = 0; i < length; i++)
+                            __output_file << "scan( " << key << ", "<< request->args_len() << " ): [";
+                            for (size_t i = 0; i < request->args_len(); i++)
                             {
-                                __output_file << "\"";
-                                for (size_t j = 0; j < values_lengths[i]; j++)
-                                {
-                                    __output_file << values[i][j];
-                                }
-                                __output_file << "\",";
+                                __output_file << "\"" << *(values[i]) << "\",";
+                                delete values[i];
                             }
                             __output_file << "]\n";
                         }
-                        pthread_barrier_destroy(barrier);
+                        delete[] values;
+                        delete[] request->get_key_to_addr();
                         delete request;
+                        __n_executed_requests++;
                     }
                 } else {
                     scan(request, key);
                     delete request;
+                    __n_executed_requests++;
                 }
-                __n_executed_requests++;
                 break;
             }
 
@@ -296,8 +271,7 @@ private:
                 break;
             }
             case REPARTITION:
-                barrier = request->barrier();
-                coordinator = pthread_barrier_wait(barrier);
+                coordinator = request->barrier_wait();
                 if (coordinator) {
                     previous_storage.push_back(storage);
                     version_count++;
@@ -306,9 +280,9 @@ private:
                         __output_file << "repartition() \n";
                     }
                 }
-                coordinator = pthread_barrier_wait(barrier);
+                coordinator = request->barrier_wait();
                 if (coordinator) {
-                    pthread_barrier_destroy(barrier);
+                    request->destroy_barrier();
                     delete request;
                 }
                 storage[__id] = Storage();
@@ -344,7 +318,7 @@ private:
     static size_t partitions;
     static std::vector<Storage*> previous_storage;
     static int version_count;
-    static std::vector<partition_map_t*> version_maps;
+    static std::vector<std::unordered_map<T, Partition<T, Capacity>*>*> version_maps;
     static std::shared_mutex version_maps_mtx;
 
     std::ofstream __output_file;

@@ -4,3 +4,6 @@
 [submodule "deps/METIS"]
 	path = deps/METIS
 	url = https://github.com/KarypisLab/METIS.git
+[submodule "deps/rocksdb"]
+	path = deps/rocksdb
+	url = https://github.com/facebook/rocksdb.git
