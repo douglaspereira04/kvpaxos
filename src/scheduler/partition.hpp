@@ -25,8 +25,11 @@ namespace kvpaxos {
 using namespace kvstorage;
 using namespace workload;
 
-template <typename T, size_t Capacity = 0>
+template <typename T, size_t QSize = 0>
 class Partition {
+
+typedef Partition<T, QSize> partition_t;
+typedef std::unordered_map<T, partition_t*> partition_map_t;
 public:
     Partition(int id)
         : __id{id},
@@ -47,16 +50,16 @@ public:
 
     void start_worker_thread() {
         sem_init(&semaphore_, 0, 0);
-        if constexpr(Capacity > 0){
-            sem_init(&remaining_space_, 0, Capacity);
+        if constexpr(QSize > 0){
+            sem_init(&remaining_space_, 0, QSize);
         }
 
-        worker_thread_ = std::thread(&Partition<T, Capacity>::thread_loop, this);
+        worker_thread_ = std::thread(&partition_t::thread_loop, this);
         utils::set_affinity(__id+5, worker_thread_, cpu_set);
     }
 
     size_t request_queue_size() const {
-        if constexpr(Capacity > 0){
+        if constexpr(QSize > 0){
             return __bounded_requests_queue.read_available();
         } else {
             size_t size = __requests_queue.size();
@@ -69,7 +72,7 @@ public:
     }
 
     void push_request(Request *request) {
-        if constexpr(Capacity > 0){
+        if constexpr(QSize > 0){
             sem_wait(&remaining_space_);
             __bounded_requests_queue.push(request);
         }else{
@@ -84,7 +87,7 @@ public:
         Request *request;
         sem_wait(&semaphore_);
 
-        if constexpr(Capacity > 0){
+        if constexpr(QSize > 0){
             request = __bounded_requests_queue.front();
             __bounded_requests_queue.pop();
             sem_post(&remaining_space_);
@@ -107,7 +110,7 @@ public:
     }
 
 
-    static void add_old_partition_map(std::unordered_map<int, Partition<T, Capacity>*>* version_map){
+    static void add_old_partition_map(std::unordered_map<int, partition_t*>* version_map){
         version_maps_mtx.lock();
         version_maps.push_back(version_map);
         version_maps_mtx.unlock();
@@ -128,7 +131,7 @@ private:
             for (int i = version_count-1; i >= 0; i--)
             {
                 version_maps_mtx.lock_shared();
-                std::unordered_map<int, Partition<T, Capacity>*> *map = version_maps.at(i);
+                std::unordered_map<int, partition_t*> *map = version_maps.at(i);
                 version_maps_mtx.unlock_shared();
                 auto partition = map->find(key);
                 if (partition != map->end()){
@@ -309,7 +312,7 @@ private:
     std::thread worker_thread_;
     sem_t semaphore_;
     std::queue<Request*> __requests_queue;
-    boost::lockfree::spsc_queue<Request*, boost::lockfree::capacity<Capacity>> __bounded_requests_queue;
+    boost::lockfree::spsc_queue<Request*, boost::lockfree::capacity<QSize>> __bounded_requests_queue;
     std::mutex __queue_mutex;
 
     sem_t remaining_space_;
@@ -318,30 +321,30 @@ private:
     static size_t partitions;
     static std::vector<Storage*> previous_storage;
     static int version_count;
-    static std::vector<std::unordered_map<T, Partition<T, Capacity>*>*> version_maps;
+    static std::vector<partition_map_t*> version_maps;
     static std::shared_mutex version_maps_mtx;
 
     std::ofstream __output_file;
 
 
 };
-template<typename T, size_t Capacity>
-std::vector<Storage*> Partition<T, Capacity>::previous_storage;
+template<typename T, size_t QSize>
+std::vector<Storage*> Partition<T, QSize>::previous_storage;
 
-template<typename T, size_t Capacity>
-int Partition<T, Capacity>::version_count = 0;
+template<typename T, size_t QSize>
+int Partition<T, QSize>::version_count = 0;
 
-template<typename T, size_t Capacity>
-size_t Partition<T, Capacity>::partitions = 0;
+template<typename T, size_t QSize>
+size_t Partition<T, QSize>::partitions = 0;
 
-template<typename T, size_t Capacity>
-Storage* Partition<T, Capacity>::storage;
+template<typename T, size_t QSize>
+Storage* Partition<T, QSize>::storage;
 
-template<typename T, size_t Capacity>
-std::vector<std::unordered_map<T, Partition<T, Capacity>*>*> Partition<T, Capacity>::version_maps;
+template<typename T, size_t QSize>
+std::vector<std::unordered_map<T, Partition<T, QSize>*>*> Partition<T, QSize>::version_maps;
 
-template<typename T, size_t Capacity>
-std::shared_mutex Partition<T, Capacity>::version_maps_mtx;
+template<typename T, size_t QSize>
+std::shared_mutex Partition<T, QSize>::version_maps_mtx;
 
 }
 

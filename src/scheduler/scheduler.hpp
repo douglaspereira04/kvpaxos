@@ -27,36 +27,39 @@ using namespace kvstorage;
 using namespace workload;
 
 
-template <typename T, bool Rebalance, size_t TL = 0, size_t WorkerCapacity = 0, interval_type IntervalType = interval_type::OPERATIONS, size_t MaxSucessiveImbalances = 100>
+template <typename T, bool Rebalance, size_t TL = 0, size_t QSize = 0, interval_type IntervalType = interval_type::OPERATIONS, size_t MaxSucessiveImbalances = 100>
 class Scheduler{
+
+typedef kvpaxos::Partition<T, QSize> partition_t;
+typedef std::unordered_map<T, partition_t*> partition_map_t;
 public:
 
     Scheduler() {}
     Scheduler(int repartition_interval,
                 int n_partitions,
                 model::CutMethod repartition_method,
-                size_t queue_head_distance,
+                size_t dh,
                 float balance_threshold
     ) {
         __n_partitions = n_partitions;
-        if (queue_head_distance == 0) {
+        if (dh == 0) {
             scheduling_queue = model::Queue<Request*>(SEM_VALUE_MAX, 0);
         } else {
-            scheduling_queue = model::Queue<Request*>(1, queue_head_distance);
+            scheduling_queue = model::Queue<Request*>(1, dh);
         }
 
         round_robin_counter = 0;
         sync_counter = 0;
         __n_dispatched_requests = 0;
 
-        Partition<T, WorkerCapacity>::create_storage(__n_partitions);
+        partition_t::create_storage(__n_partitions);
         for (auto i = 0; i < __n_partitions; i++) {
-            auto* partition = new Partition<T, WorkerCapacity>(i);
+            auto* partition = new partition_t(i);
             __partitions.emplace(i, partition);
         }
-        data_to_partition = new std::unordered_map<int, Partition<T, WorkerCapacity>*>();
+        data_to_partition = new partition_map_t();
 
-        scheduling_thread = std::thread(&Scheduler<T, Rebalance, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::scheduling_loop, this);
+        scheduling_thread = std::thread(&Scheduler<T, Rebalance, TL, QSize, IntervalType, MaxSucessiveImbalances>::scheduling_loop, this);
         utils::set_affinity(2,scheduling_thread, scheduler_cpu_set);
 
         if constexpr(Rebalance) {
@@ -79,7 +82,7 @@ public:
             cross_partition_count = 0;
             repartition_method = repartition_method;
 
-            updated_data_to_partition = new std::unordered_map<int, Partition<T, WorkerCapacity>*>();
+            updated_data_to_partition = new partition_map_t();
 
             set_balance_threshold(balance_threshold);
             clear_imbalance_count();
@@ -97,10 +100,10 @@ public:
             }
 
             sem_init(&repart_semaphore, 0, 0);
-            reparting_thread = std::thread(&Scheduler<T, Rebalance, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::partitioning_loop, this);
+            reparting_thread = std::thread(&Scheduler<T, Rebalance, TL, QSize, IntervalType, MaxSucessiveImbalances>::partitioning_loop, this);
             utils::set_affinity(4, reparting_thread, reparting_cpu_set);
 
-            graph_thread = std::thread(&Scheduler<T, Rebalance, TL, WorkerCapacity, IntervalType, MaxSucessiveImbalances>::update_graph_loop, this);
+            graph_thread = std::thread(&Scheduler<T, Rebalance, TL, QSize, IntervalType, MaxSucessiveImbalances>::update_graph_loop, this);
             utils::set_affinity(3, graph_thread, graph_cpu_set);
         }
 
@@ -134,7 +137,7 @@ public:
     }
 
     void set_balance_threshold(float balance_threshold){
-        balance_threshold = balance_threshold;
+        __balance_threshold = balance_threshold;
     }
 
 
@@ -148,7 +151,7 @@ public:
         bool cross_partition_intensive = false;
         if ( __n_dispatched_requests > operation_start){
             float cross_partition_ratio = (cross_partition_count - cross_operation_start)/ static_cast<float>(__n_dispatched_requests - operation_start);
-            if (cross_partition_ratio > balance_threshold){
+            if (cross_partition_ratio > __balance_threshold){
                 sucessive_cross_partition_intensive += 1;
                 if (sucessive_cross_partition_intensive > MaxSucessiveImbalances){
                     cross_partition_intensive = true;
@@ -180,7 +183,7 @@ public:
         }
 
         float avg = static_cast<float>(sum)/__n_partitions;
-        float threshold = avg * balance_threshold;
+        float threshold = avg * __balance_threshold;
         for (i = 0; i < __n_partitions; i++) {
             if (abs(__in_queue_amount[i] - avg) > threshold){
                 sucessive_imbalance[i] = sucessive_imbalance[i] + 1; //<< 1;
@@ -198,15 +201,15 @@ public:
         return imbalance;
     }
 
-    std::unordered_set<Partition<T, WorkerCapacity>*> involved_partitions(
+    std::unordered_set<partition_t*> involved_partitions(
         Request* request)
     {
-        std::unordered_set<Partition<T, WorkerCapacity>*> partitions;
+        std::unordered_set<partition_t*> partitions;
         auto type = request->type();
         size_t range = 1;
         bool new_mapping = false;
         int key;
-        Partition<T, WorkerCapacity>* new_assignment = nullptr;
+        partition_t* new_assignment = nullptr;
 
         if (type == SCAN) {
             range = request->args_len();
@@ -228,7 +231,7 @@ public:
                         new_assignment = __partitions.at(round_robin_counter);
                         request->set_key_to_partition(i, new_assignment);
                     } else {
-                        Partition<T, WorkerCapacity>* partition = data_to_partition->at(key);
+                        partition_t* partition = data_to_partition->at(key);
                         partitions.insert(partition);
                         request->set_key_to_partition(i, partition);
                     }
@@ -253,7 +256,7 @@ public:
     }
     
     void dispatch(Request* request){
-        std::unordered_set<Partition<T, WorkerCapacity>*> partitions = involved_partitions(request);
+        std::unordered_set<partition_t*> partitions = involved_partitions(request);
         bool is_cross_partition = partitions.size() > 1;
         if (is_cross_partition) {
             for (auto partition : partitions) {
@@ -315,10 +318,10 @@ public:
     }
 
 
-    void sync_repartition(std::unordered_map<int, Partition<T, WorkerCapacity>*> * old_partition_map) {
+    void sync_repartition(partition_map_t * old_partition_map) {
         Request *sync_request = new Request(REPARTITION);
         sync_request->init_barrier(__n_partitions);
-        Partition<T, WorkerCapacity>::add_old_partition_map(old_partition_map);
+        partition_t::add_old_partition_map(old_partition_map);
 
         for (auto& kv: __partitions) {
             auto* partition = kv.second;
@@ -351,7 +354,7 @@ public:
     }
 
     void update_partition_scheme(){
-        std::unordered_map<int, Partition<T, WorkerCapacity>*> *old_data_to_partition =  data_to_partition;
+        partition_map_t *old_data_to_partition =  data_to_partition;
         data_to_partition = updated_data_to_partition;
 
         sync_repartition(old_data_to_partition);
@@ -477,7 +480,7 @@ public:
     }
 
 
-    std::unordered_map<int, Partition<T, WorkerCapacity>*>* partitioning(InputGraph<T> &graph) {
+    partition_map_t* partitioning(InputGraph<T> &graph) {
 
         if constexpr(utils::ENABLE_INFO){
             __repartition_timestamps.push_back(utils::now());
@@ -499,7 +502,7 @@ public:
             __repartition_end_timestamps.push_back(utils::now());
             reconstruction_begin = utils::now();
         }
-        auto data_to_partition = new std::unordered_map<int, Partition<T, WorkerCapacity>*>();
+        auto data_to_partition = new partition_map_t();
 
         for (auto& it : graph.vertice_to_pos) {
             T key = it.first;
@@ -606,8 +609,8 @@ public:
     int sync_counter = 0;
     int __n_dispatched_requests = 0;
 
-    std::unordered_map<int, Partition<T, WorkerCapacity>*> __partitions;
-    std::unordered_map<int, Partition<T, WorkerCapacity>*>* data_to_partition;
+    partition_map_t __partitions;
+    partition_map_t* data_to_partition;
 
     std::thread graph_thread;
     cpu_set_t graph_cpu_set;
@@ -640,7 +643,7 @@ public:
 
     size_t cross_partition_count = 0;
 
-    std::unordered_map<int, Partition<T, WorkerCapacity>*>* updated_data_to_partition;
+    partition_map_t* updated_data_to_partition;
     InputGraph<T> input_graph;
 
     sem_t repart_semaphore;
@@ -659,7 +662,7 @@ public:
     std::atomic_bool repartition;
     int operation_start = 0;
 
-    float balance_threshold;
+    float __balance_threshold;
     size_t * __in_queue_amount;
 
     uint32_t* sucessive_imbalance;
