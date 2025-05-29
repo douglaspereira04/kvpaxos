@@ -46,15 +46,18 @@ public:
         
     }
 
-    ~Request(){
-        if (__type == SCAN) {
-            delete reinterpret_cast<scan_data_t*>(__args);
-        } else if (__type == REPARTITION){
-            delete[] __args;
-        } else if (__type == WRITE){
-            delete reinterpret_cast<std::string*>(__args);
-        }
+    ~Request(){}
+
+    void destroy_multi_partition_scan(){
+        delete[] reinterpret_cast<scan_data_t*>(__args)->values;
+        delete[] reinterpret_cast<scan_data_t*>(__args)->key_to_addr;
+        delete reinterpret_cast<scan_data_t*>(__args);
     }
+
+    void destroy_write(){
+        delete reinterpret_cast<std::string*>(__args);
+    }
+
     Request(Request& other) {
         __type = other.__type;
         __key = other.__key;
@@ -81,6 +84,7 @@ public:
 
     inline void destroy_barrier(){
         pthread_barrier_destroy(reinterpret_cast<pthread_barrier_t*>(__args));
+        delete reinterpret_cast<pthread_barrier_t*>(__args);
     }
 
     inline int barrier_wait(){

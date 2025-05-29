@@ -227,6 +227,7 @@ private:
                 if constexpr(utils::ENABLE_ANSWER){
                     __output_file << "write( " << key << ", " << *value << " )\n";
                 }
+                request->destroy_write();
                 delete request;
                 __n_executed_requests++;
                 break;
@@ -247,8 +248,7 @@ private:
                             }
                             __output_file << "]\n";
                         }
-                        delete[] values;
-                        delete[] request->get_key_to_addr();
+                        request->destroy_multi_partition_scan();
                         delete request;
                         __n_executed_requests++;
                     }
