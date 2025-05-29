@@ -165,9 +165,9 @@ run()
 	cpu_set_t workload_cpu_set;
 	utils::set_affinity(1,workload_thread, workload_cpu_set);
 	
-	partition->join();
 	workload_thread.join();
 	throughput_thread.join();
+	partition->join();
 	requests_file.close();
 
 	auto end_execution_timestamp = utils::now();

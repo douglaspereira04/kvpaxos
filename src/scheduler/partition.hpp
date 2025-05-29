@@ -25,9 +25,11 @@ namespace kvpaxos {
 using namespace kvstorage;
 using namespace workload;
 
-template <typename T, size_t Capacity = 0>
+template <typename T, size_t QSize = 0>
 class Partition {
-typedef std::unordered_map<T, Partition<T, Capacity>*> partition_map_t;
+
+typedef Partition<T, QSize> partition_t;
+typedef std::unordered_map<T, partition_t*> partition_map_t;
 public:
     Partition(int id)
         : __id{id},
@@ -55,16 +57,16 @@ public:
 
     void start_worker_thread() {
         sem_init(&semaphore_, 0, 0);
-        if constexpr(Capacity > 0){
-            sem_init(&remaining_space_, 0, Capacity);
+        if constexpr(QSize > 0){
+            sem_init(&remaining_space_, 0, QSize);
         }
 
-        worker_thread_ = std::thread(&Partition<T, Capacity>::thread_loop, this);
-        utils::set_affinity(1, worker_thread_, cpu_set);
+        worker_thread_ = std::thread(&partition_t::thread_loop, this);
+        utils::set_affinity(__id+2, worker_thread_, cpu_set);
     }
 
     size_t request_queue_size() const {
-        if constexpr(Capacity > 0){
+        if constexpr(QSize > 0){
             return __bounded_requests_queue.read_available();
         } else {
             size_t size = __requests_queue.size();
@@ -77,7 +79,7 @@ public:
     }
 
     void push_request(Request *request) {
-        if constexpr(Capacity > 0){
+        if constexpr(QSize > 0){
             sem_wait(&remaining_space_);
             __bounded_requests_queue.push(request);
         }else{
@@ -92,7 +94,7 @@ public:
         Request *request;
         sem_wait(&semaphore_);
 
-        if constexpr(Capacity > 0){
+        if constexpr(QSize > 0){
             request = __bounded_requests_queue.front();
             __bounded_requests_queue.pop();
             sem_post(&remaining_space_);
@@ -160,6 +162,9 @@ private:
                 }
                 if (len >= 0) {
                     delete value;
+                } else {
+                    error_count_++;
+                    continue;
                 }
                 delete request;
                 __n_executed_requests++;
@@ -168,11 +173,12 @@ private:
 
             case WRITE:
             {
-                std::string *value = request->get_value_string();
+                std::string *value = request->get_write_value();
                 storage.write(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
                     __output_file << "write( " << key << ", " << *value << " )\n";
                 }
+                request->destroy_write();
                 delete request;
                 __n_executed_requests++;
                 break;
@@ -218,7 +224,7 @@ private:
     std::thread worker_thread_;
     sem_t semaphore_;
     std::queue<Request*> __requests_queue;
-    boost::lockfree::spsc_queue<Request*, boost::lockfree::capacity<Capacity>> __bounded_requests_queue;
+    boost::lockfree::spsc_queue<Request*, boost::lockfree::capacity<QSize>> __bounded_requests_queue;
     std::mutex __queue_mutex;
 
     sem_t remaining_space_;
@@ -229,8 +235,8 @@ private:
 
 };
 
-template<typename T, size_t Capacity>
-Storage Partition<T, Capacity>::storage;
+template<typename T, size_t QSize>
+Storage Partition<T, QSize>::storage;
 
 }
 
