@@ -119,8 +119,8 @@ public:
         return reinterpret_cast<scan_data_t*>(__args)->key_to_addr[idx] == reinterpret_cast<char*>(p_addr);
     }
 
-    inline std::string** get_scanned_values(){
-        return reinterpret_cast<scan_data_t*>(__args)->values;
+    inline std::string*& get_scanned_values(){
+        return *reinterpret_cast<scan_data_t*>(__args)->values;
     }
 
     inline bool is_coordinator(){
@@ -131,8 +131,8 @@ public:
         __args = reinterpret_cast<char*>(barrier);
     }
 
-    inline std::string *get_write_value(){
-        return reinterpret_cast<std::string*>(__args);
+    inline const std::string& get_write_value(){
+        return *reinterpret_cast<std::string*>(__args);
     }
 
 private:

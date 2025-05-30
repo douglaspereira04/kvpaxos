@@ -19,8 +19,8 @@ public:
         storage_ = storage_t();
     }
 
-    int read(int key, std::string* &value);
-    void write(int key, std::string *value);
+    int read(int key, std::string &value);
+    void write(int key, std::string &value);
     void del(int key);
 
 
@@ -29,7 +29,7 @@ private:
 
 };
 
-inline int TBBStorage::read(int key, std::string* &value) {
+inline int TBBStorage::read(int key, std::string &value) {
     std::string compressed;
     try {
          compressed = storage_.at(key);
@@ -37,19 +37,18 @@ inline int TBBStorage::read(int key, std::string* &value) {
         value = nullptr;
         return -1;
     }
-    value = new std::string(std::move(decompress(compressed)));
-    int len = value->length();
-    return len;
+    value = std::move(decompress(compressed));
+    return value.length();
 }
 
-inline void TBBStorage::write(int key, std::string *value) {
-    auto compressed_value = compress(*value);
+inline void TBBStorage::write(int key, std::string &value) {
+    auto compressed_value = compress(value);
     storage_[key] = compressed_value;
 }
 
 inline void TBBStorage::del(int key) {
     std::string null_value("null");
-    write(key, &null_value);
+    write(key, null_value);
 }
 
 };

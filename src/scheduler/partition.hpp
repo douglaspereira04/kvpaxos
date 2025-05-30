@@ -19,7 +19,7 @@
 #include <boost/lockfree/spsc_queue.hpp>
 
 #include "request.hpp"
-#include "tbb_storage.h"
+#include "rocks_db_storage.h"
 #include "types.h"
 #include "utils.h"
 
@@ -27,7 +27,7 @@ namespace kvpaxos {
 using namespace kvstorage;
 using namespace workload;
 
-typedef TBBStorage storage_t;
+typedef RocksDBStorage storage_t;
 
 
 template <typename T, size_t QSize = 0>
@@ -130,7 +130,7 @@ private:
             __output_file << "scan( " << key << ", "<< length << " ): [";
         }
         for (auto key_i = key; key_i < key+length; key_i++) {
-            std::string *value;
+            std::string value;
             int len = storage.read(key, value);
             if (len < 0){
                 error_count_++;
@@ -138,10 +138,8 @@ private:
             }
 
             if constexpr(utils::ENABLE_ANSWER){
-                 __output_file << "\"" << *value << "\", ";
+                 __output_file << "\"" << value << "\", ";
             }
-
-            delete value;
         }
 
         if constexpr(utils::ENABLE_ANSWER){
@@ -160,14 +158,12 @@ private:
             {
             case READ:
             {   
-                std::string *value;
+                std::string value;
                 int len = storage.read(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
-                    __output_file << "read( " << key << " ): " << *value << "\n";
+                    __output_file << "read( " << key << " ): " << value << "\n";
                 }
-                if (len >= 0) {
-                    delete value;
-                } else {
+                if (len < 0) {
                     error_count_++;
                     continue;
                 }
@@ -178,10 +174,10 @@ private:
 
             case WRITE:
             {
-                std::string *value = request->get_write_value();
+                const std::string value = request->get_write_value();
                 storage.write(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
-                    __output_file << "write( " << key << ", " << *value << " )\n";
+                    __output_file << "write( " << key << ", " << value << " )\n";
                 }
                 request->destroy_write();
                 delete request;
@@ -223,7 +219,7 @@ private:
 
     int __id;
     size_t __n_executed_requests;
-    static storage_t storage;
+    storage_t storage;
     cpu_set_t cpu_set;
 
     std::thread worker_thread_;
@@ -239,9 +235,6 @@ private:
 
 
 };
-
-template<typename T, size_t QSize>
-storage_t Partition<T, QSize>::storage;
 
 }
 

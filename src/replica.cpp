@@ -36,6 +36,7 @@
 #include "utils.h"
 #include "request.hpp"
 #include "partition.hpp"
+#include <rocksdb/db.h>
 
 using namespace workload;
 
@@ -197,5 +198,4 @@ main(int argc, char const *argv[])
 
 	params = const_cast<char**>(argv);
 	run();
-	
 }

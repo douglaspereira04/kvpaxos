@@ -23,6 +23,7 @@ target_link_libraries(
             utils
             request
             scheduler
+            rocksdb
 )
 
 target_include_directories(replica
