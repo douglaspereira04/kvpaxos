@@ -2,12 +2,12 @@
 #define WORKLOAD_REQUEST_H
 
 #include <string>
-#include <unordered_set>
+#include <cstring>
 #include <pthread.h>
-
-#include "types/types.h"
 #include <fstream>
 #include <atomic>
+
+#include "types.h"
 
 
 namespace workload {

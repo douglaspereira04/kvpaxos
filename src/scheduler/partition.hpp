@@ -2,28 +2,33 @@
 #define KVPAXOS_PARTITION_H
 
 
-#include <pthread.h>
+#include <unordered_map>
 #include <queue>
+#include <string>
+#include <iostream>
+#include <fstream>
+#include <csignal>
+#include <iostream>
+
+#include <thread>
+#include <pthread.h>
 #include <mutex>
 #include <semaphore.h>
 #include <shared_mutex>
-#include <string>
-#include <thread>
-#include <unordered_map>
-#include "request/request.hpp"
-#include "storage/storage.h"
-#include "types/types.h"
-#include <boost/lockfree/spsc_queue.hpp>
-#include <iostream>
-#include "utils/utils.h"
-#include <fstream>
 
-#include <csignal>
-#include <iostream>
+#include <boost/lockfree/spsc_queue.hpp>
+
+#include "request.hpp"
+#include "tbb_storage.h"
+#include "types.h"
+#include "utils.h"
 
 namespace kvpaxos {
 using namespace kvstorage;
 using namespace workload;
+
+typedef TBBStorage storage_t;
+
 
 template <typename T, size_t QSize = 0>
 class Partition {
@@ -35,7 +40,7 @@ public:
         : __id{id},
           __n_executed_requests{0}
     {
-        storage = Storage();
+        storage = storage_t();
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
     }
     
@@ -218,7 +223,7 @@ private:
 
     int __id;
     size_t __n_executed_requests;
-    static Storage storage;
+    static storage_t storage;
     cpu_set_t cpu_set;
 
     std::thread worker_thread_;
@@ -236,7 +241,7 @@ private:
 };
 
 template<typename T, size_t QSize>
-Storage Partition<T, QSize>::storage;
+storage_t Partition<T, QSize>::storage;
 
 }
 

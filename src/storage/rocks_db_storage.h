@@ -1,19 +1,16 @@
-#ifndef _KVPAXOS_ROCKS_STORAGE_H_
-#define _KVPAXOS_ROCKS_STORAGE_H_
+#ifndef _KVPAXOS_ROCKS_DB_STORAGE_H_
+#define _KVPAXOS_ROCKS_DB_STORAGE_H_
 
 
 #include <string>
-#include <unordered_map>
-#include <vector>
-
-#include "compresser/compresser.h"
-#include "types/types.h"
 #include <atomic>
 #include <rocksdb/db.h>
 
+#include "storage.h"
+
 namespace kvstorage {
 
-class RocksStorage {
+class RocksStorage : public Storage {
 public:
     RocksStorage(){
         rocksdb::Options options;

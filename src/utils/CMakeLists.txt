@@ -1,15 +1,3 @@
-add_library(utils)
-
-target_sources(
-    utils
-        PUBLIC
-            utils.h
-        PRIVATE
-        utils.cpp
-)
-
-target_include_directories(
-    utils
-        PUBLIC
-            "${CMAKE_SOURCE_DIR}/src"
-)
+add_library(utils utils.cpp)
+target_include_directories(utils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(utils PUBLIC types)

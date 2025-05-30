@@ -1,27 +1,16 @@
-add_library(scheduler)
+add_library(scheduler partition.cpp)
 
-target_sources(
-    scheduler
-        PUBLIC
-            partition.hpp
-        PRIVATE
-            partition.cpp
+target_include_directories(scheduler
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-
-target_include_directories(
-    scheduler
-        PUBLIC
-            "${CMAKE_SOURCE_DIR}/src"
-            "${CMAKE_SOURCE_DIR}/deps/rocksdb/include"
-)
-
+find_package(Boost REQUIRED)
 target_link_libraries(
     scheduler
         PUBLIC
-            rocksdb
-            storage
-            request
+            Boost::boost
             types
             utils
+            request
+            storage
 )

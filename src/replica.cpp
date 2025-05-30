@@ -31,10 +31,11 @@
 #include <fstream>
 #include <thread>
 #include <random>
-#include "types/types.h"
-#include "utils/utils.h"
-#include "request/request.hpp"
-#include "scheduler/partition.hpp"
+
+#include "types.h"
+#include "utils.h"
+#include "request.hpp"
+#include "partition.hpp"
 
 using namespace workload;
 

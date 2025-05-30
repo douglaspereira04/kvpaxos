@@ -5,10 +5,7 @@ add_subdirectory(utils)
 add_subdirectory(storage)
 add_subdirectory(scheduler)
 
-find_package(Boost REQUIRED)
-
-add_executable(replica)
-
+add_executable(replica replica.cpp)
 
 IF(${INFO} STREQUAL "ON")
     target_compile_definitions(replica PUBLIC INFO)
@@ -18,24 +15,17 @@ IF(${ANSWER} STREQUAL "ON")
 ENDIF()
 add_definitions( -DQ_SIZE=${Q_SIZE} )
 
-target_sources(
-    replica
-        PRIVATE
-            replica.cpp
-)
 target_link_libraries(
     replica
         PRIVATE
-            rocksdb
-            Boost::boost
-            CONAN_PKG::toml11
-            request
+            pthread
             types
             utils
+            request
             scheduler
 )
-target_include_directories(
-    replica
-        PUBLIC
-            "${CMAKE_SOURCE_DIR}/deps/rocksdb/include"
+
+target_include_directories(replica
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
 )

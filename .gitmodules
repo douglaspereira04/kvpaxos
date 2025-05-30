@@ -1,3 +1,9 @@
-[submodule "deps/rocksdb"]
-	path = deps/rocksdb
+[submodule "external/zlib"]
+	path = external/zlib
+	url = https://github.com/madler/zlib.git
+[submodule "external/oneTBB"]
+	path = external/oneTBB
+	url = https://github.com/oneapi-src/oneTBB.git
+[submodule "external/rocksdb"]
+	path = external/rocksdb
 	url = https://github.com/facebook/rocksdb.git
