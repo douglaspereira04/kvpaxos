@@ -1,7 +1,7 @@
-[submodule "deps/KaHIP"]
+[submodule "external/KaHIP"]
 	path = external/KaHIP
 	url = https://github.com/KaHIP/KaHIP.git
-[submodule "deps/METIS"]
+[submodule "external/METIS"]
 	path = external/METIS
 	url = https://github.com/KarypisLab/METIS.git
 [submodule "external/oneTBB"]
