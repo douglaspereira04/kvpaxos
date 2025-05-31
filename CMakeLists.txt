@@ -25,11 +25,6 @@ set(WITH_EXAMPLES OFF CACHE BOOL "Disable RocksDB samplkes")
 set(WITH_RUNTIME_DEBUG OFF CACHE BOOL "Disable RocksDB runtime debug")
 set(ROCKSDB_BUILD_SHARED OFF CACHE BOOL "Disable RocksDB shared")
 
-# Disable oneTBB tests, build static
-set(TBB_TEST OFF CACHE BOOL "Disable TBB tests")
-set(TBB_EXAMPLES OFF CACHE BOOL "Build TBB examples")
-add_subdirectory(external/oneTBB)
-
 # Disable zlib programs/tests, build static
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build zlib, TBB static")
 set(SKIP_INSTALL_ALL ON CACHE BOOL "Skip install targets for zlib")
