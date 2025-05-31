@@ -42,6 +42,6 @@ target_include_directories(replica
 target_include_directories(
     replica
         PUBLIC
-            "${CMAKE_SOURCE_DIR}/deps/rocksdb/include"
-            "${CMAKE_SOURCE_DIR}/deps/KaHIP/interface"
+            "${CMAKE_SOURCE_DIR}/external/rocksdb/include"
+            "${CMAKE_SOURCE_DIR}/external/KaHIP/interface"
 )

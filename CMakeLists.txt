@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 project(kvstore CXX)
 
-include(cmake/base.cmake)
-include(cmake/project_options.cmake)
-include(cmake/conan.cmake)
-
 option(INF "description" ON)
 option(ANSWER "description" ON)
 set(TRACK_LENGTH "0" CACHE STRING "PATTERN TRACKER GRAPH SIZE (0 for INFINITY)")
@@ -32,11 +28,12 @@ set(TBB_INSTALL OFF CACHE BOOL "Enable TBB static library")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build zlib, TBB static")
 set(SKIP_INSTALL_ALL ON CACHE BOOL "Skip install targets for zlib")
 
+set(GKLIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/external/GKlib)
+add_subdirectory(external/GKlib)
+add_subdirectory(external/METIS)
+add_subdirectory(external/KaHIP)
 add_subdirectory(external/zlib)
 add_subdirectory(external/oneTBB)
 add_subdirectory(external/rocksdb)
-
-include(cmake/add_libkahip.cmake)
-include(cmake/add_libmetis.cmake)
 
 add_subdirectory(src)
