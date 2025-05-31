@@ -1,7 +1,7 @@
 #ifndef _KVPAXOS_INPUT_GRAPH_H_
 #define _KVPAXOS_INPUT_GRAPH_H_
 
-#include "graph/graph.hpp"
+#include "graph.hpp"
 #include <vector>
 #include <unordered_map>
 

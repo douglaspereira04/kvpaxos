@@ -22,13 +22,13 @@ public:
 private:
     rocksdb::DB* __storage;
     static std::atomic_int db_counter;
+    static std::string id;
 
 };
 
 inline int RocksDBStorage::read(int key, std::string &value) {
     rocksdb::Status status = __storage->Get(rocksdb::ReadOptions(), std::to_string(key), &value);
     if (status.IsNotFound()) {
-        value = nullptr;
         return -1;
     }
     return value.size();

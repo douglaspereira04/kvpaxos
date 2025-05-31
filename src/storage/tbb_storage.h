@@ -34,7 +34,6 @@ inline int TBBStorage::read(int key, std::string &value) {
     try {
          compressed = storage_.at(key);
     } catch(...) {
-        value = nullptr;
         return -1;
     }
     value = std::move(decompress(compressed));

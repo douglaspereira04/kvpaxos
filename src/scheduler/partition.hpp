@@ -20,13 +20,13 @@
 #include "types.h"
 #include "utils.h"
 #include "request.hpp"
-#include "tbb_storage.h"
+#include "rocks_db_storage.h"
 
 namespace kvpaxos {
 using namespace kvstorage;
 using namespace workload;
 
-typedef TBBStorage storage_t;
+typedef RocksDBStorage storage_t;
 
 template <typename T, size_t QSize = 0>
 class Partition {
@@ -38,7 +38,7 @@ public:
         : __id{id},
           __n_executed_requests{0}
     {
-        storage[__id] = TBBStorage();
+        storage[__id] = storage_t();
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
     }
     
@@ -121,14 +121,14 @@ public:
 
     static void create_storage(size_t partitions_){
         partitions = partitions_;
-        storage = new TBBStorage[partitions];
+        storage = new storage_t[partitions];
     }
 private:
 
     int read(int key, std::string& val){
         int len = storage[__id].read(key, val);
         int len_old = -1;
-        TBBStorage* past_storage;
+        storage_t* past_storage;
         int past_id;
         if (len < 0){
             for (int i = version_count-1; i >= 0; i--)
@@ -223,10 +223,10 @@ private:
 
             case WRITE:
             {
-                std::string value = request->get_write_value();
+                const std::string value = request->get_write_value();
                 storage[__id].write(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
-                    __output_file << "write( " << key << ", " << *value << " )\n";
+                    __output_file << "write( " << key << ", " << value << " )\n";
                 }
                 request->destroy_write();
                 delete request;
@@ -274,7 +274,7 @@ private:
                 if (coordinator) {
                     previous_storage.push_back(storage);
                     version_count++;
-                    storage = new TBBStorage[partitions];
+                    storage = new storage_t[partitions];
                     if constexpr(utils::ENABLE_ANSWER){
                         __output_file << "repartition() \n";
                     }
@@ -284,7 +284,7 @@ private:
                     request->destroy_barrier();
                     delete request;
                 }
-                storage[__id] = TBBStorage();
+                storage[__id] = storage_t();
                 break;
             case ERROR:
                 if constexpr(utils::ENABLE_ANSWER){
@@ -302,7 +302,7 @@ private:
 
     int __id;
     size_t __n_executed_requests;
-    static TBBStorage *storage;
+    static storage_t *storage;
     cpu_set_t cpu_set;
 
     std::thread worker_thread_;
@@ -315,7 +315,7 @@ private:
 
     size_t error_count_ = 0;
     static size_t partitions;
-    static std::vector<TBBStorage*> previous_storage;
+    static std::vector<storage_t*> previous_storage;
     static int version_count;
     static std::vector<partition_map_t*> version_maps;
     static std::shared_mutex version_maps_mtx;
@@ -325,7 +325,7 @@ private:
 
 };
 template<typename T, size_t QSize>
-std::vector<TBBStorage*> Partition<T, QSize>::previous_storage;
+std::vector<storage_t*> Partition<T, QSize>::previous_storage;
 
 template<typename T, size_t QSize>
 int Partition<T, QSize>::version_count = 0;
@@ -334,7 +334,7 @@ template<typename T, size_t QSize>
 size_t Partition<T, QSize>::partitions = 0;
 
 template<typename T, size_t QSize>
-TBBStorage* Partition<T, QSize>::storage;
+storage_t* Partition<T, QSize>::storage;
 
 template<typename T, size_t QSize>
 std::vector<std::unordered_map<T, Partition<T, QSize>*>*> Partition<T, QSize>::version_maps;
