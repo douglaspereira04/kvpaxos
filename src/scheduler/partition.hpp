@@ -10,20 +10,23 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
-#include "request/request.hpp"
-#include "storage/storage.h"
-#include "types/types.h"
-#include <boost/lockfree/spsc_queue.hpp>
 #include <iostream>
-#include "utils/utils.h"
 #include <fstream>
-
 #include <csignal>
 #include <iostream>
+
+#include <boost/lockfree/spsc_queue.hpp>
+
+#include "types.h"
+#include "utils.h"
+#include "request.hpp"
+#include "tbb_storage.h"
 
 namespace kvpaxos {
 using namespace kvstorage;
 using namespace workload;
+
+typedef TBBStorage storage_t;
 
 template <typename T, size_t QSize = 0>
 class Partition {
@@ -35,7 +38,7 @@ public:
         : __id{id},
           __n_executed_requests{0}
     {
-        storage[__id] = Storage();
+        storage[__id] = TBBStorage();
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
     }
     
@@ -118,14 +121,14 @@ public:
 
     static void create_storage(size_t partitions_){
         partitions = partitions_;
-        storage = new Storage[partitions];
+        storage = new TBBStorage[partitions];
     }
 private:
 
-    int read(int key, std::string* &val){
+    int read(int key, std::string& val){
         int len = storage[__id].read(key, val);
         int len_old = -1;
-        Storage* past_storage;
+        TBBStorage* past_storage;
         int past_id;
         if (len < 0){
             for (int i = version_count-1; i >= 0; i--)
@@ -154,12 +157,11 @@ private:
     }
 
     inline void scan_some(Request* request, int &key){
-        std::string** values = request->get_scanned_values();
         for (size_t i = 0; i < request->args_len(); i++)
         {
             if (request->key_in_partition(i, this)){
                 int key_i = key + i;
-                int len = read(key_i, values[i]);
+                int len = read(key_i, request->get_scaned_value(i));
                 if (len < 0){
                     error_count_++;
                     continue;
@@ -176,7 +178,7 @@ private:
             __output_file << "scan( " << key << ", "<< length << " ): [";
         }
         for (auto key_i = key; key_i < key+length; key_i++) {
-            std::string *value;
+            std::string value;
             int len = read(key, value);
             if (len < 0){
                 error_count_++;
@@ -184,10 +186,8 @@ private:
             }
 
             if constexpr(utils::ENABLE_ANSWER){
-                 __output_file << "\"" << *value << "\", ";
+                 __output_file << "\"" << value << "\", ";
             }
-
-            delete value;
         }
 
         if constexpr(utils::ENABLE_ANSWER){
@@ -207,14 +207,12 @@ private:
             {
             case READ:
             {   
-                std::string *value;
+                std::string value;
                 int len = read(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
-                    __output_file << "read( " << key << " ): " << *value << "\n";
+                    __output_file << "read( " << key << " ): " << value << "\n";
                 }
-                if (len >= 0) {
-                    delete value;
-                } else {
+                if (len < 0) {
                     error_count_++;
                     continue;
                 }
@@ -225,7 +223,7 @@ private:
 
             case WRITE:
             {
-                std::string *value = request->get_write_value();
+                std::string value = request->get_write_value();
                 storage[__id].write(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
                     __output_file << "write( " << key << ", " << *value << " )\n";
@@ -241,13 +239,11 @@ private:
                 if (request->is_multi_partition()){
                     scan_some(request, key);
                     if (request->is_coordinator()) {
-                        std::string** values = request->get_scanned_values();
                         if constexpr(utils::ENABLE_ANSWER){
                             __output_file << "scan( " << key << ", "<< request->args_len() << " ): [";
                             for (size_t i = 0; i < request->args_len(); i++)
                             {
-                                __output_file << "\"" << *(values[i]) << "\",";
-                                delete values[i];
+                                __output_file << "\"" << request->get_scaned_value(i) << "\",";
                             }
                             __output_file << "]\n";
                         }
@@ -278,7 +274,7 @@ private:
                 if (coordinator) {
                     previous_storage.push_back(storage);
                     version_count++;
-                    storage = new Storage[partitions];
+                    storage = new TBBStorage[partitions];
                     if constexpr(utils::ENABLE_ANSWER){
                         __output_file << "repartition() \n";
                     }
@@ -288,7 +284,7 @@ private:
                     request->destroy_barrier();
                     delete request;
                 }
-                storage[__id] = Storage();
+                storage[__id] = TBBStorage();
                 break;
             case ERROR:
                 if constexpr(utils::ENABLE_ANSWER){
@@ -306,7 +302,7 @@ private:
 
     int __id;
     size_t __n_executed_requests;
-    static Storage *storage;
+    static TBBStorage *storage;
     cpu_set_t cpu_set;
 
     std::thread worker_thread_;
@@ -319,7 +315,7 @@ private:
 
     size_t error_count_ = 0;
     static size_t partitions;
-    static std::vector<Storage*> previous_storage;
+    static std::vector<TBBStorage*> previous_storage;
     static int version_count;
     static std::vector<partition_map_t*> version_maps;
     static std::shared_mutex version_maps_mtx;
@@ -329,7 +325,7 @@ private:
 
 };
 template<typename T, size_t QSize>
-std::vector<Storage*> Partition<T, QSize>::previous_storage;
+std::vector<TBBStorage*> Partition<T, QSize>::previous_storage;
 
 template<typename T, size_t QSize>
 int Partition<T, QSize>::version_count = 0;
@@ -338,7 +334,7 @@ template<typename T, size_t QSize>
 size_t Partition<T, QSize>::partitions = 0;
 
 template<typename T, size_t QSize>
-Storage* Partition<T, QSize>::storage;
+TBBStorage* Partition<T, QSize>::storage;
 
 template<typename T, size_t QSize>
 std::vector<std::unordered_map<T, Partition<T, QSize>*>*> Partition<T, QSize>::version_maps;

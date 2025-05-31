@@ -2,12 +2,12 @@
 #define WORKLOAD_REQUEST_H
 
 #include <string>
-#include <unordered_set>
+#include <cstring>
 #include <pthread.h>
-
-#include "types/types.h"
 #include <fstream>
 #include <atomic>
+
+#include "types.h"
 
 
 namespace workload {
@@ -15,8 +15,17 @@ namespace workload {
 
 struct scan_data_t{
     std::atomic_int counter;
-    std::string** values;
+    std::string* values;
     char** key_to_addr;
+
+    scan_data_t(size_t len){
+        key_to_addr = new char*[len];
+        values = new std::string[len];
+    }
+    ~scan_data_t(){
+        delete[] values;
+        delete[] key_to_addr;
+    }
 };
 
 class Request {
@@ -49,8 +58,6 @@ public:
     ~Request(){}
 
     void destroy_multi_partition_scan(){
-        delete[] reinterpret_cast<scan_data_t*>(__args)->values;
-        delete[] reinterpret_cast<scan_data_t*>(__args)->key_to_addr;
         delete reinterpret_cast<scan_data_t*>(__args);
     }
 
@@ -92,9 +99,7 @@ public:
     }
 
     inline void init_scan_data(){
-        __args = new char[sizeof(scan_data_t)];
-        reinterpret_cast<scan_data_t*>(__args)->key_to_addr = new char*[__args_len];
-        reinterpret_cast<scan_data_t*>(__args)->values = new std::string*[__args_len];
+        __args = reinterpret_cast<char*>(new scan_data_t(__args_len));
     }
 
     inline void init_coordination(int involved_partitions){
@@ -107,9 +112,6 @@ public:
         return __args != nullptr;
     }
 
-    inline char** get_key_to_addr(){
-        return reinterpret_cast<scan_data_t*>(__args)->key_to_addr;
-    }
     template<typename PartitionT>
     inline void set_key_to_partition(size_t &idx, PartitionT* &p_addr){
         reinterpret_cast<scan_data_t*>(__args)->key_to_addr[idx] = reinterpret_cast<char*>(p_addr);
@@ -119,8 +121,12 @@ public:
         return reinterpret_cast<scan_data_t*>(__args)->key_to_addr[idx] == reinterpret_cast<char*>(p_addr);
     }
 
-    inline std::string** get_scanned_values(){
-        return reinterpret_cast<scan_data_t*>(__args)->values;
+    inline std::string& get_scaned_value(size_t idx){
+        return reinterpret_cast<scan_data_t*>(__args)->values[idx];
+    }
+
+    inline void set_scaned_value(size_t idx, std::string&& value){
+        reinterpret_cast<scan_data_t*>(__args)->values[idx] = std::move(value);
     }
 
     inline bool is_coordinator(){
@@ -131,8 +137,8 @@ public:
         __args = reinterpret_cast<char*>(barrier);
     }
 
-    inline std::string *get_write_value(){
-        return reinterpret_cast<std::string*>(__args);
+    inline const std::string& get_write_value(){
+        return *reinterpret_cast<std::string*>(__args);
     }
 
 private:

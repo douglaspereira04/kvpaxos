@@ -31,11 +31,11 @@
 #include <fstream>
 #include <thread>
 #include <random>
-#include "types/types.h"
-#include "utils/utils.h"
-#include "request/request.hpp"
+#include "types.h"
+#include "utils.h"
+#include "request.hpp"
 
-#include "scheduler/scheduler.hpp"
+#include "scheduler.hpp"
 using namespace workload;
 
 typedef kvpaxos::Scheduler<int, true, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS, MAX_SUCESSIVE_IMBALANCE> Scheduler;

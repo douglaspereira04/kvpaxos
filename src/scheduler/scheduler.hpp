@@ -10,15 +10,16 @@
 #include <unordered_map>
 #include <vector>
 #include <atomic>
-#include "input_graph.hpp"
-#include "graph/graph.hpp"
-#include "graph/partitioning.h"
-#include "partition.hpp"
-#include "request/request.hpp"
-#include "queue/queue.hpp"
-#include "types/types.h"
 #include <iostream>
-#include "utils/utils.h"
+
+#include "queue.hpp"
+#include "types.h"
+#include "utils.h"
+#include "request.hpp"
+#include "input_graph.hpp"
+#include "graph.hpp"
+#include "partitioning.h"
+#include "partition.hpp"
 
 
 namespace kvpaxos {

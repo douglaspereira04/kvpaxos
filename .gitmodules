@@ -1,6 +1,15 @@
 [submodule "deps/KaHIP"]
-	path = deps/KaHIP
+	path = external/KaHIP
 	url = https://github.com/KaHIP/KaHIP.git
 [submodule "deps/METIS"]
-	path = deps/METIS
+	path = external/METIS
 	url = https://github.com/KarypisLab/METIS.git
+[submodule "external/oneTBB"]
+	path = external/oneTBB
+	url = https://github.com/oneapi-src/oneTBB.git
+[submodule "external/zlib"]
+	path = external/zlib
+	url = https://github.com/madler/zlib.git
+[submodule "external/rocksdb"]
+	path = external/rocksdb
+	url = https://github.com/facebook/rocksdb.git

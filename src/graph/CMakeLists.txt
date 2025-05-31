@@ -1,31 +1,15 @@
-add_library(graph)
-
-target_sources(
-    graph
-        PUBLIC
-            graph.hpp
-            partitioning.h
-        PRIVATE
-            graph.cpp
-            partitioning.cpp
+add_library(graph
+    graph.cpp
+    partitioning.cpp
 )
 
-target_include_directories(
-    graph
-        PUBLIC
-            "${CMAKE_SOURCE_DIR}/src"
+target_include_directories(graph
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-target_link_libraries(
-    graph
-        PUBLIC
-            metis
-            kahip
-            scheduler
-)
-
-target_compile_options(
-    graph
-        PRIVATE
-            -O3
+# Link to RocksDB if only this module needs it
+target_link_libraries(graph
+    PUBLIC
+        metis
+        kahip
 )

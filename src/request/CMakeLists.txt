@@ -1,22 +1,11 @@
-add_library(request)
+add_library(request request.cpp)
 
-target_sources(
-    request
-        PUBLIC
-            request.hpp
-        PRIVATE
-            request.cpp
-)
-
-target_include_directories(
-    request
-        PUBLIC
-            "${CMAKE_SOURCE_DIR}/src"
+target_include_directories(request
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_link_libraries(
     request
         PUBLIC
-            CONAN_PKG::toml11
             types
 )

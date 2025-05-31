@@ -1,28 +1,20 @@
-add_library(scheduler)
-
-target_sources(
-    scheduler
-        PUBLIC
-            scheduler.hpp
-            partition.hpp
-        PRIVATE
-            scheduler.cpp
-            partition.cpp
+add_library(scheduler
+    scheduler.cpp
+    partition.cpp
+    input_graph.cpp
 )
 
-
-target_include_directories(
-    scheduler
-        PUBLIC
-            "${CMAKE_SOURCE_DIR}/src"
+target_include_directories(scheduler
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-target_link_libraries(
-    scheduler
-        PUBLIC
-            graph
-            storage
-            request
-            types
-            utils
+# Link to RocksDB if only this module needs it
+target_link_libraries(scheduler
+    PUBLIC
+        queue
+        types
+        utils
+        request
+        graph
+        storage
 )
