@@ -8,6 +8,7 @@ target_include_directories(storage
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+find_package(TBB REQUIRED)
 # Link to RocksDB if only this module needs it
 target_link_libraries(storage
     PUBLIC

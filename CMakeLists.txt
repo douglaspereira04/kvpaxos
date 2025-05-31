@@ -19,22 +19,15 @@ set(WITH_EXAMPLES OFF CACHE BOOL "Disable RocksDB samplkes")
 set(WITH_RUNTIME_DEBUG OFF CACHE BOOL "Disable RocksDB runtime debug")
 set(ROCKSDB_BUILD_SHARED OFF CACHE BOOL "Disable RocksDB shared")
 
-# Disable oneTBB tests, build static
-set(TBB_TEST OFF CACHE BOOL "Disable TBB tests")
-set(TBB_EXAMPLES OFF CACHE BOOL "Build TBB examples")
-add_subdirectory(external/oneTBB)
+
+include(cmake/add_libmetis.cmake)
+include(cmake/add_libkahip.cmake)
 
 # Disable zlib programs/tests, build static
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build zlib")
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static zlib")
 set(SKIP_INSTALL_ALL ON CACHE BOOL "Skip install targets for zlib")
 
-set(GKLIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/external/GKlib)
 
-set(PARHIP OFF CACHE BOOL "Disable parhip")
-set(PARHIP OFF CACHE BOOL "Disable parhip")
-set(GKLIB_PATH "${CMAKE_SOURCE_DIR}/external/METIS/GKlib")
-add_subdirectory(external/METIS)
-add_subdirectory(external/KaHIP)
 add_subdirectory(external/zlib)
 add_subdirectory(external/rocksdb)
 
