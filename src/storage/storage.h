@@ -10,8 +10,8 @@ class Storage {
 public:
     Storage() {};
 
-    int read(int key, std::string* &value);
-    void write(int key, std::string *value);
+    int read(int key, std::string &value);
+    void write(int key, const std::string &value);
     void del(int key);
 
 };

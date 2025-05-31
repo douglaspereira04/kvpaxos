@@ -36,6 +36,7 @@
 #include "utils.h"
 #include "request.hpp"
 #include "partition.hpp"
+
 #include <rocksdb/db.h>
 
 using namespace workload;

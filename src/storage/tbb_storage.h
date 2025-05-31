@@ -20,7 +20,7 @@ public:
     }
 
     int read(int key, std::string &value);
-    void write(int key, std::string &value);
+    void write(int key, const std::string &value);
     void del(int key);
 
 
@@ -34,14 +34,13 @@ inline int TBBStorage::read(int key, std::string &value) {
     try {
          compressed = storage_.at(key);
     } catch(...) {
-        value = nullptr;
         return -1;
     }
     value = std::move(decompress(compressed));
     return value.length();
 }
 
-inline void TBBStorage::write(int key, std::string &value) {
+inline void TBBStorage::write(int key, const std::string &value) {
     auto compressed_value = compress(value);
     storage_[key] = compressed_value;
 }

@@ -23,12 +23,18 @@
 #include "types.h"
 #include "utils.h"
 
+#include <boost/lockfree/spsc_queue.hpp>
+
+#include "types.h"
+#include "utils.h"
+#include "request.hpp"
+#include "rocks_db_storage.h"
+
 namespace kvpaxos {
 using namespace kvstorage;
 using namespace workload;
 
 typedef RocksDBStorage storage_t;
-
 
 template <typename T, size_t QSize = 0>
 class Partition {

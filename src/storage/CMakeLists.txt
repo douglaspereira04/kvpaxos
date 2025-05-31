@@ -13,5 +13,5 @@ target_link_libraries(storage
     PUBLIC
         compresser
         rocksdb
-        tbb
+        TBB::tbb
 )

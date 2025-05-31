@@ -1,7 +1,7 @@
 add_subdirectory(compresser)
-add_subdirectory(request)
 add_subdirectory(types)
 add_subdirectory(utils)
+add_subdirectory(request)
 add_subdirectory(storage)
 add_subdirectory(scheduler)
 
@@ -15,6 +15,7 @@ IF(${ANSWER} STREQUAL "ON")
 ENDIF()
 add_definitions( -DQ_SIZE=${Q_SIZE} )
 
+find_package(Boost REQUIRED)
 target_link_libraries(
     replica
         PRIVATE
@@ -22,8 +23,8 @@ target_link_libraries(
             types
             utils
             request
-            scheduler
             rocksdb
+            scheduler
 )
 
 target_include_directories(replica
