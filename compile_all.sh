@@ -6,7 +6,7 @@ q_size=(1000000)
 for q_size_ in "${q_size[@]}"; do
     ./compile.sh ${q_size_}
     mkdir -p build/bin
-    mv ./build/src/replica ./build/bin/replica_${q_size_}
+    mv ./build/src/replica ./build/bin/single_${q_size_}
 done;
 
 cp experiments/test.sh build/bin/
