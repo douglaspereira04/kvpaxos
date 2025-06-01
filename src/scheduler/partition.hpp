@@ -2,26 +2,18 @@
 #define KVPAXOS_PARTITION_H
 
 
-#include <unordered_map>
+#include <pthread.h>
 #include <queue>
+#include <mutex>
+#include <semaphore.h>
+#include <shared_mutex>
 #include <string>
+#include <thread>
+#include <unordered_map>
 #include <iostream>
 #include <fstream>
 #include <csignal>
 #include <iostream>
-
-#include <thread>
-#include <pthread.h>
-#include <mutex>
-#include <semaphore.h>
-#include <shared_mutex>
-
-#include <boost/lockfree/spsc_queue.hpp>
-
-#include "request.hpp"
-#include "rocks_db_storage.h"
-#include "types.h"
-#include "utils.h"
 
 #include <boost/lockfree/spsc_queue.hpp>
 
@@ -46,7 +38,7 @@ public:
         : __id{id},
           __n_executed_requests{0}
     {
-        storage = storage_t();
+        storage[__id] = storage_t();
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
     }
     
@@ -59,13 +51,6 @@ public:
         __output_file.close();
     }
 
-    void join(){
-        if (worker_thread_.joinable()) {
-            sem_post(&semaphore_);
-            worker_thread_.join();
-        }
-    }
-
     void start_worker_thread() {
         sem_init(&semaphore_, 0, 0);
         if constexpr(QSize > 0){
@@ -73,7 +58,7 @@ public:
         }
 
         worker_thread_ = std::thread(&partition_t::thread_loop, this);
-        utils::set_affinity(__id+2, worker_thread_, cpu_set);
+        utils::set_affinity(__id+5, worker_thread_, cpu_set);
     }
 
     size_t request_queue_size() const {
@@ -127,8 +112,65 @@ public:
         return __n_executed_requests;
     }
 
+
+    static void add_old_partition_map(std::unordered_map<int, partition_t*>* version_map){
+        version_maps_mtx.lock();
+        version_maps.push_back(version_map);
+        version_maps_mtx.unlock();
+    }
+
+    static void create_storage(size_t partitions_){
+        partitions = partitions_;
+        storage = new storage_t[partitions];
+    }
 private:
 
+    int read(int key, std::string& val){
+        int len = storage[__id].read(key, val);
+        int len_old = -1;
+        storage_t* past_storage;
+        int past_id;
+        if (len < 0){
+            for (int i = version_count-1; i >= 0; i--)
+            {
+                version_maps_mtx.lock_shared();
+                std::unordered_map<int, partition_t*> *map = version_maps.at(i);
+                version_maps_mtx.unlock_shared();
+                auto partition = map->find(key);
+                if (partition != map->end()){
+                    past_id = partition->second->__id;
+                    past_storage = previous_storage[i];
+                    len_old = past_storage[past_id].read(key, val);
+                    if (len_old >= 0){
+                        past_storage[past_id].del(key);
+                        storage[__id].write(key, val);
+                        return len_old;
+                    }
+                }
+            }
+            
+        }
+        if (len < 0 && len_old < 0){
+            exit(EXIT_FAILURE);
+        }
+        return len;
+    }
+
+    inline void scan_some(Request* request, int &key){
+        for (size_t i = 0; i < request->args_len(); i++)
+        {
+            if (request->key_in_partition(i, this)){
+                int key_i = key + i;
+                int len = read(key_i, request->get_scaned_value(i));
+                if (len < 0){
+                    error_count_++;
+                    continue;
+                }
+            }
+        }
+        
+
+    }
     inline void scan(Request* request, int &key){
         auto length = request->args_len();
 
@@ -137,7 +179,7 @@ private:
         }
         for (auto key_i = key; key_i < key+length; key_i++) {
             std::string value;
-            int len = storage.read(key, value);
+            int len = read(key, value);
             if (len < 0){
                 error_count_++;
                 continue;
@@ -160,12 +202,13 @@ private:
 
             RequestType type = request->type();
             auto key = request->key();
+            int coordinator = 0;
             switch (type)
             {
             case READ:
             {   
                 std::string value;
-                int len = storage.read(key, value);
+                int len = read(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
                     __output_file << "read( " << key << " ): " << value << "\n";
                 }
@@ -181,7 +224,7 @@ private:
             case WRITE:
             {
                 const std::string value = request->get_write_value();
-                storage.write(key, value);
+                storage[__id].write(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
                     __output_file << "write( " << key << ", " << value << " )\n";
                 }
@@ -193,15 +236,32 @@ private:
 
             case SCAN:
             {
-                scan(request, key);
-                delete request;
-                __n_executed_requests++;
+                if (request->is_multi_partition()){
+                    scan_some(request, key);
+                    if (request->is_coordinator()) {
+                        if constexpr(utils::ENABLE_ANSWER){
+                            __output_file << "scan( " << key << ", "<< request->args_len() << " ): [";
+                            for (size_t i = 0; i < request->args_len(); i++)
+                            {
+                                __output_file << "\"" << request->get_scaned_value(i) << "\",";
+                            }
+                            __output_file << "]\n";
+                        }
+                        request->destroy_multi_partition_scan();
+                        delete request;
+                        __n_executed_requests++;
+                    }
+                } else {
+                    scan(request, key);
+                    delete request;
+                    __n_executed_requests++;
+                }
                 break;
             }
 
             case DEL:
             {
-                storage.del(key);
+                storage[__id].del(key);
                 if constexpr(utils::ENABLE_ANSWER){
                     __output_file << "del( " << key << " )\n";
                 }
@@ -209,6 +269,23 @@ private:
                 __n_executed_requests++;
                 break;
             }
+            case REPARTITION:
+                coordinator = request->barrier_wait();
+                if (coordinator) {
+                    previous_storage.push_back(storage);
+                    version_count++;
+                    storage = new storage_t[partitions];
+                    if constexpr(utils::ENABLE_ANSWER){
+                        __output_file << "repartition() \n";
+                    }
+                }
+                coordinator = request->barrier_wait();
+                if (coordinator) {
+                    request->destroy_barrier();
+                    delete request;
+                }
+                storage[__id] = storage_t();
+                break;
             case ERROR:
                 if constexpr(utils::ENABLE_ANSWER){
                     __output_file << "err() \n";
@@ -225,7 +302,7 @@ private:
 
     int __id;
     size_t __n_executed_requests;
-    storage_t storage;
+    static storage_t *storage;
     cpu_set_t cpu_set;
 
     std::thread worker_thread_;
@@ -237,10 +314,33 @@ private:
     sem_t remaining_space_;
 
     size_t error_count_ = 0;
+    static size_t partitions;
+    static std::vector<storage_t*> previous_storage;
+    static int version_count;
+    static std::vector<partition_map_t*> version_maps;
+    static std::shared_mutex version_maps_mtx;
+
     std::ofstream __output_file;
 
 
 };
+template<typename T, size_t QSize>
+std::vector<storage_t*> Partition<T, QSize>::previous_storage;
+
+template<typename T, size_t QSize>
+int Partition<T, QSize>::version_count = 0;
+
+template<typename T, size_t QSize>
+size_t Partition<T, QSize>::partitions = 0;
+
+template<typename T, size_t QSize>
+storage_t* Partition<T, QSize>::storage;
+
+template<typename T, size_t QSize>
+std::vector<std::unordered_map<T, Partition<T, QSize>*>*> Partition<T, QSize>::version_maps;
+
+template<typename T, size_t QSize>
+std::shared_mutex Partition<T, QSize>::version_maps_mtx;
 
 }
 

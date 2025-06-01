@@ -1,9 +1,12 @@
 [submodule "external/zlib"]
 	path = external/zlib
 	url = https://github.com/madler/zlib.git
-[submodule "external/oneTBB"]
-	path = external/oneTBB
-	url = https://github.com/oneapi-src/oneTBB.git
 [submodule "external/rocksdb"]
 	path = external/rocksdb
 	url = https://github.com/facebook/rocksdb.git
+[submodule "external/KaHIP"]
+	path = external/KaHIP
+	url = https://github.com/KaHIP/KaHIP.git
+[submodule "external/METIS"]
+	path = external/METIS
+	url = https://github.com/KarypisLab/METIS.git

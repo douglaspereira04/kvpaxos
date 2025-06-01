@@ -1,16 +1,20 @@
-add_library(scheduler partition.cpp)
+add_library(scheduler
+    scheduler.cpp
+    partition.cpp
+    input_graph.cpp
+)
 
 target_include_directories(scheduler
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-find_package(Boost REQUIRED)
-target_link_libraries(
-    scheduler
-        PUBLIC
-            Boost::boost
-            types
-            utils
-            request
-            storage
+# Link to RocksDB if only this module needs it
+target_link_libraries(scheduler
+    PUBLIC
+        queue
+        types
+        utils
+        request
+        graph
+        storage
 )

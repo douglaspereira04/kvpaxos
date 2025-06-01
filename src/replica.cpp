@@ -31,27 +31,33 @@
 #include <fstream>
 #include <thread>
 #include <random>
-
 #include "types.h"
 #include "utils.h"
 #include "request.hpp"
-#include "partition.hpp"
 
-#include <rocksdb/db.h>
-
+#include "scheduler.hpp"
 using namespace workload;
 
-typedef kvpaxos::Partition<int, Q_SIZE> partition_t;
+typedef kvpaxos::Scheduler<int, true, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS, MAX_SUCESSIVE_IMBALANCE> Scheduler;
+
+
+typedef boost::lockfree::spsc_queue<Request*, boost::lockfree::capacity<SCHEDULE_QUEUE_SIZE>> scheduling_queue_t;
+
 
 static int verbose = 0;
 static int SLEEP = 1000;
 static bool RUNNING = true;
 
 static const int N_REQUESTS = 1;
-static const int N_INITIAL_KEYS = 2;
-static const int REQUESTS_PATH = 3;
-static const int REQUEST_RATE = 4;
-static const int REQUEST_RATE_SEED = 5;
+static const int N_PARTITIONS = 2;
+static const int N_INITIAL_KEYS = 3;
+static const int REPARTITION_INTERVAL = 4;
+static const int REPARTITION_METHOD = 5;
+static const int REQUESTS_PATH = 6;
+static const int REQUEST_RATE = 7;
+static const int REQUEST_RATE_SEED = 8;
+static const int QUEUE_HEAD_DISTANCE = 9;
+static const int BALANCE_THRESHOLD = 10;
 
 static char* *params;
 
@@ -62,20 +68,34 @@ static long request_rate_seed;
 
 
 void
-metrics_loop(int sleep_duration, partition_t* partition)
+metrics_loop(int sleep_duration, Scheduler* scheduler)
 {
 	size_t n_requests = atol(params[N_REQUESTS]);
 	size_t n_initial_keys = atol(params[N_INITIAL_KEYS]);
-	std::cout << "Executed,Arrivals,In Queue\n";
+	std::cout << "Executed,Arrivals,Graph Vertices,Graph Edges";
+	int n_partitions =  atoi(params[N_PARTITIONS]);
+	for (int i = 0; i < n_partitions; i++)
+	{
+		std::cout << ", In Queue " << i;
+	}
+	std::cout << "\n";
 	size_t executed_requests = 0;
 	while (RUNNING && executed_requests < (n_requests + n_initial_keys)) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
-		executed_requests = partition->n_executed_requests();
+		executed_requests = scheduler->n_executed_requests();
 		std::cout << executed_requests << ",";
 
 		if constexpr(utils::ENABLE_INFO){
 			std::cout << arrived << ",";
-			std::cout << partition->request_queue_size() << ",";
+
+			std::cout << scheduler->graph_vertices() << ",";
+			std::cout << scheduler->graph_edges() << ",";
+
+			std::vector<size_t> in_queue = scheduler->in_queue_amount();
+			for (int i = 0; i < n_partitions; i++)
+			{
+				std::cout << in_queue[i] << ",";
+			}
 		}
 
 		std::cout << "\n";
@@ -83,12 +103,28 @@ metrics_loop(int sleep_duration, partition_t* partition)
 	std::cout << std::flush;
 }
 
-static partition_t*
-initialize_partition(std::ifstream &requests_file)
+static Scheduler*
+initialize_scheduler(std::ifstream &requests_file)
 {
-	partition_t* partition = new partition_t(0);
+	auto n_partitions = atoi(params[N_PARTITIONS]);
+	auto repartition_interval = atoi(params[REPARTITION_INTERVAL]);
+	std::string repartition_method_s = params[REPARTITION_METHOD];
 
-	partition->start_worker_thread();
+	auto repartition_method = model::string_to_cut_method.at(
+		repartition_method_s
+	);
+
+	float q_head_distance = atoi(params[QUEUE_HEAD_DISTANCE]);
+	float balance_threshold = atof(params[BALANCE_THRESHOLD]);
+
+	auto* scheduler = new Scheduler(
+		repartition_interval, n_partitions,
+		repartition_method,
+		q_head_distance,
+		balance_threshold
+	);
+
+	scheduler->run();
 
 	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
 	if (n_initial_keys > 0) {
@@ -96,18 +132,18 @@ initialize_partition(std::ifstream &requests_file)
 		{
 			Request *request;
 			read_request(request, requests_file);
-			partition->push_request(request);
+			scheduler->submit(request);
 		}
 		
-		while(partition->n_executed_requests() < n_initial_keys){
+		while(scheduler->n_executed_requests() < n_initial_keys || scheduler->n_processed_requests() < n_initial_keys){
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		}
 	}
-	return partition;
+	return scheduler;
 }
 
 void
-workload_loop(std::ifstream &requests_file, partition_t *partition)
+workload_loop(std::ifstream &requests_file, Scheduler *scheduler)
 {
 	size_t n_requests = atol(params[N_REQUESTS]);
 	std::mt19937 generator(request_rate_seed);
@@ -119,7 +155,7 @@ workload_loop(std::ifstream &requests_file, partition_t *partition)
 		for (int i = 0; i < n_requests && requests_file.peek() != EOF; i++) {
 			Request *request;
 			read_request(request, requests_file);
-			partition->push_request(request);
+			scheduler->submit(request);
 
 			if constexpr(utils::ENABLE_INFO){
 				arrived++;
@@ -133,7 +169,7 @@ workload_loop(std::ifstream &requests_file, partition_t *partition)
 		for (int i = 0; i < n_requests && requests_file.peek() != EOF; i++) {
 			Request *request;
 			read_request(request, requests_file);
-            partition->push_request(request);
+			scheduler->submit(request);
 
 			if constexpr(utils::ENABLE_INFO){
 				arrived++;
@@ -141,7 +177,7 @@ workload_loop(std::ifstream &requests_file, partition_t *partition)
 		}
 	}
 	Request *end_request = new Request(END);
-	partition->push_request(end_request);
+	scheduler->submit(end_request);
 }
 
 
@@ -155,37 +191,85 @@ run()
 	std::string requests_path = params[REQUESTS_PATH];
 	std::ifstream requests_file(requests_path);
 
-	partition_t* partition = initialize_partition(ref(requests_file));
+	auto* scheduler = initialize_scheduler(ref(requests_file));
 	
 	auto throughput_thread = std::thread(
-		metrics_loop, SLEEP, partition
+		metrics_loop, SLEEP, scheduler
 	);
 	cpu_set_t throughput_cpu_set;
 	utils::set_affinity(0,throughput_thread, throughput_cpu_set);
 	
 	auto start_execution_timestamp = utils::now();
-	auto workload_thread = std::thread(workload_loop, ref(requests_file), partition);
+	auto workload_thread = std::thread(workload_loop, ref(requests_file), scheduler);
 	cpu_set_t workload_cpu_set;
 	utils::set_affinity(1,workload_thread, workload_cpu_set);
-	
+	scheduler->join();
 	workload_thread.join();
 	throughput_thread.join();
-	partition->join();
 	requests_file.close();
 
+	auto end_scheduling = scheduler->schedule_end();
 	auto end_execution_timestamp = utils::now();
 
 
 	auto makespan = end_execution_timestamp - start_execution_timestamp;
 
     std::ofstream ofs("details.csv");
+	ofs << "Scheduling End," << (end_scheduling - start_execution_timestamp).count()/pow(10,9) << "\n";
 	ofs << "Makespan," << makespan.count()/pow(10,9) << "\n";
-	ofs << "Error Count," << partition->error_count() << "\n";
+	ofs << "Error Count," << scheduler->error_count() << "\n";
+	if constexpr(utils::ENABLE_INFO){
+		auto& repartition_times = scheduler->repartition_timestamps();
+		ofs << "Repartition Request, Graph Copy Duration, Repartition Begin, Repartition End, Reconstruction Duration, Apply Time\n";
+		
+		auto copy_time_it = scheduler->graph_copy_duration().begin();
+		auto repartition_end_it = scheduler->repartition_end_timestamps().begin();
+		auto repartition_request_it = scheduler->repartition_request_timestamp().begin();
+		auto repartition_apply_it = scheduler->repartition_apply_timestamp().begin();
+		auto reconstruction_it = scheduler->reconstruction_duration().begin();
+		for (auto& repartition_time : repartition_times) {
+			double end_time = -1;
+			double copy_time = -1;
+			double repartition_request_time = -1;
+			double repartition_apply_time = -1;
+			double reconstruction_duration = -1;
+			double repartition_begin_time = (repartition_time - start_execution_timestamp).count()/pow(10,9);
+
+			if(repartition_request_it != scheduler->repartition_request_timestamp().end()){
+				repartition_request_time = (*repartition_request_it - start_execution_timestamp).count()/pow(10,9);
+			}
+			repartition_request_it++;
+
+			if(repartition_apply_it != scheduler->repartition_apply_timestamp().end()){
+				repartition_apply_time = (*repartition_apply_it - start_execution_timestamp).count()/pow(10,9);
+			}
+			repartition_apply_it++;
+
+			if(copy_time_it != scheduler->graph_copy_duration().end()){
+				copy_time = (*copy_time_it).count()/pow(10,9);
+			}
+			copy_time_it++;
+
+			if(repartition_end_it != scheduler->repartition_end_timestamps().end()){
+				end_time = (*repartition_end_it - start_execution_timestamp).count()/pow(10,9);
+			}
+			repartition_end_it++;
+
+			if(reconstruction_it != scheduler->reconstruction_duration().end()){
+				reconstruction_duration = (*reconstruction_it).count()/pow(10,9);
+			}
+			reconstruction_it++;
+
+			ofs << repartition_request_time << ","<< copy_time << "," << repartition_begin_time << "," << end_time << ","<< reconstruction_duration << ","<< repartition_apply_time;
+
+			ofs << "\n";
+
+		}
+	}
 
 	ofs << "\n";
 	ofs.flush();
     ofs.close();
-	delete partition;
 	
 }
 
@@ -199,4 +283,5 @@ main(int argc, char const *argv[])
 
 	params = const_cast<char**>(argv);
 	run();
+	
 }
