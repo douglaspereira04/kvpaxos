@@ -38,7 +38,7 @@ public:
         : __id{id},
           __n_executed_requests{0}
     {
-        storage[__id] = storage_t();
+        storage[__id] = storage_t(0);
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
     }
     
@@ -284,7 +284,7 @@ private:
                     request->destroy_barrier();
                     delete request;
                 }
-                storage[__id] = storage_t();
+                storage[__id] = storage_t(version_count);
                 break;
             case ERROR:
                 if constexpr(utils::ENABLE_ANSWER){

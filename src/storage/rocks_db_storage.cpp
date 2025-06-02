@@ -1,14 +1,22 @@
 #include "rocks_db_storage.h"
 
 namespace kvstorage {
-    RocksDBStorage::RocksDBStorage(){
+    RocksDBStorage::RocksDBStorage(size_t version){
         rocksdb::Options options;
         options.create_if_missing = true;
         std::string path = 
-            std::string("/tmp/kvpaxos_storage_") +
+            std::string("/tmp/repart_kv_storage/") +
             id +
-            std::to_string(db_counter.fetch_add(1, std::memory_order_relaxed));
-        rocksdb::Status status = rocksdb::DB::Open(options, path, &__storage);
+            std::string("/");
+            std::to_string(version) +
+            std::string("/");
+        std::filesystem::create_directories(path);
+        path += std::to_string(db_counter.fetch_add(1, std::memory_order_relaxed));
+        rocksdb::Status status;
+        size_t i = 0;
+        do {
+            status = rocksdb::DB::Open(options, path, &__storage);
+        } while(!status.ok() && 10 > i++);
         assert(status.ok());
     }
     
