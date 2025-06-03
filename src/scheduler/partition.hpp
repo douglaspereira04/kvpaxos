@@ -46,13 +46,12 @@ public:
         : __id{id},
           __n_executed_requests{0}
     {
-        storage = storage_t();
+        storage = storage_t(0);
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
     }
     
     ~Partition() {
         if (worker_thread_.joinable()) {
-            sem_post(&semaphore_);
             worker_thread_.join();
         }
         __output_file.flush();
@@ -94,9 +93,9 @@ public:
             sem_wait(&remaining_space_);
             __bounded_requests_queue.push(request);
         }else{
-            __queue_mutex.lock();
-                __requests_queue.push(request);
-            __queue_mutex.unlock();
+        __queue_mutex.lock();
+            __requests_queue.push(request);
+        __queue_mutex.unlock();
         }
         sem_post(&semaphore_);
     }
@@ -110,10 +109,10 @@ public:
             __bounded_requests_queue.pop();
             sem_post(&remaining_space_);
         }else{
-            __queue_mutex.lock();
-                request = __requests_queue.front();
-                __requests_queue.pop();
-            __queue_mutex.unlock();
+        __queue_mutex.lock();
+            request = __requests_queue.front();
+            __requests_queue.pop();
+        __queue_mutex.unlock();
         }
         return request;
     }
@@ -193,9 +192,9 @@ private:
 
             case SCAN:
             {
-                scan(request, key);
-                delete request;
-                __n_executed_requests++;
+                    scan(request, key);
+                    delete request;
+                    __n_executed_requests++;
                 break;
             }
 
@@ -215,8 +214,13 @@ private:
                 }
                 delete request;
                 break;
+            case END:
+                __output_file << "end() \n";
+                delete request;
+                return;
             default:
                 delete request;
+                std::raise(SIGINT);
                 return;
                 break;
             }

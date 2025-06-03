@@ -4,6 +4,7 @@
 
 #include <string>
 #include <atomic>
+#include <filesystem>
 #include <rocksdb/db.h>
 
 #include "storage.h"
@@ -12,7 +13,8 @@ namespace kvstorage {
 
 class RocksDBStorage : public Storage {
 public:
-    RocksDBStorage();
+    RocksDBStorage(){}
+    RocksDBStorage(size_t version);
 
     int read(int key, std::string &value);
     void write(int key, const std::string &value);
@@ -27,7 +29,8 @@ private:
 };
 
 inline int RocksDBStorage::read(int key, std::string &value) {
-    rocksdb::Status status = __storage->Get(rocksdb::ReadOptions(), std::to_string(key), &value);
+    rocksdb::Status status;
+    status = __storage->Get(rocksdb::ReadOptions(), std::to_string(key), &value);
     if (status.IsNotFound()) {
         return -1;
     }
@@ -35,13 +38,11 @@ inline int RocksDBStorage::read(int key, std::string &value) {
 }
 
 inline void RocksDBStorage::write(int key, const std::string &value) {
-    rocksdb::Status status = __storage->Put(rocksdb::WriteOptions(), std::to_string(key), value);
-    assert(status.ok());
+    __storage->Put(rocksdb::WriteOptions(), std::to_string(key), value);
 }
 
 inline void RocksDBStorage::del(int key) {
-    rocksdb::Status status = __storage->Delete(rocksdb::WriteOptions(), std::to_string(key));
-    assert(status.ok());
+    __storage->Delete(rocksdb::WriteOptions(), std::to_string(key));
 }
 
 };

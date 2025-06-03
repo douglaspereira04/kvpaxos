@@ -1,4 +1,5 @@
 #include "request.hpp"
+#include <cassert>
 
 
 namespace workload {
@@ -26,7 +27,7 @@ namespace workload {
             size_t len = atol(chars.c_str());
             request = new Request(type, key, len);
         } else {
-            request = new Request();
+            request = new Request(END);
         }
     }
 }

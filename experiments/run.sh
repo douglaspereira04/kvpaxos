@@ -4,11 +4,11 @@ source ./experiments.sh
 _experiment_name=$1
 node=$(get_node_id)
 _methods=(METIS)
-_partitions=(8)
+_partitions=(28)
 _n_initial_keys=(1000000)
-_queue_heads_distance=(0)
-_imbalance_thresholds=(0.1 0.05)
-_max_sucessive_imbalances=(10 100)
+_queue_heads_distance=(100000)
+_imbalance_thresholds=(0.20)
+_max_sucessive_imbalances=(100)
 _arrival_rates=(0)
 _reps=1
 _versions=()
