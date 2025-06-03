@@ -30,11 +30,7 @@ private:
 
 inline int RocksDBStorage::read(int key, std::string &value) {
     rocksdb::Status status;
-    size_t i = 0;
-    do {
-        status = __storage->Get(rocksdb::ReadOptions(), std::to_string(key), &value);
-    } while(!status.ok() && 10 > i++);
-    assert(status.ok());
+    status = __storage->Get(rocksdb::ReadOptions(), std::to_string(key), &value);
     if (status.IsNotFound()) {
         return -1;
     }
@@ -42,21 +38,11 @@ inline int RocksDBStorage::read(int key, std::string &value) {
 }
 
 inline void RocksDBStorage::write(int key, const std::string &value) {
-    rocksdb::Status status;
-    size_t i = 0;
-    do {
-        status = __storage->Put(rocksdb::WriteOptions(), std::to_string(key), value);
-    } while(!status.ok() && 10 > i++);
-    assert(status.ok());
+    __storage->Put(rocksdb::WriteOptions(), std::to_string(key), value);
 }
 
 inline void RocksDBStorage::del(int key) {
-    rocksdb::Status status;
-    size_t i = 0;
-    do {
-        status = __storage->Delete(rocksdb::WriteOptions(), std::to_string(key));
-    } while(!status.ok() && 10 > i++);
-    assert(status.ok());
+    __storage->Delete(rocksdb::WriteOptions(), std::to_string(key));
 }
 
 };

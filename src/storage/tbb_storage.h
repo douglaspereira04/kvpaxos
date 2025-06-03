@@ -18,6 +18,9 @@ public:
     TBBStorage() {
         storage_ = storage_t();
     }
+    TBBStorage(size_t version) {
+        TBBStorage();
+    }
 
     int read(int key, std::string &value);
     void write(int key, const std::string &value);

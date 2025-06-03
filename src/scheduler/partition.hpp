@@ -44,7 +44,6 @@ public:
     
     ~Partition() {
         if (worker_thread_.joinable()) {
-            sem_post(&semaphore_);
             worker_thread_.join();
         }
         __output_file.flush();
@@ -79,9 +78,9 @@ public:
             sem_wait(&remaining_space_);
             __bounded_requests_queue.push(request);
         }else{
-            __queue_mutex.lock();
-                __requests_queue.push(request);
-            __queue_mutex.unlock();
+        __queue_mutex.lock();
+            __requests_queue.push(request);
+        __queue_mutex.unlock();
         }
         sem_post(&semaphore_);
     }
@@ -95,10 +94,10 @@ public:
             __bounded_requests_queue.pop();
             sem_post(&remaining_space_);
         }else{
-            __queue_mutex.lock();
-                request = __requests_queue.front();
-                __requests_queue.pop();
-            __queue_mutex.unlock();
+        __queue_mutex.lock();
+            request = __requests_queue.front();
+            __requests_queue.pop();
+        __queue_mutex.unlock();
         }
         return request;
     }
@@ -271,7 +270,7 @@ private:
             }
             case REPARTITION:
                 coordinator = request->barrier_wait();
-                if (coordinator) {
+                if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
                     previous_storage.push_back(storage);
                     version_count++;
                     storage = new storage_t[partitions];
@@ -280,7 +279,7 @@ private:
                     }
                 }
                 coordinator = request->barrier_wait();
-                if (coordinator) {
+                if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
                     request->destroy_barrier();
                     delete request;
                 }
@@ -292,8 +291,13 @@ private:
                 }
                 delete request;
                 break;
+            case END:
+                __output_file << "end() \n";
+                delete request;
+                return;
             default:
                 delete request;
+                std::raise(SIGINT);
                 return;
                 break;
             }

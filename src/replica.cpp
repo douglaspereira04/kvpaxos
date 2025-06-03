@@ -38,7 +38,13 @@
 #include "scheduler.hpp"
 using namespace workload;
 
-typedef kvpaxos::Scheduler<int, true, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS, MAX_SUCESSIVE_IMBALANCE> Scheduler;
+#if defined(REPARTITIONING)
+	const bool ENABLE_REPARTITION = true;
+#else
+    const bool ENABLE_REPARTITION = false;
+#endif
+
+typedef kvpaxos::Scheduler<int, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS> Scheduler;
 
 
 typedef boost::lockfree::spsc_queue<Request*, boost::lockfree::capacity<SCHEDULE_QUEUE_SIZE>> scheduling_queue_t;
@@ -57,7 +63,6 @@ static const int REQUESTS_PATH = 6;
 static const int REQUEST_RATE = 7;
 static const int REQUEST_RATE_SEED = 8;
 static const int QUEUE_HEAD_DISTANCE = 9;
-static const int BALANCE_THRESHOLD = 10;
 
 static char* *params;
 
@@ -115,13 +120,11 @@ initialize_scheduler(std::ifstream &requests_file)
 	);
 
 	float q_head_distance = atoi(params[QUEUE_HEAD_DISTANCE]);
-	float balance_threshold = atof(params[BALANCE_THRESHOLD]);
 
 	auto* scheduler = new Scheduler(
 		repartition_interval, n_partitions,
 		repartition_method,
-		q_head_distance,
-		balance_threshold
+		q_head_distance
 	);
 
 	scheduler->run();
@@ -135,8 +138,14 @@ initialize_scheduler(std::ifstream &requests_file)
 			scheduler->submit(request);
 		}
 		
-		while(scheduler->n_executed_requests() < n_initial_keys || scheduler->n_processed_requests() < n_initial_keys){
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		bool wait = true;
+		while(wait){
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+			if (ENABLE_REPARTITION){
+				wait = scheduler->n_executed_requests() < n_initial_keys || scheduler->n_processed_requests() < n_initial_keys;
+			} else {
+				wait = scheduler->n_executed_requests() < n_initial_keys;
+			}
 		}
 	}
 	return scheduler;
@@ -203,9 +212,9 @@ run()
 	auto workload_thread = std::thread(workload_loop, ref(requests_file), scheduler);
 	cpu_set_t workload_cpu_set;
 	utils::set_affinity(1,workload_thread, workload_cpu_set);
-	scheduler->join();
 	workload_thread.join();
 	throughput_thread.join();
+	scheduler->join();
 	requests_file.close();
 
 	auto end_scheduling = scheduler->schedule_end();

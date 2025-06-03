@@ -4,17 +4,14 @@
 track_length=(0 100000)
 q_size=(0 100000)
 schedule_queue_size=50000000
-max_sucessive_imbalances=(100)
 
 
 for track_length_ in "${track_length[@]}"; do
     for q_size_ in "${q_size[@]}"; do
-            for max_sucessive_imbalance in "${max_sucessive_imbalances[@]}"; do
-                ./compile.sh ${track_length_} ${q_size_} ${schedule_queue_size} ${max_sucessive_imbalance}
-                mkdir -p build/bin
-                mv ./build/src/replica ./build/bin/async_imb_${track_length_}_${q_size_}_${max_sucessive_imbalance}
-            done;
+            ./compile.sh ${track_length_} ${q_size_} ${schedule_queue_size}
+            mkdir -p build/bin
+            mv ./build/src/replica ./build/bin/rep_${track_length_}_${q_size_}
     done;
 done;
 
-cp -r experiments/. build/bin/
+cp -r experiments/test.sh build/bin/
