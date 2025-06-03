@@ -12,7 +12,7 @@ arrival_rate_seed=1672270886
 method=METIS
 partitions=(8)
 workloads=(ycsb_a ycsb_d ycsb_e)
-requests=(10000000 10000000 1000000)
+requests=(50000000 50000000 5000000)
 
 mkdir -p output
 for track_length_ in "${track_length[@]}"; do
