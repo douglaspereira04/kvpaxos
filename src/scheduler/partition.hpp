@@ -30,6 +30,10 @@
 #include "request.hpp"
 #include "rocks_db_storage.h"
 
+
+static const int VALUE_SIZE = 4096;
+static const std::string template_value(VALUE_SIZE, '*');
+
 namespace kvpaxos {
 using namespace kvstorage;
 using namespace workload;
@@ -179,12 +183,14 @@ private:
 
             case WRITE:
             {
-                const std::string value = request->get_write_value();
-                storage.write(key, value);
                 if constexpr(utils::ENABLE_ANSWER){
+                    const std::string value = request->get_write_value();
+                    storage.write(key, value);
                     __output_file << "write( " << key << ", " << value << " )\n";
+                    request->destroy_write();
+                } else {
+                    storage.write(key, template_value);
                 }
-                request->destroy_write();
                 delete request;
                 __n_executed_requests++;
                 break;
