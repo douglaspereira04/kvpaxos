@@ -47,9 +47,6 @@ using namespace workload;
 typedef kvpaxos::Scheduler<int, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS> Scheduler;
 
 
-typedef boost::lockfree::spsc_queue<Request*, boost::lockfree::capacity<SCHEDULE_QUEUE_SIZE>> scheduling_queue_t;
-
-
 static int verbose = 0;
 static int SLEEP = 1000;
 static bool RUNNING = true;

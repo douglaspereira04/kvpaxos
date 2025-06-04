@@ -8,4 +8,5 @@ target_link_libraries(
     request
         PUBLIC
             types
+            utils
 )

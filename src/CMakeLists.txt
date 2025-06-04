@@ -20,14 +20,11 @@ IF(${REPARTITIONING} STREQUAL "ON")
 ENDIF()
 add_definitions( -DTRACK_LENGTH=${TRACK_LENGTH} )
 add_definitions( -DQ_SIZE=${Q_SIZE} )
-add_definitions( -DSCHEDULE_QUEUE_SIZE=${SCHEDULE_QUEUE_SIZE} )
 
-find_package(Boost REQUIRED)
 target_link_libraries(
     replica
         PRIVATE
             pthread
-            Boost::boost
             types
             utils
             request

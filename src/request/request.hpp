@@ -8,6 +8,7 @@
 #include <atomic>
 
 #include "types.h"
+#include "utils.h"
 
 
 namespace workload {

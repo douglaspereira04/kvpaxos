@@ -8,9 +8,11 @@ target_include_directories(scheduler
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# Link to RocksDB if only this module needs it
+
+find_package(Boost REQUIRED)
 target_link_libraries(scheduler
     PUBLIC
+        Boost::boost
         queue
         types
         utils
