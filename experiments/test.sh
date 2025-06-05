@@ -29,6 +29,7 @@ for track_length_ in "${track_length[@]}"; do
                     fi
                     mv details.csv output/details_$file_name
                     rm partition_output_*
+                    rm -r /tmp/repart_kv_storage
                 done;
             done;
         done;
