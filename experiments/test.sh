@@ -10,7 +10,8 @@ deltat=(5000000)
 deltah=100000
 arrival_rate_seed=1672270886
 method=METIS
-partitions=($1)
+execute=$1
+partitions=($2)
 workloads=(ycsb_a ycsb_d ycsb_e)
 requests=(50000000 50000000 5000000)
 
@@ -20,8 +21,8 @@ for track_length_ in "${track_length[@]}"; do
         for deltat_ in "${deltat[@]}"; do
             for p_ in "${partitions[@]}"; do
                 for ((i=0; i<${#workloads[@]}; i++)); do
-                    file_name=rep_t${track_length_}_q${q_size_}_p${p_}_dt${deltat_}_w${workloads[$i]}.csv
-                    ./rep_${track_length_}_${q_size_} ${requests[$i]}  $p_  $n_initial_keys  $deltat_  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed  $deltah > output/$file_name
+                    file_name=${execute}_t${track_length_}_q${q_size_}_p${p_}_dt${deltat_}_w${workloads[$i]}.csv
+                    ./${execute}_${track_length_}_${q_size_} ${requests[$i]}  $p_  $n_initial_keys  $deltat_  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed  $deltah > output/$file_name
                     if [ $? -ne 0 ]; then
                         echo "ERROR"
                         break
@@ -33,5 +34,5 @@ for track_length_ in "${track_length[@]}"; do
         done;
     done;
 done;
-mkdir -p $2
-cp -r output $2
+mkdir -p $3
+cp -r output $3

@@ -7,9 +7,12 @@ q_size=(0 100000)
 
 for track_length_ in "${track_length[@]}"; do
     for q_size_ in "${q_size[@]}"; do
-            ./compile.sh ${track_length_} ${q_size_}
+            ./compile.sh ON ${track_length_} ${q_size_}
             mkdir -p build/bin
             mv ./build/src/replica ./build/bin/rep_${track_length_}_${q_size_}
+            ./compile.sh OFF ${track_length_} ${q_size_}
+            mkdir -p build/bin
+            mv ./build/src/replica ./build/bin/stat_${track_length_}_${q_size_}
     done;
 done;
 
