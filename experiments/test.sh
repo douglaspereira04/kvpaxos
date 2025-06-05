@@ -3,11 +3,11 @@
 #                    #requests  #initial keys    request file       #rate mean   #rate seed
 #./single_100000      1000000      100000      ycsb_a_requests.txt     0        167227088
 
-q_size=(0 100000)
-n_initial_keys=1000000
+q_size=(0 10000)
+n_initial_keys=100000
 arrival_rate_seed=1672270886
 workloads=(ycsb_a ycsb_d ycsb_e)
-requests=(50000000 50000000 5000000)
+requests=(5000000 5000000 1000000)
 
 mkdir -p output
 for q_size_ in "${q_size[@]}"; do
