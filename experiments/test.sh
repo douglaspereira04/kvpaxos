@@ -4,7 +4,7 @@
 #./rep_100000_100000      1000000        2           100000         10000000         METIS   ycsb_a_requests.txt     0        167227088  100000
 
 track_length=(0 100000)
-q_size=(0 100000)
+q_size=(0 10000)
 n_initial_keys=1000000
 deltat=(5000000)
 deltah=100000
@@ -13,7 +13,7 @@ method=METIS
 execute=$1
 partitions=($2)
 workloads=(ycsb_a ycsb_d ycsb_e)
-requests=(50000000 50000000 5000000)
+requests=(5000000 5000000 1000000)
 
 mkdir -p output
 for track_length_ in "${track_length[@]}"; do
