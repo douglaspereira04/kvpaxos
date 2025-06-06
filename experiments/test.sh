@@ -3,37 +3,40 @@
 #                        #requests  #partitions   #initial keys   interval in us   method      request file    #rate mean   #rate seed   #dh
 #./rep_100000_100000      1000000        2           100000         10000000         METIS   ycsb_a_requests.txt     0        167227088  100000
 
-track_length=(0 10000)
-q_size=(0 10000)
+track_length=(0 100000)
+q_size=(0 100000)
 n_initial_keys=1000000
 deltat=(5000000)
-deltah=10000
+deltah=100000
 arrival_rate_seed=1672270886
 method=METIS
-execute=$1
-partitions=($2)
+version=(stat rep)
+partitions=($1)
 workloads=(ycsb_a ycsb_d ycsb_e)
 requests=(50000000 50000000 5000000)
 
 mkdir -p output
+rm -r /tmp/repart_kv_storage
 for track_length_ in "${track_length[@]}"; do
     for q_size_ in "${q_size[@]}"; do
         for deltat_ in "${deltat[@]}"; do
             for p_ in "${partitions[@]}"; do
                 for ((i=0; i<${#workloads[@]}; i++)); do
-                    file_name=${execute}_t${track_length_}_q${q_size_}_p${p_}_dt${deltat_}_w${workloads[$i]}.csv
-                    ./${execute}_${track_length_}_${q_size_} ${requests[$i]}  $p_  $n_initial_keys  $deltat_  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed  $deltah > output/$file_name
-                    if [ $? -ne 0 ]; then
-                        echo "ERROR"
-                        break
-                    fi
-                    mv details.csv output/details_$file_name
-                    rm partition_output_*
-                    rm -r /tmp/repart_kv_storage
+                    for v_ in "${version[@]}"; do
+                        file_name=${v_}_t${track_length_}_q${q_size_}_p${p_}_dt${deltat_}_w${workloads[$i]}.csv
+                        ./${v_}_${track_length_}_${q_size_} ${requests[$i]}  $p_  $n_initial_keys  $deltat_  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed  $deltah > output/$file_name
+                        if [ $? -ne 0 ]; then
+                            echo "ERROR"
+                            break
+                        fi
+                        mv details.csv output/details_$file_name
+                        rm partition_output_*
+                        rm -r /tmp/repart_kv_storage
+                    done;
                 done;
             done;
         done;
     done;
 done;
-mkdir -p $3
-cp -r output $3
+mkdir -p $2
+cp -r output $2

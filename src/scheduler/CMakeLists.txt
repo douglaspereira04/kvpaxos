@@ -9,10 +9,8 @@ target_include_directories(scheduler
 )
 
 
-find_package(Boost REQUIRED)
 target_link_libraries(scheduler
     PUBLIC
-        Boost::boost
         queue
         types
         utils

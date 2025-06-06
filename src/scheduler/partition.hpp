@@ -14,9 +14,6 @@
 #include <fstream>
 #include <csignal>
 #include <iostream>
-
-#include <boost/lockfree/spsc_queue.hpp>
-
 #include "types.h"
 #include "utils.h"
 #include "request.hpp"
@@ -65,12 +62,7 @@ public:
     }
 
     size_t request_queue_size() const {
-        if constexpr(QSize > 0){
-            return __bounded_requests_queue.read_available();
-        } else {
-            size_t size = __requests_queue.size();
-            return size;
-        }
+        return __requests_queue.size();
     }
 
     size_t error_count() {
@@ -80,12 +72,10 @@ public:
     void push_request(Request *request) {
         if constexpr(QSize > 0){
             sem_wait(&remaining_space_);
-            __bounded_requests_queue.push(request);
-        }else{
+        }
         __queue_mutex.lock();
             __requests_queue.push(request);
         __queue_mutex.unlock();
-        }
         sem_post(&semaphore_);
     }
 
@@ -93,15 +83,12 @@ public:
         Request *request;
         sem_wait(&semaphore_);
 
-        if constexpr(QSize > 0){
-            request = __bounded_requests_queue.front();
-            __bounded_requests_queue.pop();
-            sem_post(&remaining_space_);
-        }else{
         __queue_mutex.lock();
             request = __requests_queue.front();
             __requests_queue.pop();
         __queue_mutex.unlock();
+        if constexpr(QSize > 0){
+            sem_post(&remaining_space_);
         }
         return request;
     }
@@ -318,7 +305,6 @@ private:
     std::thread worker_thread_;
     sem_t semaphore_;
     std::queue<Request*> __requests_queue;
-    boost::lockfree::spsc_queue<Request*, boost::lockfree::capacity<QSize>> __bounded_requests_queue;
     std::mutex __queue_mutex;
 
     sem_t remaining_space_;
