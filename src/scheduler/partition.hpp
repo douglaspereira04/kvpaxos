@@ -132,7 +132,6 @@ private:
                     past_storage = previous_storage[i];
                     len_old = past_storage[past_id].read(key, val);
                     if (len_old >= 0){
-                        past_storage[past_id].del(key);
                         storage[__id].write(key, val);
                         return len_old;
                     }
