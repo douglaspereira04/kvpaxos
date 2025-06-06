@@ -3,7 +3,7 @@
 #                    #requests  #initial keys    request file       #rate mean   #rate seed
 #./single_100000      1000000      100000      ycsb_a_requests.txt     0        167227088
 
-q_size=(0 10000)
+q_size=(0 100000)
 n_initial_keys=1000000
 arrival_rate_seed=1672270886
 workloads=(ycsb_a ycsb_d ycsb_e)
