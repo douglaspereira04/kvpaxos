@@ -10,8 +10,8 @@ deltat=(5000000)
 deltah=100000
 arrival_rate_seed=1672270886
 method=METIS
-version=(stat rep)
-partitions=($1)
+version=($1)
+partitions=($2)
 workloads=(ycsb_a ycsb_d ycsb_e)
 requests=(50000000 50000000 5000000)
 
@@ -38,5 +38,5 @@ for track_length_ in "${track_length[@]}"; do
         done;
     done;
 done;
-mkdir -p $2
-cp -r output $2
+mkdir -p $3
+cp -r output $3
