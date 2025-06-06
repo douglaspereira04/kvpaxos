@@ -360,8 +360,11 @@ public:
             if (stop.load(std::memory_order_relaxed)){
                 break;
             }
-
-            updated_data_to_partition = partitioning(input_graph);
+            if (__n_partitions > 1){
+                updated_data_to_partition = partitioning(input_graph);
+            } else {
+                updated_data_to_partition = new partition_map_t(data_to_partition);
+            }
             __update.store(true, std::memory_order_release);
         }
     }
