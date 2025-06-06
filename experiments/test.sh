@@ -5,7 +5,7 @@
 
 track_length=(0 10000)
 q_size=(0 10000)
-n_initial_keys=100000
+n_initial_keys=1000000
 deltat=(5000000)
 deltah=10000
 arrival_rate_seed=1672270886
@@ -13,7 +13,7 @@ method=METIS
 execute=$1
 partitions=($2)
 workloads=(ycsb_a ycsb_d ycsb_e)
-requests=(5000000 5000000 1000000)
+requests=(50000000 50000000 5000000)
 
 mkdir -p output
 for track_length_ in "${track_length[@]}"; do
