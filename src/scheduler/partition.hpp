@@ -31,7 +31,7 @@
 #include "rocks_db_storage.h"
 
 
-static const int VALUE_SIZE = 4096;
+static const int VALUE_SIZE = 1024;
 static const std::string template_value(VALUE_SIZE, '*');
 
 namespace kvpaxos {
