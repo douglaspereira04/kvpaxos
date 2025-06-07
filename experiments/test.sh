@@ -26,7 +26,6 @@ for track_length_ in "${track_length[@]}"; do
                     ./${v_}_${track_length_}_${q_size_} ${requests[$i]}  $p_  $n_initial_keys  ${deltat[$i]}  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed  $deltah > output/$file_name
                     if [ $? -ne 0 ]; then
                         echo "ERROR"
-                        break
                     fi
                     mv details.csv output/details_$file_name
                     rm partition_output_*

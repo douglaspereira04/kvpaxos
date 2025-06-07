@@ -74,7 +74,7 @@ metrics_loop(int sleep_duration, Scheduler* scheduler)
 {
 	size_t n_requests = atol(params[N_REQUESTS]);
 	size_t n_initial_keys = atol(params[N_INITIAL_KEYS]);
-	std::cout << "Executed,Arrivals,Graph Vertices,Graph Edges";
+	std::cout << "Executed,Arrivals,VM,RSS,Used Disk,Graph Vertices,Graph Edges";
 	int n_partitions =  atoi(params[N_PARTITIONS]);
 	for (int i = 0; i < n_partitions; i++)
 	{
@@ -89,6 +89,11 @@ metrics_loop(int sleep_duration, Scheduler* scheduler)
 
 		if constexpr(utils::ENABLE_INFO){
 			std::cout << arrived << ",";
+			double vm, rss;
+			utils::process_mem_usage(vm, rss);
+			std::cout << vm << ",";
+			std::cout << rss << ",";
+			std::cout << utils::used_disk(".");
 
 			std::cout << scheduler->graph_vertices() << ",";
 			std::cout << scheduler->graph_edges() << ",";
