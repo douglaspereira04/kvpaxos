@@ -41,6 +41,12 @@ std::uintmax_t used_disk(const char* path);
     static const bool ENABLE_ANSWER = false;
 #endif
 
+#if defined(LINEARIZABLE)
+	static const bool ENABLE_LINEARIZABLE = true;
+#else
+    static const bool ENABLE_LINEARIZABLE = false;
+#endif
+
 }
 
 #endif

@@ -72,6 +72,11 @@ static long request_rate_seed;
 void
 metrics_loop(int sleep_duration, Scheduler* scheduler)
 {
+	if constexpr(utils::ENABLE_LINEARIZABLE) {
+		std::cout << "LINEARIZABLE" << std::endl;
+	} else {
+		std::cout << "EVENTUAL" << std::endl;
+	}
 	size_t n_requests = atol(params[N_REQUESTS]);
 	size_t n_initial_keys = atol(params[N_INITIAL_KEYS]);
 	std::cout << "Executed,Arrivals,VM,RSS,Used Disk,Graph Vertices,Graph Edges";

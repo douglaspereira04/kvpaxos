@@ -229,7 +229,8 @@ private:
             {
                 if (request->is_multi_partition()){
                     scan_some(request, key);
-                    if (request->is_coordinator()) {
+                    bool is_coordinator = request->is_coordinator();
+                    if (is_coordinator) {
                         if constexpr(utils::ENABLE_ANSWER){
                             __output_file << "scan( " << key << ", "<< request->args_len() << " ): [";
                             for (size_t i = 0; i < request->args_len(); i++)
@@ -238,6 +239,11 @@ private:
                             }
                             __output_file << "]\n";
                         }
+                    }
+                    if constexpr(utils::ENABLE_LINEARIZABLE){
+                        is_coordinator = request->is_coordinator();
+                    }
+                    if (is_coordinator) {
                         request->destroy_multi_partition_scan();
                         delete request;
                         __n_executed_requests++;
