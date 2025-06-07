@@ -13,9 +13,13 @@
 
 namespace workload {
 
+union sync_t{
+    pthread_barrier_t barrier;
+    std::atomic_int counter;
+};
 
 struct scan_data_t{
-    std::atomic_int counter;
+    sync_t synchronizer;
     std::string* values;
     char** key_to_addr;
 
@@ -59,6 +63,9 @@ public:
     ~Request(){}
 
     void destroy_multi_partition_scan(){
+        if constexpr(utils::ENABLE_LINEARIZABLE){
+            pthread_barrier_destroy(&reinterpret_cast<scan_data_t*>(__args)->synchronizer.barrier);
+        }
         delete reinterpret_cast<scan_data_t*>(__args);
     }
 
@@ -104,7 +111,11 @@ public:
     }
 
     inline void init_coordination(int involved_partitions){
-        reinterpret_cast<scan_data_t*>(__args)->counter.store(involved_partitions, std::memory_order_relaxed);
+        if constexpr(utils::ENABLE_LINEARIZABLE){
+            pthread_barrier_init(&reinterpret_cast<scan_data_t*>(__args)->synchronizer.barrier, NULL, involved_partitions);
+        } else {
+            reinterpret_cast<scan_data_t*>(__args)->synchronizer.counter.store(involved_partitions, std::memory_order_relaxed);
+        }
     }
 
     inline void set_single_partition(){}
@@ -131,7 +142,11 @@ public:
     }
 
     inline bool is_coordinator(){
-        return 1 == reinterpret_cast<scan_data_t*>(__args)->counter.fetch_add(-1);
+        if constexpr(utils::ENABLE_LINEARIZABLE){
+            return pthread_barrier_wait(&reinterpret_cast<scan_data_t*>(__args)->synchronizer.barrier) == PTHREAD_BARRIER_SERIAL_THREAD;
+        } else {
+            return 1 == reinterpret_cast<scan_data_t*>(__args)->synchronizer.counter.fetch_add(-1);
+        }
     }
 
     inline void barrier(pthread_barrier_t* barrier){
