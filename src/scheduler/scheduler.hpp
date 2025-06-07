@@ -188,13 +188,7 @@ public:
     
     void dispatch(Request* request){
         std::unordered_set<partition_t*> partitions = prepare_request(request);
-        bool is_cross_partition = partitions.size() > 1;
-        if (is_cross_partition) {
-            for (auto partition : partitions) {
-                partition->push_request(request);
-            }
-        } else {
-            auto partition = *begin(partitions);
+        for (auto partition : partitions) {
             partition->push_request(request);
         }
     }
