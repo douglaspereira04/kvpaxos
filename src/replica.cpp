@@ -66,7 +66,7 @@ metrics_loop(int sleep_duration, partition_t* partition)
 {
 	size_t n_requests = atol(params[N_REQUESTS]);
 	size_t n_initial_keys = atol(params[N_INITIAL_KEYS]);
-	std::cout << "Executed,Arrivals,In Queue\n";
+	std::cout << "Executed,Arrivals,VM,RSS,Used Disk,In Queue\n";
 	size_t executed_requests = 0;
 	while (RUNNING && executed_requests < (n_requests + n_initial_keys)) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
@@ -75,6 +75,11 @@ metrics_loop(int sleep_duration, partition_t* partition)
 
 		if constexpr(utils::ENABLE_INFO){
 			std::cout << arrived << ",";
+			double vm, rss;
+			utils::process_mem_usage(vm, rss);
+			std::cout << vm << ",";
+			std::cout << rss << ",";
+			std::cout << utils::used_disk(".");
 			std::cout << partition->request_queue_size() << ",";
 		}
 

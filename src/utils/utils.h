@@ -3,6 +3,9 @@
 
 #include <thread>
 #include <chrono>
+#include <fstream>
+#include <unistd.h>
+#include <filesystem>
 
 #include "types.h"
 
@@ -21,6 +24,10 @@ inline duration to_us(duration t) {
 /// @param thread is a given thread
 /// @param cpu_set will be the new cpu set
 void set_affinity(size_t cpu, std::thread &thread, cpu_set_t &cpu_set);
+
+void process_mem_usage(double& vm_usage, double& resident_set);
+
+std::uintmax_t used_disk(const char* path);
 
 #if defined(INFO)
 	static const bool ENABLE_INFO = true;
