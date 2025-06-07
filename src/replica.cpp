@@ -44,7 +44,7 @@ using namespace workload;
     const bool ENABLE_REPARTITION = false;
 #endif
 
-typedef kvpaxos::Scheduler<int, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, interval_type::MICROSECONDS> Scheduler;
+typedef kvpaxos::Scheduler<int, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
 
 
 static int verbose = 0;
