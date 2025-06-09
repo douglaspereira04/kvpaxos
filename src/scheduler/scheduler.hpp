@@ -163,8 +163,10 @@ public:
                     request->set_storage(next_storage);
                 } else {
                     partitions.insert(mapping.first);
-                    request->set_storage(mapping.second);
-                    it->second = next_mapping;
+                    request->set_storage(utils::unmarked(mapping.second));
+                    if (utils::is_marked(mapping.second)){
+                        mapping.second = &__storage[mapping.first->__id];
+                    }
                 }
                 request->set_single_partition();
             } else{
@@ -174,7 +176,6 @@ public:
                     key = request->key() + i;
                     auto [it, inserted] = __data_to_partition->try_emplace(key, next_mapping);
                     std::pair<partition_t*, storage_t*> mapping = it->second;
-
                     if (inserted){
                         new_assignment = next_partition;
                         request->set_key_to_partition(i, new_assignment);
@@ -182,8 +183,10 @@ public:
                     } else {
                         partitions.insert(mapping.first);
                         request->set_key_to_partition(i, mapping.first);
-                        request->set_storage(i, mapping.second);
-                        it->second = next_mapping;
+                        request->set_storage(i, utils::unmarked(mapping.second));
+                        if (utils::is_marked(mapping.second)){
+                            mapping.second = &__storage[mapping.first->__id];
+                        }
                     }
                 }
             }
@@ -197,8 +200,10 @@ public:
                 request->set_storage(next_storage);
             } else {
                 partitions.insert(mapping.first);
-                request->set_storage(mapping.second);
-                it->second = next_mapping;
+                request->set_storage(utils::unmarked(mapping.second));
+                if (utils::is_marked(mapping.second)){
+                    mapping.second = &__storage[mapping.first->__id];
+                }
             }
         }
 
@@ -235,18 +240,27 @@ public:
             __repartition_end_timestamps.push_back(utils::now());
             reconstruction_begin = utils::now();
         }
-        partition_map_t* new_data_to_partition = new partition_map_t(*__data_to_partition);
+        partition_map_t* new_data_to_partition = new partition_map_t();
+        new_data_to_partition ->reserve(__data_to_partition->size());
+        
         for (auto& it : input_graph.vertice_to_pos) {
             T key = it.first;
-            int position = it.second;
-            int partition_idx = partition_scheme[position];  
-            if (partition_idx >= __n_partitions) {
-                printf("ERROR: partition was %d!\n", partition_idx);
-                fflush(stdout);
+            auto it_data_to_partition = __data_to_partition->find(key);
+            if (it_data_to_partition != __data_to_partition->end()){
+                int position = it.second;
+                int partition_idx = partition_scheme[position];  
+                if (partition_idx >= __n_partitions) {
+                    printf("ERROR: partition was %d!\n", partition_idx);
+                    fflush(stdout);
+                }
+                partition_t* partition = __partitions[partition_idx];
+                storage_t* storage = it_data_to_partition->second.second;
+                new_data_to_partition->emplace(key, std::make_pair(partition, utils::marked(storage)));
             }
-            partition_t* partition = __partitions[partition_idx];
-            storage_t* storage = (*__data_to_partition)[key].second;
-            (*new_data_to_partition)[key] = std::make_pair(partition, storage);
+        }
+
+        for (auto& [key, value] : (*__data_to_partition)) {
+            new_data_to_partition->try_emplace(key, std::make_pair(value.first, utils::marked(value.second)));
         }
 
         if constexpr(utils::ENABLE_INFO){
@@ -311,20 +325,18 @@ public:
     void sync_repartition() {
         Request *sync_request = new Request(REPARTITION);
         sync_request->init_barrier(__n_partitions);
-        storage_t* new_storage = new storage_t[__n_partitions];
-
+        __storage = new storage_t[__n_partitions];
         __version_count++;
         for (size_t i = 0; i < __n_partitions; i++)
         {
-            new_storage[i] = storage_t(__version_count);
+            __storage[i] = storage_t(__version_count);
         }
-        sync_request->set_new_storage(new_storage);
+        sync_request->set_new_storage(__storage);
 
         for (size_t i = 0; i < __n_partitions; i++)
         {
             __partitions[i]->push_request(sync_request);
         }
-        __storage = new_storage;
     }
 
     int submited = 0;

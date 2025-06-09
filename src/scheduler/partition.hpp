@@ -276,9 +276,6 @@ private:
         }
     }
 
-    storage_t *__storage;
-
-    int __id;
     size_t __n_executed_requests;
     cpu_set_t cpu_set;
 
@@ -297,6 +294,9 @@ private:
     std::ofstream __output_file;
 
 public:
+    int __id;
+
+    storage_t *__storage;
 
 
 };
