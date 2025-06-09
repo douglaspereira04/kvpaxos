@@ -35,11 +35,12 @@ class Partition {
 typedef Partition<T, QSize> partition_t;
 typedef std::unordered_map<T, partition_t*> partition_map_t;
 public:
-    Partition(int id)
+    Partition(){}
+    Partition(int id, storage_t* storage)
         : __id{id},
           __n_executed_requests{0}
     {
-        storage[__id] = storage_t(0);
+        __storage = storage;
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
     }
     
@@ -101,45 +102,15 @@ public:
     size_t n_executed_requests() const {
         return __n_executed_requests;
     }
-
-
-    static void add_old_partition_map(std::unordered_map<int, partition_t*>* version_map){
-        version_maps_mtx.lock();
-        version_maps.push_back(version_map);
-        version_maps_mtx.unlock();
-    }
-
-    static void create_storage(size_t partitions_){
-        partitions = partitions_;
-        storage = new storage_t[partitions];
-    }
 private:
 
-    int read(int key, std::string& val){
-        int len = storage[__id].read(key, val);
-        int len_old = -1;
-        storage_t* past_storage;
-        int past_id;
-        if (len < 0){
-            for (int i = version_count-1; i >= 0; i--)
-            {
-                version_maps_mtx.lock_shared();
-                std::unordered_map<int, partition_t*> *map = version_maps.at(i);
-                version_maps_mtx.unlock_shared();
-                auto partition = map->find(key);
-                if (partition != map->end()){
-                    past_id = partition->second->__id;
-                    past_storage = previous_storage[i];
-                    len_old = past_storage[past_id].read(key, val);
-                    if (len_old >= 0){
-                        storage[__id].write(key, val);
-                        return len_old;
-                    }
-                }
-            }
-            
+    int read(int key, std::string& val, storage_t* storage){
+        int len = storage->read(key, val);
+        if (storage != &__storage[__id]){
+            __storage->write(key, val);
         }
-        if (len < 0 && len_old < 0){
+        if (len < 0){
+            std::cout << "ERROR" << std::endl;
             exit(EXIT_FAILURE);
         }
         return len;
@@ -150,7 +121,8 @@ private:
         {
             if (request->key_in_partition(i, this)){
                 int key_i = key + i;
-                int len = read(key_i, request->get_scaned_value(i));
+                storage_t* storage = request->get_storage<storage_t>(i);
+                int len = read(key_i, request->get_scaned_value(i), storage);
                 if (len < 0){
                     error_count_++;
                     continue;
@@ -166,9 +138,10 @@ private:
         if constexpr(utils::ENABLE_ANSWER){
             __output_file << "scan( " << key << ", "<< length << " ): [";
         }
+        storage_t* storage = request->get_storage<storage_t>();
         for (auto key_i = key; key_i < key+length; key_i++) {
             std::string value;
-            int len = read(key, value);
+            int len = read(key, value, storage);
             if (len < 0){
                 error_count_++;
                 continue;
@@ -192,12 +165,14 @@ private:
             RequestType type = request->type();
             auto key = request->key();
             int coordinator = 0;
+            storage_t* storage;
             switch (type)
             {
             case READ:
             {   
+                storage = request->get_storage<storage_t>();
                 std::string value;
-                int len = read(key, value);
+                int len = read(key, value, storage);
                 if constexpr(utils::ENABLE_ANSWER){
                     __output_file << "read( " << key << " ): " << value << "\n";
                 }
@@ -214,11 +189,11 @@ private:
             {
                 if constexpr(utils::ENABLE_ANSWER){
                     const std::string value = request->get_write_value();
-                    storage[__id].write(key, value);
+                    __storage->write(key, value);
                     __output_file << "write( " << key << ", " << value << " )\n";
                     request->destroy_write();
                 } else {
-                    storage[__id].write(key, template_value);
+                    __storage->write(key, template_value);
                 }
                 delete request;
                 __n_executed_requests++;
@@ -258,7 +233,8 @@ private:
 
             case DEL:
             {
-                storage[__id].del(key);
+                storage = request->get_storage<storage_t>();
+                storage->del(key);
                 if constexpr(utils::ENABLE_ANSWER){
                     __output_file << "del( " << key << " )\n";
                 }
@@ -267,21 +243,19 @@ private:
                 break;
             }
             case REPARTITION:
-                coordinator = request->barrier_wait();
-                if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
-                    previous_storage.push_back(storage);
-                    version_count++;
-                    storage = new storage_t[partitions];
-                    if constexpr(utils::ENABLE_ANSWER){
-                        __output_file << "repartition() \n";
-                    }
+                previous_storage_mtx.lock();
+                previous_storage.push_back(__storage);
+                previous_storage_mtx.unlock();
+                __storage = &request->get_new_storage<storage_t>()[__id];
+                if constexpr(utils::ENABLE_ANSWER){
+                    __output_file << "repartition() \n";
                 }
+
                 coordinator = request->barrier_wait();
                 if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
                     request->destroy_barrier();
                     delete request;
                 }
-                storage[__id] = storage_t(version_count);
                 break;
             case ERROR:
                 if constexpr(utils::ENABLE_ANSWER){
@@ -302,9 +276,7 @@ private:
         }
     }
 
-    int __id;
     size_t __n_executed_requests;
-    static storage_t *storage;
     cpu_set_t cpu_set;
 
     std::thread worker_thread_;
@@ -317,11 +289,14 @@ private:
     size_t error_count_ = 0;
     static size_t partitions;
     static std::vector<storage_t*> previous_storage;
-    static int version_count;
-    static std::vector<partition_map_t*> version_maps;
-    static std::shared_mutex version_maps_mtx;
+    static std::mutex previous_storage_mtx;
 
     std::ofstream __output_file;
+
+public:
+    int __id;
+
+    storage_t *__storage;
 
 
 };
@@ -329,19 +304,10 @@ template<typename T, size_t QSize>
 std::vector<storage_t*> Partition<T, QSize>::previous_storage;
 
 template<typename T, size_t QSize>
-int Partition<T, QSize>::version_count = 0;
-
-template<typename T, size_t QSize>
 size_t Partition<T, QSize>::partitions = 0;
 
 template<typename T, size_t QSize>
-storage_t* Partition<T, QSize>::storage;
-
-template<typename T, size_t QSize>
-std::vector<std::unordered_map<T, Partition<T, QSize>*>*> Partition<T, QSize>::version_maps;
-
-template<typename T, size_t QSize>
-std::shared_mutex Partition<T, QSize>::version_maps_mtx;
+std::mutex Partition<T, QSize>::previous_storage_mtx;
 
 }
 

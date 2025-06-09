@@ -29,7 +29,7 @@ const std::unordered_map<std::string, CutMethod> string_to_cut_method({
 });
 
 
-std::vector<int> multilevel_cut(
+std::vector<int>* multilevel_cut(
     std::vector<int> &vertice_weight, 
     std::vector<int> &x_edges, 
     std::vector<int> &edges, 

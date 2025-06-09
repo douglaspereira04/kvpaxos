@@ -32,7 +32,7 @@ template <typename T, bool Rebalance, size_t TL = 0, size_t QSize = 0, interval_
 class Scheduler{
 
 typedef kvpaxos::Partition<T, QSize> partition_t;
-typedef std::unordered_map<T, partition_t*> partition_map_t;
+typedef std::unordered_map<T, std::pair<partition_t*, storage_t*>> partition_map_t;
 public:
 
     Scheduler() {}
@@ -42,6 +42,14 @@ public:
                 size_t dh
     ) {
         __n_partitions = n_partitions;
+
+        __version_count = 0;
+        __storage = new storage_t[__n_partitions];
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            __storage[i] = storage_t(__version_count);
+        }
+
         if constexpr(Rebalance) {
             if (dh == 0) {
                 scheduling_queue = model::Queue<Request*>(SEM_VALUE_MAX, 0);
@@ -55,12 +63,11 @@ public:
         round_robin_counter = 0;
         __n_dispatched_requests = 0;
 
-        partition_t::create_storage(__n_partitions);
+        __partitions = new partition_t*[__n_partitions];
         for (auto i = 0; i < __n_partitions; i++) {
-            auto* partition = new partition_t(i);
-            __partitions.emplace(i, partition);
+            __partitions[i] = new partition_t(i, &__storage[i]);
         }
-        data_to_partition = new partition_map_t();
+        __data_to_partition = new partition_map_t();
 
         scheduling_thread = std::thread(&Scheduler<T, Rebalance, TL, QSize, IntervalType>::scheduling_loop, this);
         utils::set_affinity(2,scheduling_thread, scheduler_cpu_set);
@@ -108,19 +115,22 @@ public:
         if constexpr(Rebalance) {
             graph_thread.join();
             reparting_thread.join();
-            delete data_to_partition;
+            delete __data_to_partition;
             delete updated_data_to_partition;
         }
 
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            delete partition;
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            delete __partitions[i];
         }
+        delete __partitions;
     }
 
     void run() {
-        for (auto& kv : __partitions) {
-            kv.second->start_worker_thread();
+
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            __partitions[i]->start_worker_thread();
         }
     }
 
@@ -139,15 +149,24 @@ public:
         bool is_multi_partition_scan = false;
         int key;
         partition_t* new_assignment = nullptr;
+        partition_t* next_partition = __partitions[round_robin_counter];
+        storage_t* next_storage = &__storage[round_robin_counter]; 
+        std::pair<partition_t*, storage_t*> next_mapping = std::make_pair(next_partition, next_storage);
         if (type == SCAN) {
             range = request->args_len();
             if (range == 1){
                 key = request->key();
-                if(!mapped(key)){
-                    map_key(key, round_robin_counter);
-                    new_assignment = __partitions.at(round_robin_counter);
+                auto [it, inserted] = __data_to_partition->try_emplace(key, next_mapping);
+                std::pair<partition_t*, storage_t*> mapping = it->second;
+                if (inserted){
+                    new_assignment = next_partition;
+                    request->set_storage(next_storage);
                 } else {
-                    partitions.insert(data_to_partition->at(key));
+                    partitions.insert(mapping.first);
+                    request->set_storage(utils::unmarked(mapping.second));
+                    if (utils::is_marked(mapping.second)){
+                        mapping.second = &__storage[mapping.first->__id];
+                    }
                 }
                 request->set_single_partition();
             } else{
@@ -155,24 +174,36 @@ public:
                 request->init_scan_data();
                 for (size_t i = 0; i < range; i++) {
                     key = request->key() + i;
-                    if(!mapped(key)){
-                        map_key(key, round_robin_counter);
-                        new_assignment = __partitions.at(round_robin_counter);
+                    auto [it, inserted] = __data_to_partition->try_emplace(key, next_mapping);
+                    std::pair<partition_t*, storage_t*> mapping = it->second;
+                    if (inserted){
+                        new_assignment = next_partition;
                         request->set_key_to_partition(i, new_assignment);
+                        request->set_storage(i, next_storage);
                     } else {
-                        partition_t* partition = data_to_partition->at(key);
-                        partitions.insert(partition);
-                        request->set_key_to_partition(i, partition);
+                        partitions.insert(mapping.first);
+                        request->set_key_to_partition(i, mapping.first);
+                        request->set_storage(i, utils::unmarked(mapping.second));
+                        if (utils::is_marked(mapping.second)){
+                            mapping.second = &__storage[mapping.first->__id];
+                        }
                     }
                 }
             }
         } else {
             key = request->key();
-            if(!mapped(key)){
-                map_key(key, round_robin_counter);
-                new_assignment = __partitions.at(round_robin_counter);
+
+            auto [it, inserted] = __data_to_partition->try_emplace(key, next_mapping);
+            std::pair<partition_t*, storage_t*> mapping = it->second;
+            if (inserted){
+                new_assignment = next_partition;
+                request->set_storage(next_storage);
             } else {
-                partitions.insert(data_to_partition->at(key));
+                partitions.insert(mapping.first);
+                request->set_storage(utils::unmarked(mapping.second));
+                if (utils::is_marked(mapping.second)){
+                    mapping.second = &__storage[mapping.first->__id];
+                }
             }
         }
 
@@ -201,6 +232,41 @@ public:
         else if constexpr(IntervalType == interval_type::OPERATIONS)
             interval_achieved = __n_dispatched_requests - __operation_start >= operation_interval;
         return interval_achieved;
+    }
+
+    partition_map_t* rebuild_map(std::vector<int> &partition_scheme){
+        time_point reconstruction_begin;
+        if constexpr(utils::ENABLE_INFO){
+            __repartition_end_timestamps.push_back(utils::now());
+            reconstruction_begin = utils::now();
+        }
+        partition_map_t* new_data_to_partition = new partition_map_t();
+        new_data_to_partition ->reserve(__data_to_partition->size());
+        
+        for (auto& it : input_graph.vertice_to_pos) {
+            T key = it.first;
+            auto it_data_to_partition = __data_to_partition->find(key);
+            if (it_data_to_partition != __data_to_partition->end()){
+                int position = it.second;
+                int partition_idx = partition_scheme[position];  
+                if (partition_idx >= __n_partitions) {
+                    printf("ERROR: partition was %d!\n", partition_idx);
+                    fflush(stdout);
+                }
+                partition_t* partition = __partitions[partition_idx];
+                storage_t* storage = it_data_to_partition->second.second;
+                new_data_to_partition->emplace(key, std::make_pair(partition, utils::marked(storage)));
+            }
+        }
+
+        for (auto& [key, value] : (*__data_to_partition)) {
+            new_data_to_partition->try_emplace(key, std::make_pair(value.first, utils::marked(value.second)));
+        }
+
+        if constexpr(utils::ENABLE_INFO){
+            __reconstruction_duration.push_back(utils::now() - reconstruction_begin);
+        }
+        return new_data_to_partition;
     }
 
     void schedule_and_answer(Request* request) {
@@ -232,10 +298,10 @@ public:
     }
 
     void end_signal(Request* request){
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
             Request* end_request = new Request(END);
-            partition->push_request(end_request);
+            __partitions[i]->push_request(end_request);
         }
         delete request;
     }
@@ -256,30 +322,21 @@ public:
     }
 
 
-    void sync_repartition(partition_map_t * old_partition_map) {
+    void sync_repartition() {
         Request *sync_request = new Request(REPARTITION);
         sync_request->init_barrier(__n_partitions);
-        partition_t::add_old_partition_map(old_partition_map);
-
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            partition->push_request(sync_request);
+        __storage = new storage_t[__n_partitions];
+        __version_count++;
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            __storage[i] = storage_t(__version_count);
         }
-    }
+        sync_request->set_new_storage(__storage);
 
-    void map_key(T key) {
-        auto partition_id = round_robin_counter;
-        data_to_partition->emplace(key, __partitions.at(partition_id));
-
-        round_robin_counter = (round_robin_counter+1) % __n_partitions;
-    }
-
-    void map_key(T key, int partition_id) {
-        data_to_partition->emplace(key, __partitions.at(partition_id));
-    }
-
-    bool mapped(T key) const {
-        return data_to_partition->find(key) != data_to_partition->end();
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            __partitions[i]->push_request(sync_request);
+        }
     }
 
     int submited = 0;
@@ -292,10 +349,11 @@ public:
     }
 
     void update_partition_scheme(){
-        partition_map_t *old_data_to_partition =  data_to_partition;
-        data_to_partition = updated_data_to_partition;
-
-        sync_repartition(old_data_to_partition);
+        partition_map_t* temp = __data_to_partition;
+        __data_to_partition = rebuild_map(*__partition_scheme);
+        delete __partition_scheme;
+        delete temp;
+        sync_repartition();
     }
 
     void order_partitioning(){
@@ -355,9 +413,7 @@ public:
                 break;
             }
             if (__n_partitions > 1){
-                updated_data_to_partition = partitioning(input_graph);
-            } else {
-                updated_data_to_partition = new partition_map_t(*data_to_partition);
+                __partition_scheme = partitioning();
             }
             __update.store(true, std::memory_order_release);
         }
@@ -401,52 +457,27 @@ public:
     }
 
 
-    partition_map_t* partitioning(InputGraph<T> &graph) {
+    std::vector<int>* partitioning() {
 
         if constexpr(utils::ENABLE_INFO){
             __repartition_timestamps.push_back(utils::now());
         }
 
-        auto partition_scheme = move(
-            model::multilevel_cut(
-                graph.vertice_weight, 
-                graph.x_edges, 
-                graph.edges, 
-                graph.edges_weight,
-                __partitions.size(), 
+        return model::multilevel_cut(
+                input_graph.vertice_weight, 
+                input_graph.x_edges, 
+                input_graph.edges, 
+                input_graph.edges_weight,
+                __n_partitions, 
                 repartition_method
-            )
         );
-
-        time_point reconstruction_begin;
-        if constexpr(utils::ENABLE_INFO){
-            __repartition_end_timestamps.push_back(utils::now());
-            reconstruction_begin = utils::now();
-        }
-        auto data_to_partition = new partition_map_t();
-
-        for (auto& it : graph.vertice_to_pos) {
-            T key = it.first;
-            int position = it.second;
-            int partition = partition_scheme[position];  
-            if (partition >= __n_partitions) {
-                printf("ERROR: partition was %d!\n", partition);
-                fflush(stdout);
-            }
-            data_to_partition->emplace(key, __partitions.at(partition));
-        }
-
-        if constexpr(utils::ENABLE_INFO){
-            __reconstruction_duration.push_back(utils::now() - reconstruction_begin);
-        }
-        return data_to_partition;
     }
 
     size_t n_executed_requests() const{
         size_t n_executed_requests = 0;
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            n_executed_requests += partition->n_executed_requests();
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            n_executed_requests += __partitions[i]->n_executed_requests();
         }
         return n_executed_requests;
     }
@@ -457,18 +488,18 @@ public:
 
     size_t n_enqueued_requests() const{
         size_t n_enqueued_requests = 0;
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            n_enqueued_requests += partition->request_queue_size();
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            n_enqueued_requests += __partitions[i]->request_queue_size();
         }
         return n_enqueued_requests;
     }
 
     std::vector<size_t> in_queue_amount() const{
         std::vector<size_t> in_queue;
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            size_t amount = partition->request_queue_size();
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            size_t amount = __partitions[i]->request_queue_size();
             in_queue.push_back(amount);
         }
         return in_queue;
@@ -492,9 +523,9 @@ public:
 
     int error_count(){
         int count = 0;
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            count += partition->error_count();
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            count += __partitions[i]->error_count();
         }
         return count;
     }
@@ -529,8 +560,8 @@ public:
     int round_robin_counter = 0;
     int __n_dispatched_requests = 0;
 
-    partition_map_t __partitions;
-    partition_map_t* data_to_partition;
+    partition_t** __partitions; //to be refactored to partition_t*
+    partition_map_t* __data_to_partition;
 
     std::thread graph_thread;
     cpu_set_t graph_cpu_set;
@@ -547,7 +578,7 @@ public:
     int operation_interval;
     duration time_interval;
     time_point __time_start;
-
+    std::vector<int> *__partition_scheme;
 
     std::vector<time_point> __repartition_timestamps;
     std::vector<duration> __graph_copy_duration;
@@ -579,7 +610,8 @@ public:
 
     int __operation_start = 0;
     
-
+    storage_t* __storage;
+    int __version_count;
 };
 
 };

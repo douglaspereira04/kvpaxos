@@ -27,6 +27,24 @@ void set_affinity(size_t cpu, std::thread &thread, cpu_set_t &cpu_set);
 
 void process_mem_usage(double& vm_usage, double& resident_set);
 
+
+
+
+template<typename T>
+inline T* unmarked(T* &pointer){
+    return reinterpret_cast<T*>(reinterpret_cast<uintptr_t>(pointer) & ~0x1);
+}
+
+template<typename T>
+inline T* marked(T* &pointer){
+    return reinterpret_cast<T*>(reinterpret_cast<uintptr_t>(pointer) | 0x1);
+}
+
+template<typename T>
+inline bool is_marked(T* &pointer){
+    return reinterpret_cast<uintptr_t>(pointer) & 0x1;
+}
+
 std::uintmax_t used_disk(const char* path);
 
 #if defined(INFO)
