@@ -16,7 +16,7 @@ struct dummy_partition {
 };
 
 
-std::vector<int> multilevel_cut(
+std::vector<int>* multilevel_cut(
     std::vector<int> &vertice_weight, 
     std::vector<int> &x_edges, 
     std::vector<int> &edges, 
@@ -35,12 +35,12 @@ std::vector<int> multilevel_cut(
 
     int objval;
     int n_vertex = vertice_weight.size();
-    auto vertex_partitions = std::vector<int>(n_vertex, 0);
+    std::vector<int> *vertex_partitions = new std::vector<int>(n_vertex, 0);
     if (cut_method == METIS) {
         METIS_PartGraphKway(
             &n_vertex, &n_constrains, x_edges.data(), edges.data(),
             vertice_weight.data(), NULL, edges_weight.data(), &n_partitions, NULL,
-            NULL, options, &objval, vertex_partitions.data()
+            NULL, options, &objval, vertex_partitions->data()
         );
     } else {
         double imbalance = 0.03;//default kaffpa imbalance
@@ -48,7 +48,7 @@ std::vector<int> multilevel_cut(
             &n_vertex, vertice_weight.data(), x_edges.data(),
             edges_weight.data(), edges.data(), &n_partitions,
             &imbalance, true, -1, STRONGSOCIAL, &objval,
-            vertex_partitions.data()
+            vertex_partitions->data()
         );
     }
 

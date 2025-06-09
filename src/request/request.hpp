@@ -67,6 +67,7 @@ public:
             pthread_barrier_destroy(&reinterpret_cast<scan_data_t*>(__args)->synchronizer.barrier);
         }
         delete reinterpret_cast<scan_data_t*>(__args);
+        delete __storage;
     }
 
     void destroy_write(){
@@ -108,6 +109,7 @@ public:
 
     inline void init_scan_data(){
         __args = reinterpret_cast<char*>(new scan_data_t(__args_len));
+        __storage = new char*[__args_len];
     }
 
     inline void init_coordination(int involved_partitions){
@@ -117,6 +119,37 @@ public:
             reinterpret_cast<scan_data_t*>(__args)->synchronizer.counter.store(involved_partitions, std::memory_order_relaxed);
         }
     }
+
+    template<typename T>
+    inline void set_new_storage(T* storage){
+        __storage = reinterpret_cast<char**>(storage);
+    }
+
+    template<typename T>
+    inline T* get_new_storage(){
+        return reinterpret_cast<T*>(__storage);
+    }
+
+    template<typename T>
+    inline void set_storage(T* storage){
+        __storage = reinterpret_cast<char**>(storage);
+    }
+
+    template<typename T>
+    inline T* get_storage(){
+        return reinterpret_cast<T*>(__storage);
+    }
+
+    template<typename T>
+    inline void set_storage(size_t idx, T* storage){
+        __storage[idx] = reinterpret_cast<char*>(storage);
+    }
+
+    template<typename T>
+    inline T* get_storage(size_t idx){
+        return reinterpret_cast<T*>(__storage[idx]);
+    }
+
 
     inline void set_single_partition(){}
 
@@ -162,6 +195,7 @@ private:
     int __key;
     size_t __args_len;
     char* __args = nullptr;
+    char** __storage;
 };
 
     void read_request(Request* &request, std::ifstream &file);

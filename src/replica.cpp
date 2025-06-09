@@ -182,7 +182,8 @@ workload_loop(std::ifstream &requests_file, Scheduler *scheduler)
 			begin = now;
 		}
 	} else {
-		for (int i = 0; i < n_requests && requests_file.peek() != EOF; i++) {
+		std::cout << "n_requests: " << n_requests << std::endl;
+		for (size_t i = 0; i < n_requests; i++) {
 			Request *request;
 			read_request(request, requests_file);
 			scheduler->submit(request);

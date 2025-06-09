@@ -1,5 +1,6 @@
 #include "request.hpp"
 #include <cassert>
+#include "utils.h"
 
 
 namespace workload {
@@ -15,17 +16,11 @@ namespace workload {
             key = atoi(chars.c_str());
             request = new Request(type, key);
         } else if(type == WRITE) {
-            if constexpr(utils::ENABLE_ANSWER){
-                getline(file, chars, ',');
-                key = atoi(chars.c_str());
-                std::string *value = new std::string();
-                getline(file, *value);
-                request = new Request(type, key, value);
-            } else {
-                getline(file, chars);
-                key = atoi(chars.c_str());
-                request = new Request(type, key, nullptr);
-            }
+            getline(file, chars, ',');
+            key = atoi(chars.c_str());
+            std::string *value = new std::string();
+            getline(file, *value);
+            request = new Request(type, key, value);
         } else if(type == SCAN) {
             getline(file, chars, ',');
             key = atoi(chars.c_str());
