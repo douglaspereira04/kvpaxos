@@ -12,7 +12,7 @@ method=METIS
 version=$1
 partitions=($2)
 workloads=(ycsb_a ycsb_d ycsb_e)
-deltat=(10000000 10000000 1000000)
+deltat=(1000000 1000000 100000)
 requests=(50000000 50000000 5000000)
 
 mkdir -p output
