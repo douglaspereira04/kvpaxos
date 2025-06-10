@@ -5,7 +5,7 @@ add_subdirectory(utils)
 add_subdirectory(request)
 add_subdirectory(storage)
 add_subdirectory(graph)
-add_subdirectory(scheduler)
+add_subdirectory(kvstore)
 
 add_executable(replica replica.cpp)
 
@@ -32,7 +32,7 @@ target_link_libraries(
             utils
             request
             rocksdb
-            scheduler
+            kvstore
 )
 
 target_include_directories(replica

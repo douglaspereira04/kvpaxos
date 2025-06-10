@@ -1,5 +1,5 @@
-#ifndef _KVPAXOS_SCHEDULER_H_
-#define _KVPAXOS_SCHEDULER_H_
+#ifndef _KVPAXOS_KVSTORE_H_
+#define _KVPAXOS_KVSTORE_H_
 
 #include <memory>
 #include <pthread.h>
@@ -29,14 +29,14 @@ using namespace workload;
 
 
 template <typename T, bool Rebalance, size_t TL = 0, size_t QSize = 0, interval_type IntervalType = interval_type::OPERATIONS>
-class Scheduler{
+class KVStore{
 
 typedef kvpaxos::Partition<T, QSize> partition_t;
 typedef std::unordered_map<T, partition_t*> partition_map_t;
 public:
 
-    Scheduler() {}
-    Scheduler(int repartition_interval,
+    KVStore() {}
+    KVStore(int repartition_interval,
                 int n_partitions,
                 model::CutMethod repartition_method,
                 size_t dh
@@ -62,7 +62,7 @@ public:
         }
         data_to_partition = new partition_map_t();
 
-        scheduling_thread = std::thread(&Scheduler<T, Rebalance, TL, QSize, IntervalType>::scheduling_loop, this);
+        scheduling_thread = std::thread(&KVStore<T, Rebalance, TL, QSize, IntervalType>::scheduling_loop, this);
         utils::set_affinity(2,scheduling_thread, scheduler_cpu_set);
 
         if constexpr(Rebalance) {
@@ -94,16 +94,16 @@ public:
             }
 
             sem_init(&repart_semaphore, 0, 0);
-            reparting_thread = std::thread(&Scheduler<T, Rebalance, TL, QSize, IntervalType>::partitioning_loop, this);
+            reparting_thread = std::thread(&KVStore<T, Rebalance, TL, QSize, IntervalType>::partitioning_loop, this);
             utils::set_affinity(4, reparting_thread, reparting_cpu_set);
 
-            graph_thread = std::thread(&Scheduler<T, Rebalance, TL, QSize, IntervalType>::update_graph_loop, this);
+            graph_thread = std::thread(&KVStore<T, Rebalance, TL, QSize, IntervalType>::update_graph_loop, this);
             utils::set_affinity(3, graph_thread, graph_cpu_set);
         }
 
     }
 
-    ~Scheduler(){
+    ~KVStore(){
         scheduling_thread.join();
         if constexpr(Rebalance) {
             graph_thread.join();

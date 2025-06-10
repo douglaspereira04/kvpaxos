@@ -35,7 +35,7 @@
 #include "utils.h"
 #include "request.hpp"
 
-#include "scheduler.hpp"
+#include "kvstore.hpp"
 using namespace workload;
 
 #if defined(REPARTITIONING)
@@ -44,7 +44,7 @@ using namespace workload;
     const bool ENABLE_REPARTITION = false;
 #endif
 
-typedef kvpaxos::Scheduler<int, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> Scheduler;
+typedef kvpaxos::KVStore<int, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> KVStore;
 
 
 static int verbose = 0;
@@ -70,7 +70,7 @@ static long request_rate_seed;
 
 
 void
-metrics_loop(int sleep_duration, Scheduler* scheduler)
+metrics_loop(int sleep_duration, KVStore* kvstore)
 {
 	if constexpr(utils::ENABLE_LINEARIZABLE) {
 		std::cout << "LINEARIZABLE" << std::endl;
@@ -89,7 +89,7 @@ metrics_loop(int sleep_duration, Scheduler* scheduler)
 	size_t executed_requests = 0;
 	while (RUNNING && executed_requests < (n_requests + n_initial_keys)) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
-		executed_requests = scheduler->n_executed_requests();
+		executed_requests = kvstore->n_executed_requests();
 		std::cout << executed_requests << ",";
 
 		if constexpr(utils::ENABLE_INFO){
@@ -100,10 +100,10 @@ metrics_loop(int sleep_duration, Scheduler* scheduler)
 			std::cout << rss << ",";
 			std::cout << utils::used_disk(".");
 
-			std::cout << scheduler->graph_vertices() << ",";
-			std::cout << scheduler->graph_edges() << ",";
+			std::cout << kvstore->graph_vertices() << ",";
+			std::cout << kvstore->graph_edges() << ",";
 
-			std::vector<size_t> in_queue = scheduler->in_queue_amount();
+			std::vector<size_t> in_queue = kvstore->in_queue_amount();
 			for (int i = 0; i < n_partitions; i++)
 			{
 				std::cout << in_queue[i] << ",";
@@ -115,8 +115,8 @@ metrics_loop(int sleep_duration, Scheduler* scheduler)
 	std::cout << std::flush;
 }
 
-static Scheduler*
-initialize_scheduler(std::ifstream &requests_file)
+static KVStore*
+initialize_kvstore(std::ifstream &requests_file)
 {
 	auto n_partitions = atoi(params[N_PARTITIONS]);
 	auto repartition_interval = atoi(params[REPARTITION_INTERVAL]);
@@ -128,13 +128,13 @@ initialize_scheduler(std::ifstream &requests_file)
 
 	float q_head_distance = atoi(params[QUEUE_HEAD_DISTANCE]);
 
-	auto* scheduler = new Scheduler(
+	auto* kvstore = new KVStore(
 		repartition_interval, n_partitions,
 		repartition_method,
 		q_head_distance
 	);
 
-	scheduler->run();
+	kvstore->run();
 
 	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
 	if (n_initial_keys > 0) {
@@ -142,24 +142,24 @@ initialize_scheduler(std::ifstream &requests_file)
 		{
 			Request *request;
 			read_request(request, requests_file);
-			scheduler->submit(request);
+			kvstore->submit(request);
 		}
 		
 		bool wait = true;
 		while(wait){
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 			if (ENABLE_REPARTITION){
-				wait = scheduler->n_executed_requests() < n_initial_keys || scheduler->n_processed_requests() < n_initial_keys;
+				wait = kvstore->n_executed_requests() < n_initial_keys || kvstore->n_processed_requests() < n_initial_keys;
 			} else {
-				wait = scheduler->n_executed_requests() < n_initial_keys;
+				wait = kvstore->n_executed_requests() < n_initial_keys;
 			}
 		}
 	}
-	return scheduler;
+	return kvstore;
 }
 
 void
-workload_loop(std::ifstream &requests_file, Scheduler *scheduler)
+workload_loop(std::ifstream &requests_file, KVStore *kvstore)
 {
 	size_t n_requests = atol(params[N_REQUESTS]);
 	std::mt19937 generator(request_rate_seed);
@@ -171,7 +171,7 @@ workload_loop(std::ifstream &requests_file, Scheduler *scheduler)
 		for (int i = 0; i < n_requests && requests_file.peek() != EOF; i++) {
 			Request *request;
 			read_request(request, requests_file);
-			scheduler->submit(request);
+			kvstore->submit(request);
 
 			if constexpr(utils::ENABLE_INFO){
 				arrived++;
@@ -185,7 +185,7 @@ workload_loop(std::ifstream &requests_file, Scheduler *scheduler)
 		for (int i = 0; i < n_requests && requests_file.peek() != EOF; i++) {
 			Request *request;
 			read_request(request, requests_file);
-			scheduler->submit(request);
+			kvstore->submit(request);
 
 			if constexpr(utils::ENABLE_INFO){
 				arrived++;
@@ -193,7 +193,7 @@ workload_loop(std::ifstream &requests_file, Scheduler *scheduler)
 		}
 	}
 	Request *end_request = new Request(END);
-	scheduler->submit(end_request);
+	kvstore->submit(end_request);
 }
 
 
@@ -207,24 +207,24 @@ run()
 	std::string requests_path = params[REQUESTS_PATH];
 	std::ifstream requests_file(requests_path);
 
-	auto* scheduler = initialize_scheduler(ref(requests_file));
+	auto* kvstore = initialize_kvstore(ref(requests_file));
 	
 	auto throughput_thread = std::thread(
-		metrics_loop, SLEEP, scheduler
+		metrics_loop, SLEEP, kvstore
 	);
 	cpu_set_t throughput_cpu_set;
 	utils::set_affinity(0,throughput_thread, throughput_cpu_set);
 	
 	auto start_execution_timestamp = utils::now();
-	auto workload_thread = std::thread(workload_loop, ref(requests_file), scheduler);
+	auto workload_thread = std::thread(workload_loop, ref(requests_file), kvstore);
 	cpu_set_t workload_cpu_set;
 	utils::set_affinity(1,workload_thread, workload_cpu_set);
 	workload_thread.join();
 	throughput_thread.join();
-	scheduler->join();
+	kvstore->join();
 	requests_file.close();
 
-	auto end_scheduling = scheduler->schedule_end();
+	auto end_scheduling = kvstore->schedule_end();
 	auto end_execution_timestamp = utils::now();
 
 
@@ -233,16 +233,16 @@ run()
     std::ofstream ofs("details.csv");
 	ofs << "Scheduling End," << (end_scheduling - start_execution_timestamp).count()/pow(10,9) << "\n";
 	ofs << "Makespan," << makespan.count()/pow(10,9) << "\n";
-	ofs << "Error Count," << scheduler->error_count() << "\n";
+	ofs << "Error Count," << kvstore->error_count() << "\n";
 	if constexpr(utils::ENABLE_INFO){
-		auto& repartition_times = scheduler->repartition_timestamps();
+		auto& repartition_times = kvstore->repartition_timestamps();
 		ofs << "Repartition Request, Graph Copy Duration, Repartition Begin, Repartition End, Reconstruction Duration, Apply Time\n";
 		
-		auto copy_time_it = scheduler->graph_copy_duration().begin();
-		auto repartition_end_it = scheduler->repartition_end_timestamps().begin();
-		auto repartition_request_it = scheduler->repartition_request_timestamp().begin();
-		auto repartition_apply_it = scheduler->repartition_apply_timestamp().begin();
-		auto reconstruction_it = scheduler->reconstruction_duration().begin();
+		auto copy_time_it = kvstore->graph_copy_duration().begin();
+		auto repartition_end_it = kvstore->repartition_end_timestamps().begin();
+		auto repartition_request_it = kvstore->repartition_request_timestamp().begin();
+		auto repartition_apply_it = kvstore->repartition_apply_timestamp().begin();
+		auto reconstruction_it = kvstore->reconstruction_duration().begin();
 		for (auto& repartition_time : repartition_times) {
 			double end_time = -1;
 			double copy_time = -1;
@@ -251,27 +251,27 @@ run()
 			double reconstruction_duration = -1;
 			double repartition_begin_time = (repartition_time - start_execution_timestamp).count()/pow(10,9);
 
-			if(repartition_request_it != scheduler->repartition_request_timestamp().end()){
+			if(repartition_request_it != kvstore->repartition_request_timestamp().end()){
 				repartition_request_time = (*repartition_request_it - start_execution_timestamp).count()/pow(10,9);
 			}
 			repartition_request_it++;
 
-			if(repartition_apply_it != scheduler->repartition_apply_timestamp().end()){
+			if(repartition_apply_it != kvstore->repartition_apply_timestamp().end()){
 				repartition_apply_time = (*repartition_apply_it - start_execution_timestamp).count()/pow(10,9);
 			}
 			repartition_apply_it++;
 
-			if(copy_time_it != scheduler->graph_copy_duration().end()){
+			if(copy_time_it != kvstore->graph_copy_duration().end()){
 				copy_time = (*copy_time_it).count()/pow(10,9);
 			}
 			copy_time_it++;
 
-			if(repartition_end_it != scheduler->repartition_end_timestamps().end()){
+			if(repartition_end_it != kvstore->repartition_end_timestamps().end()){
 				end_time = (*repartition_end_it - start_execution_timestamp).count()/pow(10,9);
 			}
 			repartition_end_it++;
 
-			if(reconstruction_it != scheduler->reconstruction_duration().end()){
+			if(reconstruction_it != kvstore->reconstruction_duration().end()){
 				reconstruction_duration = (*reconstruction_it).count()/pow(10,9);
 			}
 			reconstruction_it++;
