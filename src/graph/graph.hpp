@@ -121,23 +121,24 @@ public:
 
         std::unordered_map<T, int> vertice_positions;
         std::vector<T> sorted_vertex = this->sorted_vertex();
-
         int i = 0;
+        vertice_weight.reserve(sorted_vertex.size());
         for (auto& v : sorted_vertex) {
             vertice_weight.push_back(vertex_weight_.at(v));
             vertice_positions[v] = i;
             i++;
         }
 
+        x_edges.reserve(sorted_vertex.size());
         x_edges.push_back(0);
         for (auto& v : sorted_vertex) {
             auto last_edge_index = x_edges.back();
             auto n_neighbours = 0;
 
             for (auto& e_it: edges_weight_.at(v)) {
-
-                if(vertice_positions.find(e_it.first) != vertice_positions.end()){
-                    auto neighbour = vertice_positions[e_it.first];
+                auto v_p_it = vertice_positions.find(e_it.first);
+                if(v_p_it != vertice_positions.end()){
+                    auto neighbour = v_p_it->second;
                     auto weight = e_it.second;
                     edges.push_back(neighbour);
                     edges_weight.push_back(weight);

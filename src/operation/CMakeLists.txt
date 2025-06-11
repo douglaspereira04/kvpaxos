@@ -1,6 +1,15 @@
 add_library(operation
     operation.cpp
+    get_operation.cpp
+    set_operation.cpp
+    scan_operation.cpp
+    del_operation.cpp
     callback_operation.cpp
+    get_callback_operation.cpp
+    set_callback_operation.cpp
+    scan_callback_operation.cpp
+    del_callback_operation.cpp
+    tracking_info.cpp
 )
 
 target_include_directories(operation

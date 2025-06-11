@@ -5,11 +5,12 @@
 #include <queue>
 #include <mutex>
 #include <semaphore.h>
+#include <type_traits>
 
 
 namespace model {
 
-template <typename T>
+template <typename T, typename U>
 class Queue {
     
 
@@ -31,8 +32,8 @@ public:
         sem_init(&ahead_sems[0], 0, ahead_0);
         sem_init(&ahead_sems[1], 0, ahead_1);
 
-        queues[0] = std::queue<T>();
-        queues[1] = std::queue<T>();
+        t_queue = std::queue<T>();
+        u_queue = std::queue<U>();
         q_mutex[0] = new std::mutex();
         q_mutex[1] = new std::mutex();
         
@@ -40,13 +41,13 @@ public:
     }
     ~Queue(){}
 
-    void push(T value_0, T value_1){
+    void push(T t_value, U u_value){
         q_mutex[0]->lock();
-        queues[0].push(value_0);
+        t_queue.push(t_value);
         q_mutex[0]->unlock();
 
         q_mutex[1]->lock();
-        queues[1].push(value_1);
+        u_queue.push(u_value);
         q_mutex[1]->unlock();
     }
 
@@ -67,14 +68,25 @@ public:
         sem_wait(&ahead_sems[Head]);
     }
 
-    template <size_t Head>
-    T pop(){
-        q_mutex[Head]->lock();
-        T curr_value = queues[Head].front();
-        queues[Head].pop();
-        q_mutex[Head]->unlock();
-        sem_post(&ahead_sems[(Head+1)%2]);
-        return curr_value;
+    template<typename TorU>
+    TorU pop(){
+        if constexpr(std::is_same_v<TorU, T>){
+            q_mutex[0]->lock();
+                T curr_value = t_queue.front();
+                t_queue.pop();
+            q_mutex[0]->unlock();
+            sem_post(&ahead_sems[1]);
+            return curr_value;
+        } else if constexpr(std::is_same_v<TorU, U>){
+            q_mutex[1]->lock();
+                U curr_value = u_queue.front();
+                u_queue.pop();
+            q_mutex[1]->unlock();
+            sem_post(&ahead_sems[0]);
+            return curr_value;
+        } else {
+            abort();
+        }
     }
 
 
@@ -83,7 +95,8 @@ private:
 
     sem_t ahead_sems[2];
 
-    std::queue<T> queues[2];
+    std::queue<T> t_queue;
+    std::queue<U> u_queue;
 
     std::mutex* q_mutex[2];
 };

@@ -14,13 +14,18 @@
 
 #include "queue.hpp"
 #include "utils.h"
-#include "operation.hpp"
-#include "callback_operation.hpp"
 #include "input_graph.hpp"
 #include "graph.hpp"
 #include "partitioning.h"
 #include "partition.hpp"
 
+#include "operation.hpp"
+#include "get_callback_operation.hpp"
+#include "set_callback_operation.hpp"
+#include "scan_callback_operation.hpp"
+#include "del_callback_operation.hpp"
+#include "repartition_operation.hpp"
+#include "tracking_info.hpp"
 
 namespace kvpaxos {
 
@@ -32,6 +37,7 @@ class KVStore{
 
 typedef kvpaxos::Partition<T, QSize> partition_t;
 typedef std::unordered_map<T, partition_t*> partition_map_t;
+typedef model::Queue<Operation<T>*, TrackingInfo<T>*> scheduling_queue_t;
 public:
 
     KVStore() {}
@@ -43,12 +49,12 @@ public:
         __n_partitions = n_partitions;
         if constexpr(Rebalance) {
             if (dh == 0) {
-                scheduling_queue = model::Queue<Operation<T>*>(SEM_VALUE_MAX, 0);
+                scheduling_queue = scheduling_queue_t(SEM_VALUE_MAX, 0);
             } else {
-                scheduling_queue = model::Queue<Operation<T>*>(1, dh);
+                scheduling_queue = scheduling_queue_t(1, dh);
             }
         } else {
-            scheduling_queue = model::Queue<Operation<T>*>(SEM_VALUE_MAX, 0);
+            scheduling_queue = scheduling_queue_t(SEM_VALUE_MAX, 0);
         }
 
         round_robin_counter = 0;
@@ -87,7 +93,7 @@ public:
             if constexpr(TL > 0){
                 for (size_t i = 0; i < TL; i++)
                 {
-                    Operation<T> *dummy = new Operation<T>(DUMMY);
+                    TrackingInfo<T> *dummy = new TrackingInfo<T>(DUMMY);
                     graph_deletion_queue.push_back(dummy);
                 }
             }
@@ -134,23 +140,23 @@ public:
     }
     
     void get(T key, void (*cb)(T key, std::string*)){
-        CallbackOperation<T>* operation = new CallbackOperation<T>(GET_CALLBACK, key, cb);
-        submit<GET>(operation);
+        GetCallbackOperation<T>* operation = new GetCallbackOperation<T>(key, cb);
+        submit<GET_CALLBACK>(operation);
     }
     
     void set(T key, const std::string &value, void (*cb)(T key, std::string*)){
-        CallbackOperation<T>* operation = new CallbackOperation<T>(SET_CALLBACK, key, new std::string(value), cb);
-        submit<SET>(operation);
+        SetCallbackOperation<T>* operation = new SetCallbackOperation<T>(key, new std::string(value), cb);
+        submit<SET_CALLBACK>(operation);
     }
     
     void scan(T key, size_t len, void (*cb)(T key, std::string*)){
-        CallbackOperation<T>* operation = new CallbackOperation<T>(SCAN_CALLBACK, key, len, cb);
-        submit<SCAN>(operation);
+        ScanCallbackOperation<T>* operation = new ScanCallbackOperation<T>(key, len, cb);
+        submit<SCAN_CALLBACK>(operation);
     }
     
     void del(T key, void (*cb)(T key)){
-        CallbackOperation<T>* operation = new CallbackOperation<T>(DEL_CALLBACK, key, cb);
-        submit<DEL>(operation);
+        DelCallbackOperation<T>* operation = new DelCallbackOperation<T>(key, cb);
+        submit<DEL_CALLBACK>(operation);
     }
 
     inline std::pair<typename partition_map_t::iterator, bool> try_map(T key){
@@ -168,9 +174,10 @@ public:
         partition_t* new_assignment;
         
         if (type == SCAN) {
-            range = operation->args_len();
+            ScanOperation<T>* scan_op = static_cast<ScanOperation<T>*>(operation);
+            range = scan_op->len();
             if (range == 1){
-                auto [it, inserted] = try_map(operation->key());
+                auto [it, inserted] = try_map(scan_op->key());
                 if (inserted){
                     new_assignment = __partitions[round_robin_counter];
                     partitions.insert(new_assignment);
@@ -178,28 +185,28 @@ public:
                 } else {
                     partitions.insert(it->second);
                 }
-                operation->set_single_partition();
+                scan_op->set_is_single_partition();
             } else{
-                operation->init_scan_data();
+                scan_op->init_scan_data();
                 new_assignment = nullptr;
                 for (size_t i = 0; i < range; i++) {
-                    key = operation->key() + i;
+                    key = scan_op->key() + i;
                     auto [it, inserted] = try_map(key);
                     if (inserted){
                         if (new_assignment == nullptr){
                             new_assignment = __partitions[round_robin_counter];
                         }
-                        operation->set_key_to_partition(i, new_assignment);
+                        scan_op->set_key_to_partition(i, new_assignment);
                     } else {
                         partitions.insert(it->second);
-                        operation->set_key_to_partition(i, it->second);
+                        scan_op->set_key_to_partition(i, it->second);
                     }
                 }
                 if(new_assignment != nullptr){
                     partitions.insert(new_assignment);
                     round_robin_counter = (round_robin_counter+1) % __n_partitions;
                 }
-                operation->init_coordination(partitions.size());
+                scan_op->init_coordination(partitions.size());
             }
         } else {
             auto [it, inserted] = try_map(operation->key());
@@ -272,7 +279,7 @@ public:
     void scheduling_loop() {
         while(true){
             scheduling_queue.template wait<0>();
-            Operation<T> *operation = scheduling_queue.template pop<0>();
+            Operation<T> *operation = scheduling_queue.template pop<Operation<T>*>();
             if (operation->type() == END){
                 stop_signal();
                 delete operation;
@@ -286,8 +293,7 @@ public:
 
 
     void sync_repartition(partition_map_t * old_partition_map) {
-        Operation<T> *sync_operation = new Operation<T>(REPARTITION);
-        sync_operation->init_barrier(__n_partitions);
+        RepartitionOperation<T> *sync_operation = new RepartitionOperation<T>(__n_partitions);
         partition_t::add_old_partition_map(old_partition_map);
 
         for (size_t i = 0; i < __n_partitions; i++)
@@ -313,8 +319,8 @@ public:
 
     template<OperationType type>
     void submit(Operation<T>* operation){
-        Operation<T>* tracking_operation = operation->no_value_copy();
-        scheduling_queue.template push(operation, tracking_operation);
+        TrackingInfo<T>* tracking_info = TrackingInfo<T>::template get_tracking_info<type>(operation);
+        scheduling_queue.template push(operation, tracking_info);
         scheduling_queue.template notify<0>();
         scheduling_queue.template notify<1>();
     }
@@ -333,7 +339,6 @@ public:
         }
 
         input_graph = InputGraph<T>(workload_graph);
-
         if constexpr(utils::ENABLE_INFO){
             __graph_copy_duration.push_back(utils::now() - begin);
         }
@@ -348,21 +353,21 @@ public:
         while(true) {
             __n_processed_operations++;
             scheduling_queue.template wait<1>();
-            Operation<T> *operation = scheduling_queue.template pop<1>();
-            if (operation->type() == END){
+            TrackingInfo<T> *tracking_info = scheduling_queue.template pop<TrackingInfo<T>*>();
+            if (tracking_info->type() == END){
                 __stop.store(true, std::memory_order_relaxed);
                 sem_post(&repart_semaphore);
-                delete operation;
+                delete tracking_info;
                 break;
             }
-            update_graph(operation);
+            update_graph(tracking_info);
 
             if constexpr(TL > 0){
-                graph_deletion_queue.push_back(operation);
+                graph_deletion_queue.push_back(tracking_info);
 
-                Operation<T> *expired_operation = graph_deletion_queue.front();
-                expire(expired_operation);
-                delete expired_operation;
+                TrackingInfo<T> *expired_info = graph_deletion_queue.front();
+                expire(expired_info);
+                delete expired_info;
                 graph_deletion_queue.pop_front();
             }
 
@@ -392,46 +397,46 @@ public:
         }
     }
 
-    void update_graph(Operation<T>* operation) {
+    void update_graph(TrackingInfo<T>* tracking_info) {
         size_t data_size = 1;
-        if (operation->type() == SCAN) {
-            data_size = operation->args_len();
+        if (tracking_info->type() == SCAN) {
+            data_size = tracking_info->len();
         }
 
         for (auto i = 0; i < data_size; i++) {
-            workload_graph.add_vertice(operation->key()+i);
-            workload_graph.increment_vertice_weight(operation->key()+i, 1);
+            workload_graph.add_vertice(tracking_info->key()+i);
+            workload_graph.increment_vertice_weight(tracking_info->key()+i, 1);
 
             for (auto j = i+1; j < data_size; j++) {
-                workload_graph.add_vertice(operation->key()+j);
-                workload_graph.add_edge(operation->key()+i, operation->key()+j);
-                workload_graph.increment_edge_weight(operation->key()+i, operation->key()+j, 1);
+                workload_graph.add_vertice(tracking_info->key()+j);
+                workload_graph.add_edge(tracking_info->key()+i, tracking_info->key()+j);
+                workload_graph.increment_edge_weight(tracking_info->key()+i, tracking_info->key()+j, 1);
             }
         }
     }
 
-    void expire(Operation<T>* operation) {
-        if(operation->type() != DUMMY){
+    void expire(TrackingInfo<T>* tracking_info) {
+        if(tracking_info->type() != DUMMY){
             int data_size = 1;
-            if (operation->type() == SCAN) {
-                data_size = operation->args_len();
+            if (tracking_info->type() == SCAN) {
+                data_size = tracking_info->len();
             }
 
             for (int i = data_size-1; i >= 0; i--) {
                 for (int j = data_size-1; j >= i+1; j--) {
-                    workload_graph.increment_edge_weight(operation->key()+i, operation->key()+j, -1);
-                    workload_graph.remove_weightless_edge(operation->key()+i, operation->key()+j);
-                    workload_graph.remove_weightless_vertice(operation->key()+j);
+                    workload_graph.increment_edge_weight(tracking_info->key()+i, tracking_info->key()+j, -1);
+                    workload_graph.remove_weightless_edge(tracking_info->key()+i, tracking_info->key()+j);
+                    workload_graph.remove_weightless_vertice(tracking_info->key()+j);
                 }
-                workload_graph.increment_vertice_weight(operation->key()+i, -1);
-                workload_graph.remove_weightless_vertice(operation->key()+i);
+                workload_graph.increment_vertice_weight(tracking_info->key()+i, -1);
+                workload_graph.remove_weightless_vertice(tracking_info->key()+i);
             }
         }
     }
 
 
     partition_map_t* partitioning(InputGraph<T> &graph) {
-
+        
         if constexpr(utils::ENABLE_INFO){
             __repartition_timestamps.push_back(utils::now());
         }
@@ -568,7 +573,7 @@ public:
     std::thread scheduling_thread;
     cpu_set_t scheduler_cpu_set;
 
-    std::deque<Operation<T>*> graph_deletion_queue;
+    std::deque<TrackingInfo<T>*> graph_deletion_queue;
 
     model::Graph<T> workload_graph;
     model::CutMethod repartition_method;
@@ -587,7 +592,7 @@ public:
     std::vector<types::duration> __reconstruction_duration;
     types::time_point __schedule_end;
 
-    model::Queue<Operation<T>*> scheduling_queue;
+    scheduling_queue_t scheduling_queue;
 
     size_t __n_processed_operations = 0;
 
