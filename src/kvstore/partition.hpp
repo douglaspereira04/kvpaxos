@@ -14,14 +14,11 @@
 #include <fstream>
 #include <csignal>
 #include <iostream>
-#include "types.h"
 #include "utils.h"
 #include "request.hpp"
+#include "callback_request.hpp"
 #include "rocks_db_storage.h"
 
-
-static const int VALUE_SIZE = 1024;
-static const std::string template_value(VALUE_SIZE, '*');
 
 namespace kvpaxos {
 using namespace kvstorage;
@@ -35,7 +32,7 @@ class Partition {
 typedef Partition<T, QSize> partition_t;
 typedef std::unordered_map<T, partition_t*> partition_map_t;
 public:
-    Partition(int id)
+    Partition(size_t id)
         : __id{id},
           __n_executed_requests{0}
     {
@@ -66,10 +63,10 @@ public:
     }
 
     size_t error_count() {
-        return error_count_;
+        return __error_count;
     }
 
-    void push_request(Request *request) {
+    void push_request(Request<T> *request) {
         if constexpr(QSize > 0){
             sem_wait(&remaining_space_);
         }
@@ -79,8 +76,8 @@ public:
         sem_post(&semaphore_);
     }
 
-    Request * pop_request() {
-        Request *request;
+    Request<T> * pop_request() {
+        Request<T> *request;
         sem_wait(&semaphore_);
 
         __queue_mutex.lock();
@@ -115,67 +112,53 @@ public:
     }
 private:
 
-    int read(int key, std::string& val){
+    void read(T &key, std::string& val){
         int len = storage[__id].read(key, val);
-        int len_old = -1;
-        storage_t* past_storage;
-        int past_id;
-        if (len < 0){
-            for (int i = version_count-1; i >= 0; i--)
+        if (len >= 0){
+            return;
+        } else {
+            for (size_t i = version_count-1; i >= 0; i--)
             {
                 version_maps_mtx.lock_shared();
-                std::unordered_map<int, partition_t*> *map = version_maps.at(i);
+                partition_map_t *map = version_maps.at(i);
                 version_maps_mtx.unlock_shared();
-                auto partition = map->find(key);
-                if (partition != map->end()){
-                    past_id = partition->second->__id;
-                    past_storage = previous_storage[i];
-                    len_old = past_storage[past_id].read(key, val);
+
+                auto map_it = map->find(key);
+                if (map_it != map->end()){
+                    size_t prev_id = map_it->second->__id;
+                    int len_old = prev_storage[i][prev_id].read(key, val);
                     if (len_old >= 0){
                         storage[__id].write(key, val);
-                        return len_old;
+                        return;
                     }
                 }
             }
             
         }
-        if (len < 0 && len_old < 0){
-            exit(EXIT_FAILURE);
-        }
-        return len;
+        __error_count++;
     }
 
-    inline void scan_some(Request* request, int &key){
-        for (size_t i = 0; i < request->args_len(); i++)
+    inline void scan_some(Request<T>* request, T &key, size_t &len){
+        for (size_t i = 0; i < len; i++)
         {
             if (request->key_in_partition(i, this)){
-                int key_i = key + i;
-                int len = read(key_i, request->get_scaned_value(i));
-                if (len < 0){
-                    error_count_++;
-                    continue;
-                }
+                T key_i = key + i;
+                read(key_i, request->get_scaned_value(i));
             }
         }
         
 
     }
-    inline void scan(Request* request, int &key){
-        auto length = request->args_len();
+    inline void scan(T &key, size_t &len, std::string* values){
 
         if constexpr(utils::ENABLE_ANSWER){
-            __output_file << "scan( " << key << ", "<< length << " ): [";
+            __output_file << "scan( " << key << ", "<< len << " ): [";
         }
-        for (auto key_i = key; key_i < key+length; key_i++) {
-            std::string value;
-            int len = read(key, value);
-            if (len < 0){
-                error_count_++;
-                continue;
-            }
-
+        for (auto i = 0; i < len; i++) {
+            T key_i = key+i;
+            read(key_i, values[i]);
             if constexpr(utils::ENABLE_ANSWER){
-                 __output_file << "\"" << value << "\", ";
+                 __output_file << "\"" << values[i] << "\", ";
             }
         }
 
@@ -184,62 +167,96 @@ private:
         }
     }
 
+    inline void print_read(T &key, std::string &value){
+        if constexpr(utils::ENABLE_ANSWER){
+            __output_file << "read( " << key << " ): " << value << "\n";
+        }
+    }
+
+    inline void print_write(T &key, std::string &value){
+        if constexpr(utils::ENABLE_ANSWER){
+            __output_file << "write( " << key << ", " << value << " )\n";
+        }
+    }
+
+    inline void print_scan(bool is_coordinator, T &key, size_t &len, const std::string* values){
+        if (is_coordinator) {
+            if constexpr(utils::ENABLE_ANSWER){
+                __output_file << "scan( " << key << ", "<< len << " ): [";
+                for (size_t i = 0; i < len; i++)
+                {
+                    __output_file << "\"" << values[i] << "\",";
+                }
+                __output_file << "]\n";
+            }
+        }
+    }
+
+    void print_del(T &key){
+        if constexpr(utils::ENABLE_ANSWER){
+            __output_file << "del( " << key << " )\n";
+        }
+    }
+
+
     void thread_loop() {
+        std::string value;
+        T key;
+        OperationType type;
+        Request<T> *request;
+
         while (true) {
 
-            Request *request = pop_request();
+            request = pop_request();
+            type = request->type();
+            key = request->key();
 
-            RequestType type = request->type();
-            auto key = request->key();
-            int coordinator = 0;
-            switch (type)
+            switch (type){
+            case GET:
             {
-            case READ:
-            {   
-                std::string value;
-                int len = read(key, value);
-                if constexpr(utils::ENABLE_ANSWER){
-                    __output_file << "read( " << key << " ): " << value << "\n";
-                }
-                if (len < 0) {
-                    error_count_++;
-                    continue;
-                }
+                read(key, value);
+                print_read(key, value);
                 delete request;
                 __n_executed_requests++;
                 break;
             }
-
-            case WRITE:
+            case GET_CALLBACK:
             {
-                if constexpr(utils::ENABLE_ANSWER){
-                    const std::string value = request->get_write_value();
-                    storage[__id].write(key, value);
-                    __output_file << "write( " << key << ", " << value << " )\n";
-                    request->destroy_write();
-                } else {
-                    storage[__id].write(key, template_value);
-                }
+                read(key, value);
+                print_read(key, value);
+                static_cast<CallbackRequest<T>*>(request)->callback_function(&value);
                 delete request;
                 __n_executed_requests++;
                 break;
             }
-
+            case SET:
+            {
+                value = request->get_write_value();
+                storage[__id].write(key, value);
+                print_write(key, value);
+                request->destroy_write();
+                delete request;
+                __n_executed_requests++;
+                break;
+            }
+            case SET_CALLBACK:
+            {
+                value = request->get_write_value();
+                storage[__id].write(key, value);
+                print_write(key, value);
+                static_cast<CallbackRequest<T>*>(request)->callback_function(&value);
+                request->destroy_write();
+                delete request;
+                __n_executed_requests++;
+                break;
+            }
             case SCAN:
             {
+                size_t len = request->args_len();
                 if (request->is_multi_partition()){
-                    scan_some(request, key);
+                    scan_some(request, key, len);
                     bool is_coordinator = request->is_coordinator();
-                    if (is_coordinator) {
-                        if constexpr(utils::ENABLE_ANSWER){
-                            __output_file << "scan( " << key << ", "<< request->args_len() << " ): [";
-                            for (size_t i = 0; i < request->args_len(); i++)
-                            {
-                                __output_file << "\"" << request->get_scaned_value(i) << "\",";
-                            }
-                            __output_file << "]\n";
-                        }
-                    }
+                    print_scan(is_coordinator, key, len, request->get_scaned_values());
                     if constexpr(utils::ENABLE_LINEARIZABLE){
                         is_coordinator = request->is_coordinator();
                     }
@@ -249,27 +266,62 @@ private:
                         __n_executed_requests++;
                     }
                 } else {
-                    scan(request, key);
+                    std::string values[len];
+                    scan(key, len, values);
+                    print_scan(true, key, len, values);
                     delete request;
                     __n_executed_requests++;
                 }
                 break;
             }
-
+            case SCAN_CALLBACK:
+            {
+                size_t len = request->args_len();
+                if (request->is_multi_partition()){
+                    scan_some(request, key, len);
+                    bool is_coordinator = request->is_coordinator();
+                    print_scan(is_coordinator, key, len, request->get_scaned_values());
+                    if constexpr(utils::ENABLE_LINEARIZABLE){
+                        static_cast<CallbackRequest<T>*>(request)->callback_function(request->get_scaned_values());
+                        is_coordinator = request->is_coordinator();
+                    }
+                    if (is_coordinator) {
+                        request->destroy_multi_partition_scan();
+                        delete request;
+                        __n_executed_requests++;
+                    }
+                } else {
+                    std::string values[len];
+                    scan(key, len, values);
+                    print_scan(true, key, len, values);
+                    static_cast<CallbackRequest<T>*>(request)->callback_function(&value);
+                    delete request;
+                    __n_executed_requests++;
+                }
+                break;
+            }
             case DEL:
             {
                 storage[__id].del(key);
-                if constexpr(utils::ENABLE_ANSWER){
-                    __output_file << "del( " << key << " )\n";
-                }
+                print_del(key);
+                delete request;
+                __n_executed_requests++;
+                break;
+            }
+            case DEL_CALLBACK:
+            {
+                storage[__id].del(key);
+                print_del(key);
+                static_cast<CallbackRequest<T>*>(request)->callback_function();
                 delete request;
                 __n_executed_requests++;
                 break;
             }
             case REPARTITION:
-                coordinator = request->barrier_wait();
+            {
+                int coordinator = request->barrier_wait();
                 if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
-                    previous_storage.push_back(storage);
+                    prev_storage.push_back(storage);
                     version_count++;
                     storage = new storage_t[partitions];
                     if constexpr(utils::ENABLE_ANSWER){
@@ -283,40 +335,39 @@ private:
                 }
                 storage[__id] = storage_t(version_count);
                 break;
-            case ERROR:
-                if constexpr(utils::ENABLE_ANSWER){
-                    __output_file << "err() \n";
-                }
-                delete request;
-                break;
+            }
             case END:
+            {
                 __output_file << "end() \n";
                 delete request;
                 return;
+            }
             default:
+            {
                 delete request;
                 std::raise(SIGINT);
                 return;
                 break;
             }
+            }
         }
     }
 
-    int __id;
+    size_t __id;
     size_t __n_executed_requests;
     static storage_t *storage;
     cpu_set_t cpu_set;
 
     std::thread worker_thread_;
     sem_t semaphore_;
-    std::queue<Request*> __requests_queue;
+    std::queue<Request<T>*> __requests_queue;
     std::mutex __queue_mutex;
 
     sem_t remaining_space_;
 
-    size_t error_count_ = 0;
+    size_t __error_count = 0;
     static size_t partitions;
-    static std::vector<storage_t*> previous_storage;
+    static std::vector<storage_t*> prev_storage;
     static int version_count;
     static std::vector<partition_map_t*> version_maps;
     static std::shared_mutex version_maps_mtx;
@@ -326,7 +377,7 @@ private:
 
 };
 template<typename T, size_t QSize>
-std::vector<storage_t*> Partition<T, QSize>::previous_storage;
+std::vector<storage_t*> Partition<T, QSize>::prev_storage;
 
 template<typename T, size_t QSize>
 int Partition<T, QSize>::version_count = 0;

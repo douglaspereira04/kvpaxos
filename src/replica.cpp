@@ -44,7 +44,7 @@ using namespace workload;
     const bool ENABLE_REPARTITION = false;
 #endif
 
-typedef kvpaxos::KVStore<int, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, interval_type::OPERATIONS> KVStore;
+typedef kvpaxos::KVStore<int, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, types::OPERATIONS> KVStore;
 
 
 static int verbose = 0;
@@ -68,15 +68,13 @@ static int arrived = 0;
 static long request_rate;
 static long request_rate_seed;
 
+static const int VALUE_SIZE = 1024;
+static const std::string template_value(VALUE_SIZE, '*');
+
 
 void
 metrics_loop(int sleep_duration, KVStore* kvstore)
 {
-	if constexpr(utils::ENABLE_LINEARIZABLE) {
-		std::cout << "LINEARIZABLE" << std::endl;
-	} else {
-		std::cout << "EVENTUAL" << std::endl;
-	}
 	size_t n_requests = atol(params[N_REQUESTS]);
 	size_t n_initial_keys = atol(params[N_INITIAL_KEYS]);
 	std::cout << "Executed,Arrivals,VM,RSS,Used Disk,Graph Vertices,Graph Edges";
@@ -115,6 +113,40 @@ metrics_loop(int sleep_duration, KVStore* kvstore)
 	std::cout << std::flush;
 }
 
+void do_nothing_with_kv(int key, std::string *value){}
+void do_nothing_with_k(int key){}
+
+void submit_request_from_file(KVStore *kvstore, std::ifstream &requests_file){
+	types::RequestType type;
+	int key;
+	size_t len;
+	std::string value;
+	utils::read_request(type, key, len, value, requests_file);
+
+	switch (type)
+	{
+	case types::READ:
+		kvstore->get(key, do_nothing_with_kv);
+		break;
+	case types::WRITE:
+		if (utils::ENABLE_ANSWER){
+			kvstore->set(key, value, do_nothing_with_kv);
+		} else {
+			kvstore->set(key, template_value, do_nothing_with_kv);
+		}
+		break;
+	case types::SCAN:
+		kvstore->scan(key, len, do_nothing_with_kv);
+		break;
+	case types::DEL:
+		kvstore->del(key, do_nothing_with_k);
+		break;
+	default:
+		std::cout << "ERROR" << std::endl;
+		break;
+	}
+}
+
 static KVStore*
 initialize_kvstore(std::ifstream &requests_file)
 {
@@ -128,7 +160,7 @@ initialize_kvstore(std::ifstream &requests_file)
 
 	float q_head_distance = atoi(params[QUEUE_HEAD_DISTANCE]);
 
-	auto* kvstore = new KVStore(
+	KVStore* kvstore = new KVStore(
 		repartition_interval, n_partitions,
 		repartition_method,
 		q_head_distance
@@ -140,18 +172,18 @@ initialize_kvstore(std::ifstream &requests_file)
 	if (n_initial_keys > 0) {
 		for (int i = 0; i < n_initial_keys; i++)
 		{
-			Request *request;
-			read_request(request, requests_file);
-			kvstore->submit(request);
+			submit_request_from_file(kvstore, requests_file);
 		}
 		
 		bool wait = true;
 		while(wait){
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+			size_t executed = kvstore->n_executed_requests();
 			if (ENABLE_REPARTITION){
-				wait = kvstore->n_executed_requests() < n_initial_keys || kvstore->n_processed_requests() < n_initial_keys;
+				size_t processed = kvstore->n_processed_requests();
+				wait = executed < n_initial_keys || processed < n_initial_keys;
 			} else {
-				wait = kvstore->n_executed_requests() < n_initial_keys;
+				wait = executed < n_initial_keys;
 			}
 		}
 	}
@@ -169,9 +201,7 @@ workload_loop(std::ifstream &requests_file, KVStore *kvstore)
 
 		auto begin = utils::now();
 		for (int i = 0; i < n_requests && requests_file.peek() != EOF; i++) {
-			Request *request;
-			read_request(request, requests_file);
-			kvstore->submit(request);
+			submit_request_from_file(kvstore, requests_file);
 
 			if constexpr(utils::ENABLE_INFO){
 				arrived++;
@@ -183,17 +213,13 @@ workload_loop(std::ifstream &requests_file, KVStore *kvstore)
 		}
 	} else {
 		for (int i = 0; i < n_requests && requests_file.peek() != EOF; i++) {
-			Request *request;
-			read_request(request, requests_file);
-			kvstore->submit(request);
-
+			submit_request_from_file(kvstore, requests_file);
 			if constexpr(utils::ENABLE_INFO){
 				arrived++;
 			}
 		}
 	}
-	Request *end_request = new Request(END);
-	kvstore->submit(end_request);
+	kvstore->stop();
 }
 
 
@@ -207,9 +233,9 @@ run()
 	std::string requests_path = params[REQUESTS_PATH];
 	std::ifstream requests_file(requests_path);
 
-	auto* kvstore = initialize_kvstore(ref(requests_file));
+	KVStore* kvstore = initialize_kvstore(ref(requests_file));
 	
-	auto throughput_thread = std::thread(
+	std::thread throughput_thread = std::thread(
 		metrics_loop, SLEEP, kvstore
 	);
 	cpu_set_t throughput_cpu_set;

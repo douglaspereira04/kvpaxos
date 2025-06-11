@@ -11,11 +11,11 @@
 
 namespace utils{ 
 
-inline time_point now(){
+inline types::time_point now(){
     return std::chrono::_V2::system_clock::now();
 }
 
-inline duration to_us(duration t) {
+inline types::duration to_us(types::duration t) {
     return std::chrono::duration_cast<std::chrono::microseconds>(t);
 }
 
@@ -46,6 +46,9 @@ std::uintmax_t used_disk(const char* path);
 #else
     static const bool ENABLE_LINEARIZABLE = false;
 #endif
+
+
+void read_request(types::RequestType &type, int &key, size_t &len, std::string &value, std::ifstream &file);
 
 }
 

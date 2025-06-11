@@ -13,9 +13,9 @@
 #include <iostream>
 
 #include "queue.hpp"
-#include "types.h"
 #include "utils.h"
 #include "request.hpp"
+#include "callback_request.hpp"
 #include "input_graph.hpp"
 #include "graph.hpp"
 #include "partitioning.h"
@@ -25,10 +25,9 @@
 namespace kvpaxos {
 
 using namespace kvstorage;
-using namespace workload;
 
 
-template <typename T, bool Rebalance, size_t TL = 0, size_t QSize = 0, interval_type IntervalType = interval_type::OPERATIONS>
+template <typename T, bool Rebalance, size_t TL = 0, size_t QSize = 0, types::interval_type IntervalType = types::OPERATIONS>
 class KVStore{
 
 typedef kvpaxos::Partition<T, QSize> partition_t;
@@ -44,23 +43,23 @@ public:
         __n_partitions = n_partitions;
         if constexpr(Rebalance) {
             if (dh == 0) {
-                scheduling_queue = model::Queue<Request*>(SEM_VALUE_MAX, 0);
+                scheduling_queue = model::Queue<Request<T>*>(SEM_VALUE_MAX, 0);
             } else {
-                scheduling_queue = model::Queue<Request*>(1, dh);
+                scheduling_queue = model::Queue<Request<T>*>(1, dh);
             }
         } else {
-            scheduling_queue = model::Queue<Request*>(SEM_VALUE_MAX, 0);
+            scheduling_queue = model::Queue<Request<T>*>(SEM_VALUE_MAX, 0);
         }
 
         round_robin_counter = 0;
         __n_dispatched_requests = 0;
 
         partition_t::create_storage(__n_partitions);
+        __partitions = new partition_t*[__n_partitions];
         for (auto i = 0; i < __n_partitions; i++) {
-            auto* partition = new partition_t(i);
-            __partitions.emplace(i, partition);
+            __partitions[i] = new partition_t(i);
         }
-        data_to_partition = new partition_map_t();
+        __data_to_partition = new partition_map_t();
 
         scheduling_thread = std::thread(&KVStore<T, Rebalance, TL, QSize, IntervalType>::scheduling_loop, this);
         utils::set_affinity(2,scheduling_thread, scheduler_cpu_set);
@@ -68,11 +67,11 @@ public:
         if constexpr(Rebalance) {
             workload_graph = model::Graph<T>();
 
-            if constexpr(IntervalType == interval_type::MICROSECONDS){
+            if constexpr(IntervalType == types::MICROSECONDS){
                 __time_start = utils::now();
                 time_interval = std::chrono::microseconds(repartition_interval);
                 __operation_start = 0;
-            } else if constexpr(IntervalType == interval_type::OPERATIONS){
+            } else if constexpr(IntervalType == types::OPERATIONS){
                 __operation_start = 0;
                 operation_interval = repartition_interval;
             }
@@ -88,7 +87,7 @@ public:
             if constexpr(TL > 0){
                 for (size_t i = 0; i < TL; i++)
                 {
-                    Request *dummy = new Request(DUMMY);
+                    Request<T> *dummy = new Request<T>(DUMMY);
                     graph_deletion_queue.push_back(dummy);
                 }
             }
@@ -108,85 +107,115 @@ public:
         if constexpr(Rebalance) {
             graph_thread.join();
             reparting_thread.join();
-            delete data_to_partition;
+            delete __data_to_partition;
             delete updated_data_to_partition;
         }
 
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            delete partition;
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            delete __partitions[i];
         }
+        delete[] __partitions;
     }
 
     void run() {
-        for (auto& kv : __partitions) {
-            kv.second->start_worker_thread();
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            __partitions[i]->start_worker_thread();
         }
     }
 
     void join(){
         scheduling_thread.join();
     }
+
+    void stop(){
+        submit<END>(new Request<T>(END));
+    }
     
+    void get(T key, void (*cb)(T key, std::string*)){
+        CallbackRequest<T>* request = new CallbackRequest<T>(GET_CALLBACK, key, cb);
+        submit<GET>(request);
+    }
+    
+    void set(T key, const std::string &value, void (*cb)(T key, std::string*)){
+        CallbackRequest<T>* request = new CallbackRequest<T>(SET_CALLBACK, key, new std::string(value), cb);
+        submit<SET>(request);
+    }
+    
+    void scan(T key, size_t len, void (*cb)(T key, std::string*)){
+        CallbackRequest<T>* request = new CallbackRequest<T>(SCAN_CALLBACK, key, len, cb);
+        submit<SCAN>(request);
+    }
+    
+    void del(T key, void (*cb)(T key)){
+        CallbackRequest<T>* request = new CallbackRequest<T>(DEL_CALLBACK, key, cb);
+        submit<DEL>(request);
+    }
+
+    inline std::pair<typename partition_map_t::iterator, bool> try_map(T key){
+        return __data_to_partition->try_emplace(key, __partitions[round_robin_counter]);
+    }
 
     std::unordered_set<partition_t*> prepare_request(
-        Request* request)
+        Request<T>* request)
     {
         std::unordered_set<partition_t*> partitions;
-        auto type = request->type();
+        OperationType type = request->clean_type();
         size_t range = 1;
         bool new_mapping = false;
-        bool is_multi_partition_scan = false;
-        int key;
-        partition_t* new_assignment = nullptr;
+        T key;
+        partition_t* new_assignment;
+        
         if (type == SCAN) {
             range = request->args_len();
             if (range == 1){
-                key = request->key();
-                if(!mapped(key)){
-                    map_key(key, round_robin_counter);
-                    new_assignment = __partitions.at(round_robin_counter);
+                auto [it, inserted] = try_map(request->key());
+                if (inserted){
+                    new_assignment = __partitions[round_robin_counter];
+                    partitions.insert(new_assignment);
+                    round_robin_counter = (round_robin_counter+1) % __n_partitions;
                 } else {
-                    partitions.insert(data_to_partition->at(key));
+                    partitions.insert(it->second);
                 }
                 request->set_single_partition();
             } else{
-                is_multi_partition_scan = true;
                 request->init_scan_data();
+                new_assignment = nullptr;
                 for (size_t i = 0; i < range; i++) {
                     key = request->key() + i;
-                    if(!mapped(key)){
-                        map_key(key, round_robin_counter);
-                        new_assignment = __partitions.at(round_robin_counter);
+                    auto [it, inserted] = try_map(key);
+                    if (inserted){
+                        if (new_assignment == nullptr){
+                            new_assignment = __partitions[round_robin_counter];
+                        }
                         request->set_key_to_partition(i, new_assignment);
                     } else {
-                        partition_t* partition = data_to_partition->at(key);
-                        partitions.insert(partition);
-                        request->set_key_to_partition(i, partition);
+                        partitions.insert(it->second);
+                        request->set_key_to_partition(i, it->second);
                     }
                 }
+                if(new_assignment != nullptr){
+                    partitions.insert(new_assignment);
+                    round_robin_counter = (round_robin_counter+1) % __n_partitions;
+                }
+                request->init_coordination(partitions.size());
             }
         } else {
-            key = request->key();
-            if(!mapped(key)){
-                map_key(key, round_robin_counter);
-                new_assignment = __partitions.at(round_robin_counter);
+            auto [it, inserted] = try_map(request->key());
+            if (inserted){
+                new_assignment = __partitions[round_robin_counter];
+                partitions.insert(new_assignment);
+                round_robin_counter = (round_robin_counter+1) % __n_partitions;
             } else {
-                partitions.insert(data_to_partition->at(key));
+                partitions.insert(it->second);
             }
         }
 
-        if(new_assignment != nullptr){
-            partitions.insert(new_assignment);
-            round_robin_counter = (round_robin_counter+1) % __n_partitions;
-        }
-        if (is_multi_partition_scan){
-            request->init_coordination(partitions.size());
-        }
         return partitions;
     }
     
-    void dispatch(Request* request){
+    void dispatch(Request<T>* request){
         std::unordered_set<partition_t*> partitions = prepare_request(request);
         for (auto partition : partitions) {
             partition->push_request(request);
@@ -195,15 +224,15 @@ public:
 
     inline bool interval_achieved(){
         bool interval_achieved;
-        time_point now_ = utils::now();
-        if constexpr(IntervalType == interval_type::MICROSECONDS)
+        types::time_point now_ = utils::now();
+        if constexpr(IntervalType == types::MICROSECONDS)
             interval_achieved = utils::to_us(now_ - __time_start) >= time_interval;
-        else if constexpr(IntervalType == interval_type::OPERATIONS)
+        else if constexpr(IntervalType == types::OPERATIONS)
             interval_achieved = __n_dispatched_requests - __operation_start >= operation_interval;
         return interval_achieved;
     }
 
-    void schedule_and_answer(Request* request) {
+    void schedule_and_answer(Request<T>* request) {
         dispatch(request);
         __n_dispatched_requests++;
 
@@ -221,9 +250,9 @@ public:
                 }
                 __update.store(false, std::memory_order_relaxed);
 
-                if constexpr(IntervalType == interval_type::MICROSECONDS)
+                if constexpr(IntervalType == types::MICROSECONDS)
                     __time_start = utils::now();
-                else if constexpr(IntervalType == interval_type::OPERATIONS)
+                else if constexpr(IntervalType == types::OPERATIONS)
                     __operation_start = __n_dispatched_requests;
 
                 __repartitioning = false;
@@ -231,22 +260,22 @@ public:
         }
     }
 
-    void end_signal(Request* request){
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            Request* end_request = new Request(END);
-            partition->push_request(end_request);
+    void stop_signal(){
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            Request<T>* end_request = new Request<T>(END);
+            __partitions[i]->push_request(end_request);
         }
-        delete request;
     }
 
 
     void scheduling_loop() {
         while(true){
             scheduling_queue.template wait<0>();
-            Request *request = scheduling_queue.template pop<0>();
+            Request<T> *request = scheduling_queue.template pop<0>();
             if (request->type() == END){
-                end_signal(request);
+                stop_signal();
+                delete request;
                 break;
             }
             schedule_and_answer(request);
@@ -257,52 +286,52 @@ public:
 
 
     void sync_repartition(partition_map_t * old_partition_map) {
-        Request *sync_request = new Request(REPARTITION);
+        Request<T> *sync_request = new Request<T>(REPARTITION);
         sync_request->init_barrier(__n_partitions);
         partition_t::add_old_partition_map(old_partition_map);
 
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            partition->push_request(sync_request);
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            __partitions[i]->push_request(sync_request);
         }
     }
 
     void map_key(T key) {
         auto partition_id = round_robin_counter;
-        data_to_partition->emplace(key, __partitions.at(partition_id));
+        __data_to_partition->emplace(key, __partitions[partition_id]);
 
         round_robin_counter = (round_robin_counter+1) % __n_partitions;
     }
 
     void map_key(T key, int partition_id) {
-        data_to_partition->emplace(key, __partitions.at(partition_id));
+        __data_to_partition->emplace(key, __partitions[partition_id]);
     }
 
     bool mapped(T key) const {
-        return data_to_partition->find(key) != data_to_partition->end();
+        return __data_to_partition->find(key) != __data_to_partition->end();
     }
 
-    int submited = 0;
-    void submit(Request* request){
-        submited++;
-        Request* request_copy = request->no_value_copy();
-        scheduling_queue.push(request, request_copy);
+    template<OperationType type>
+    void submit(Request<T>* request){
+        Request<T>* tracking_request = request->no_value_copy();
+        scheduling_queue.template push(request, tracking_request);
         scheduling_queue.template notify<0>();
         scheduling_queue.template notify<1>();
     }
 
     void update_partition_scheme(){
-        partition_map_t *old_data_to_partition =  data_to_partition;
-        data_to_partition = updated_data_to_partition;
+        partition_map_t *old_data_to_partition =  __data_to_partition;
+        __data_to_partition = updated_data_to_partition;
 
         sync_repartition(old_data_to_partition);
     }
 
     void order_partitioning(){
-        time_point begin;
+        types::time_point begin;
         if constexpr(utils::ENABLE_INFO){
             begin = utils::now();
         }
+
         input_graph = InputGraph<T>(workload_graph);
 
         if constexpr(utils::ENABLE_INFO){
@@ -319,9 +348,9 @@ public:
         while(true) {
             __n_processed_requests++;
             scheduling_queue.template wait<1>();
-            Request *request = scheduling_queue.template pop<1>();
+            Request<T> *request = scheduling_queue.template pop<1>();
             if (request->type() == END){
-                stop.store(true, std::memory_order_relaxed);
+                __stop.store(true, std::memory_order_relaxed);
                 sem_post(&repart_semaphore);
                 delete request;
                 break;
@@ -331,7 +360,7 @@ public:
             if constexpr(TL > 0){
                 graph_deletion_queue.push_back(request);
 
-                Request *expired_request = graph_deletion_queue.front();
+                Request<T> *expired_request = graph_deletion_queue.front();
                 expire(expired_request);
                 delete expired_request;
                 graph_deletion_queue.pop_front();
@@ -351,19 +380,19 @@ public:
     void partitioning_loop(){
         while(true){
             sem_wait(&repart_semaphore);
-            if (stop.load(std::memory_order_relaxed)){
+            if (__stop.load(std::memory_order_relaxed)){
                 break;
             }
             if (__n_partitions > 1){
                 updated_data_to_partition = partitioning(input_graph);
             } else {
-                updated_data_to_partition = new partition_map_t(*data_to_partition);
+                updated_data_to_partition = new partition_map_t(*__data_to_partition);
             }
             __update.store(true, std::memory_order_release);
         }
     }
 
-    void update_graph(Request* request) {
+    void update_graph(Request<T>* request) {
         size_t data_size = 1;
         if (request->type() == SCAN) {
             data_size = request->args_len();
@@ -381,7 +410,7 @@ public:
         }
     }
 
-    void expire(Request* request) {
+    void expire(Request<T>* request) {
         if(request->type() != DUMMY){
             int data_size = 1;
             if (request->type() == SCAN) {
@@ -407,23 +436,24 @@ public:
             __repartition_timestamps.push_back(utils::now());
         }
 
-        auto partition_scheme = move(
+        std::vector<int> partition_scheme = move(
             model::multilevel_cut(
                 graph.vertice_weight, 
                 graph.x_edges, 
                 graph.edges, 
                 graph.edges_weight,
-                __partitions.size(), 
+                __n_partitions, 
                 repartition_method
             )
         );
 
-        time_point reconstruction_begin;
+        types::time_point reconstruction_begin;
         if constexpr(utils::ENABLE_INFO){
             __repartition_end_timestamps.push_back(utils::now());
             reconstruction_begin = utils::now();
         }
-        auto data_to_partition = new partition_map_t();
+        partition_map_t* data_to_partition = new partition_map_t();
+        data_to_partition->reserve(graph.vertice_to_pos.size());
 
         for (auto& it : graph.vertice_to_pos) {
             T key = it.first;
@@ -433,7 +463,7 @@ public:
                 printf("ERROR: partition was %d!\n", partition);
                 fflush(stdout);
             }
-            data_to_partition->emplace(key, __partitions.at(partition));
+            data_to_partition->emplace(key, __partitions[partition]);
         }
 
         if constexpr(utils::ENABLE_INFO){
@@ -444,9 +474,9 @@ public:
 
     size_t n_executed_requests() const{
         size_t n_executed_requests = 0;
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            n_executed_requests += partition->n_executed_requests();
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            n_executed_requests += __partitions[i]->n_executed_requests();
         }
         return n_executed_requests;
     }
@@ -457,18 +487,18 @@ public:
 
     size_t n_enqueued_requests() const{
         size_t n_enqueued_requests = 0;
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            n_enqueued_requests += partition->request_queue_size();
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            n_enqueued_requests += __partitions[i]->request_queue_size();
         }
         return n_enqueued_requests;
     }
 
     std::vector<size_t> in_queue_amount() const{
         std::vector<size_t> in_queue;
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            size_t amount = partition->request_queue_size();
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            size_t amount = __partitions[i]->request_queue_size();
             in_queue.push_back(amount);
         }
         return in_queue;
@@ -482,7 +512,7 @@ public:
         return workload_graph.n_edges();
     }
 
-    time_point schedule_end(){
+    types::time_point schedule_end(){
         return __schedule_end;
     }
 
@@ -492,34 +522,34 @@ public:
 
     int error_count(){
         int count = 0;
-        for (auto& kv: __partitions) {
-            auto* partition = kv.second;
-            count += partition->error_count();
+        for (size_t i = 0; i < __n_partitions; i++)
+        {
+            count += __partitions[i]->error_count();
         }
         return count;
     }
 
-    const std::vector<time_point>& repartition_timestamps() const {
+    const std::vector<types::time_point>& repartition_timestamps() const {
         return __repartition_timestamps;
     }
 
-    const std::vector<duration>& graph_copy_duration() const {
+    const std::vector<types::duration>& graph_copy_duration() const {
         return __graph_copy_duration;
     }
 
-    const std::vector<time_point>& repartition_end_timestamps() const {
+    const std::vector<types::time_point>& repartition_end_timestamps() const {
         return __repartition_end_timestamps;
     }
 
-    const std::vector<time_point>& repartition_apply_timestamp() const {
+    const std::vector<types::time_point>& repartition_apply_timestamp() const {
         return __repartition_apply_timestamp;
     }
 
-    const std::vector<time_point>& repartition_request_timestamp() const {
+    const std::vector<types::time_point>& repartition_request_timestamp() const {
         return __repartition_request_timestamp;
     }
 
-    const std::vector<duration>& reconstruction_duration() const {
+    const std::vector<types::duration>& reconstruction_duration() const {
         return __reconstruction_duration;
     }
 
@@ -529,8 +559,8 @@ public:
     int round_robin_counter = 0;
     int __n_dispatched_requests = 0;
 
-    partition_map_t __partitions;
-    partition_map_t* data_to_partition;
+    partition_t** __partitions;
+    partition_map_t* __data_to_partition;
 
     std::thread graph_thread;
     cpu_set_t graph_cpu_set;
@@ -538,26 +568,26 @@ public:
     std::thread scheduling_thread;
     cpu_set_t scheduler_cpu_set;
 
-    std::deque<Request*> graph_deletion_queue;
+    std::deque<Request<T>*> graph_deletion_queue;
 
     model::Graph<T> workload_graph;
     model::CutMethod repartition_method;
     pthread_barrier_t repartition_barrier;
 
     int operation_interval;
-    duration time_interval;
-    time_point __time_start;
+    types::duration time_interval;
+    types::time_point __time_start;
 
 
-    std::vector<time_point> __repartition_timestamps;
-    std::vector<duration> __graph_copy_duration;
-    std::vector<time_point> __repartition_end_timestamps;
-    std::vector<time_point> __repartition_request_timestamp;
-    std::vector<time_point> __repartition_apply_timestamp;
-    std::vector<duration> __reconstruction_duration;
-    time_point __schedule_end;
+    std::vector<types::time_point> __repartition_timestamps;
+    std::vector<types::duration> __graph_copy_duration;
+    std::vector<types::time_point> __repartition_end_timestamps;
+    std::vector<types::time_point> __repartition_request_timestamp;
+    std::vector<types::time_point> __repartition_apply_timestamp;
+    std::vector<types::duration> __reconstruction_duration;
+    types::time_point __schedule_end;
 
-    model::Queue<Request*> scheduling_queue;
+    model::Queue<Request<T>*> scheduling_queue;
 
     size_t __n_processed_requests = 0;
 
@@ -572,7 +602,7 @@ public:
 
     std::atomic_bool __repartition_signal;
     std::atomic_bool __update;
-    std::atomic_bool stop = false;
+    std::atomic_bool __stop = false;
 
     bool __repartitioning;
 

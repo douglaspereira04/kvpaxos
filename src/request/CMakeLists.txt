@@ -1,4 +1,7 @@
-add_library(request request.cpp)
+add_library(request
+    request.cpp
+    callback_request.cpp
+)
 
 target_include_directories(request
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
