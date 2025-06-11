@@ -27,7 +27,7 @@ target_link_libraries(kvstore
         queue
         types
         utils
-        request
+        operation
         graph
         storage
 )

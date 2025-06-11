@@ -2,7 +2,7 @@ add_subdirectory(compresser)
 add_subdirectory(queue)
 add_subdirectory(types)
 add_subdirectory(utils)
-add_subdirectory(request)
+add_subdirectory(operation)
 add_subdirectory(storage)
 add_subdirectory(graph)
 add_subdirectory(kvstore)
@@ -30,7 +30,7 @@ target_link_libraries(
             pthread
             types
             utils
-            request
+            operation
             rocksdb
             kvstore
 )

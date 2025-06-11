@@ -3,9 +3,9 @@
 
 #include <thread>
 #include <chrono>
-#include <fstream>
 #include <unistd.h>
 #include <filesystem>
+#include <fstream>
 
 #include "types.h"
 
@@ -48,7 +48,7 @@ std::uintmax_t used_disk(const char* path);
 #endif
 
 
-void read_request(types::RequestType &type, int &key, size_t &len, std::string &value, std::ifstream &file);
+void read_operation(types::RequestType &type, int &key, size_t &len, std::string &value, std::ifstream &file);
 
 }
 

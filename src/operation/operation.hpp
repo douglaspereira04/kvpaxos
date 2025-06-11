@@ -1,5 +1,5 @@
-#ifndef WORKLOAD_REQUEST_H
-#define WORKLOAD_REQUEST_H
+#ifndef WORKLOAD_OPERATION_H
+#define WORKLOAD_OPERATION_H
 
 #include <string>
 #include <cstring>
@@ -50,26 +50,26 @@ struct scan_data_t{
 };
 
 template<typename T>
-class Request {
+class Operation {
 public:
-    Request(){}
+    Operation(){}
 
-    Request(OperationType type):
+    Operation(OperationType type):
         __type{type}
     {}
 
-    Request(OperationType type, T key):
+    Operation(OperationType type, T key):
         __type{type},
         __key{key}
     {}
 
-    Request(OperationType type, T key, size_t len):
+    Operation(OperationType type, T key, size_t len):
         __type{type},
         __key{key},
         __args_len{len}
     {}
 
-    Request(OperationType type, T key, std::string *args):
+    Operation(OperationType type, T key, std::string *args):
         __type{type},
         __key{key}
     {
@@ -77,7 +77,7 @@ public:
         
     }
 
-    ~Request(){}
+    ~Operation(){}
 
     void destroy_multi_partition_scan(){
         if constexpr(utils::ENABLE_LINEARIZABLE){
@@ -90,10 +90,10 @@ public:
         delete reinterpret_cast<std::string*>(__args);
     }
 
-    Request * no_value_copy(){
-        return new Request(__type, __key, __args_len);
+    Operation * no_value_copy(){
+        return new Operation(__type, __key, __args_len);
     }
-    Request(Request&& other) = default;
+    Operation(Operation&& other) = default;
 
     inline OperationType type() const {return __type;}
     inline OperationType clean_type() const {

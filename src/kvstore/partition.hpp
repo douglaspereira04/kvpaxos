@@ -15,8 +15,8 @@
 #include <csignal>
 #include <iostream>
 #include "utils.h"
-#include "request.hpp"
-#include "callback_request.hpp"
+#include "operation.hpp"
+#include "callback_operation.hpp"
 #include "rocks_db_storage.h"
 
 
@@ -34,7 +34,7 @@ typedef std::unordered_map<T, partition_t*> partition_map_t;
 public:
     Partition(size_t id)
         : __id{id},
-          __n_executed_requests{0}
+          __n_executed_operations{0}
     {
         storage[__id] = storage_t(0);
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
@@ -58,36 +58,36 @@ public:
         utils::set_affinity(__id+5, worker_thread_, cpu_set);
     }
 
-    size_t request_queue_size() const {
-        return __requests_queue.size();
+    size_t operation_queue_size() const {
+        return __operations_queue.size();
     }
 
     size_t error_count() {
         return __error_count;
     }
 
-    void push_request(Request<T> *request) {
+    void push_operation(Operation<T> *operation) {
         if constexpr(QSize > 0){
             sem_wait(&remaining_space_);
         }
         __queue_mutex.lock();
-            __requests_queue.push(request);
+            __operations_queue.push(operation);
         __queue_mutex.unlock();
         sem_post(&semaphore_);
     }
 
-    Request<T> * pop_request() {
-        Request<T> *request;
+    Operation<T> * pop_operation() {
+        Operation<T> *operation;
         sem_wait(&semaphore_);
 
         __queue_mutex.lock();
-            request = __requests_queue.front();
-            __requests_queue.pop();
+            operation = __operations_queue.front();
+            __operations_queue.pop();
         __queue_mutex.unlock();
         if constexpr(QSize > 0){
             sem_post(&remaining_space_);
         }
-        return request;
+        return operation;
     }
 
 
@@ -95,8 +95,8 @@ public:
         return __id;
     }
 
-    size_t n_executed_requests() const {
-        return __n_executed_requests;
+    size_t n_executed_operations() const {
+        return __n_executed_operations;
     }
 
 
@@ -138,12 +138,12 @@ private:
         __error_count++;
     }
 
-    inline void scan_some(Request<T>* request, T &key, size_t &len){
+    inline void scan_some(Operation<T>* operation, T &key, size_t &len){
         for (size_t i = 0; i < len; i++)
         {
-            if (request->key_in_partition(i, this)){
+            if (operation->key_in_partition(i, this)){
                 T key_i = key + i;
-                read(key_i, request->get_scaned_value(i));
+                read(key_i, operation->get_scaned_value(i));
             }
         }
         
@@ -203,100 +203,100 @@ private:
         std::string value;
         T key;
         OperationType type;
-        Request<T> *request;
+        Operation<T> *operation;
 
         while (true) {
 
-            request = pop_request();
-            type = request->type();
-            key = request->key();
+            operation = pop_operation();
+            type = operation->type();
+            key = operation->key();
 
             switch (type){
             case GET:
             {
                 read(key, value);
                 print_read(key, value);
-                delete request;
-                __n_executed_requests++;
+                delete operation;
+                __n_executed_operations++;
                 break;
             }
             case GET_CALLBACK:
             {
                 read(key, value);
                 print_read(key, value);
-                static_cast<CallbackRequest<T>*>(request)->callback_function(&value);
-                delete request;
-                __n_executed_requests++;
+                static_cast<CallbackOperation<T>*>(operation)->callback_function(&value);
+                delete operation;
+                __n_executed_operations++;
                 break;
             }
             case SET:
             {
-                value = request->get_write_value();
+                value = operation->get_write_value();
                 storage[__id].write(key, value);
                 print_write(key, value);
-                request->destroy_write();
-                delete request;
-                __n_executed_requests++;
+                operation->destroy_write();
+                delete operation;
+                __n_executed_operations++;
                 break;
             }
             case SET_CALLBACK:
             {
-                value = request->get_write_value();
+                value = operation->get_write_value();
                 storage[__id].write(key, value);
                 print_write(key, value);
-                static_cast<CallbackRequest<T>*>(request)->callback_function(&value);
-                request->destroy_write();
-                delete request;
-                __n_executed_requests++;
+                static_cast<CallbackOperation<T>*>(operation)->callback_function(&value);
+                operation->destroy_write();
+                delete operation;
+                __n_executed_operations++;
                 break;
             }
             case SCAN:
             {
-                size_t len = request->args_len();
-                if (request->is_multi_partition()){
-                    scan_some(request, key, len);
-                    bool is_coordinator = request->is_coordinator();
-                    print_scan(is_coordinator, key, len, request->get_scaned_values());
+                size_t len = operation->args_len();
+                if (operation->is_multi_partition()){
+                    scan_some(operation, key, len);
+                    bool is_coordinator = operation->is_coordinator();
+                    print_scan(is_coordinator, key, len, operation->get_scaned_values());
                     if constexpr(utils::ENABLE_LINEARIZABLE){
-                        is_coordinator = request->is_coordinator();
+                        is_coordinator = operation->is_coordinator();
                     }
                     if (is_coordinator) {
-                        request->destroy_multi_partition_scan();
-                        delete request;
-                        __n_executed_requests++;
+                        operation->destroy_multi_partition_scan();
+                        delete operation;
+                        __n_executed_operations++;
                     }
                 } else {
                     std::string values[len];
                     scan(key, len, values);
                     print_scan(true, key, len, values);
-                    delete request;
-                    __n_executed_requests++;
+                    delete operation;
+                    __n_executed_operations++;
                 }
                 break;
             }
             case SCAN_CALLBACK:
             {
-                size_t len = request->args_len();
-                if (request->is_multi_partition()){
-                    scan_some(request, key, len);
-                    bool is_coordinator = request->is_coordinator();
-                    print_scan(is_coordinator, key, len, request->get_scaned_values());
+                size_t len = operation->args_len();
+                if (operation->is_multi_partition()){
+                    scan_some(operation, key, len);
+                    bool is_coordinator = operation->is_coordinator();
+                    print_scan(is_coordinator, key, len, operation->get_scaned_values());
                     if constexpr(utils::ENABLE_LINEARIZABLE){
-                        static_cast<CallbackRequest<T>*>(request)->callback_function(request->get_scaned_values());
-                        is_coordinator = request->is_coordinator();
+                        static_cast<CallbackOperation<T>*>(operation)->callback_function(operation->get_scaned_values());
+                        is_coordinator = operation->is_coordinator();
                     }
                     if (is_coordinator) {
-                        request->destroy_multi_partition_scan();
-                        delete request;
-                        __n_executed_requests++;
+                        operation->destroy_multi_partition_scan();
+                        delete operation;
+                        __n_executed_operations++;
                     }
                 } else {
                     std::string values[len];
                     scan(key, len, values);
                     print_scan(true, key, len, values);
-                    static_cast<CallbackRequest<T>*>(request)->callback_function(&value);
-                    delete request;
-                    __n_executed_requests++;
+                    static_cast<CallbackOperation<T>*>(operation)->callback_function(&value);
+                    delete operation;
+                    __n_executed_operations++;
                 }
                 break;
             }
@@ -304,22 +304,22 @@ private:
             {
                 storage[__id].del(key);
                 print_del(key);
-                delete request;
-                __n_executed_requests++;
+                delete operation;
+                __n_executed_operations++;
                 break;
             }
             case DEL_CALLBACK:
             {
                 storage[__id].del(key);
                 print_del(key);
-                static_cast<CallbackRequest<T>*>(request)->callback_function();
-                delete request;
-                __n_executed_requests++;
+                static_cast<CallbackOperation<T>*>(operation)->callback_function();
+                delete operation;
+                __n_executed_operations++;
                 break;
             }
             case REPARTITION:
             {
-                int coordinator = request->barrier_wait();
+                int coordinator = operation->barrier_wait();
                 if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
                     prev_storage.push_back(storage);
                     version_count++;
@@ -328,10 +328,10 @@ private:
                         __output_file << "repartition() \n";
                     }
                 }
-                coordinator = request->barrier_wait();
+                coordinator = operation->barrier_wait();
                 if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
-                    request->destroy_barrier();
-                    delete request;
+                    operation->destroy_barrier();
+                    delete operation;
                 }
                 storage[__id] = storage_t(version_count);
                 break;
@@ -339,12 +339,12 @@ private:
             case END:
             {
                 __output_file << "end() \n";
-                delete request;
+                delete operation;
                 return;
             }
             default:
             {
-                delete request;
+                delete operation;
                 std::raise(SIGINT);
                 return;
                 break;
@@ -354,13 +354,13 @@ private:
     }
 
     size_t __id;
-    size_t __n_executed_requests;
+    size_t __n_executed_operations;
     static storage_t *storage;
     cpu_set_t cpu_set;
 
     std::thread worker_thread_;
     sem_t semaphore_;
-    std::queue<Request<T>*> __requests_queue;
+    std::queue<Operation<T>*> __operations_queue;
     std::mutex __queue_mutex;
 
     sem_t remaining_space_;

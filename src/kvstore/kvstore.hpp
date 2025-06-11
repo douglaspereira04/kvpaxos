@@ -14,8 +14,8 @@
 
 #include "queue.hpp"
 #include "utils.h"
-#include "request.hpp"
-#include "callback_request.hpp"
+#include "operation.hpp"
+#include "callback_operation.hpp"
 #include "input_graph.hpp"
 #include "graph.hpp"
 #include "partitioning.h"
@@ -43,16 +43,16 @@ public:
         __n_partitions = n_partitions;
         if constexpr(Rebalance) {
             if (dh == 0) {
-                scheduling_queue = model::Queue<Request<T>*>(SEM_VALUE_MAX, 0);
+                scheduling_queue = model::Queue<Operation<T>*>(SEM_VALUE_MAX, 0);
             } else {
-                scheduling_queue = model::Queue<Request<T>*>(1, dh);
+                scheduling_queue = model::Queue<Operation<T>*>(1, dh);
             }
         } else {
-            scheduling_queue = model::Queue<Request<T>*>(SEM_VALUE_MAX, 0);
+            scheduling_queue = model::Queue<Operation<T>*>(SEM_VALUE_MAX, 0);
         }
 
         round_robin_counter = 0;
-        __n_dispatched_requests = 0;
+        __n_dispatched_operations = 0;
 
         partition_t::create_storage(__n_partitions);
         __partitions = new partition_t*[__n_partitions];
@@ -87,7 +87,7 @@ public:
             if constexpr(TL > 0){
                 for (size_t i = 0; i < TL; i++)
                 {
-                    Request<T> *dummy = new Request<T>(DUMMY);
+                    Operation<T> *dummy = new Operation<T>(DUMMY);
                     graph_deletion_queue.push_back(dummy);
                 }
             }
@@ -130,47 +130,47 @@ public:
     }
 
     void stop(){
-        submit<END>(new Request<T>(END));
+        submit<END>(new Operation<T>(END));
     }
     
     void get(T key, void (*cb)(T key, std::string*)){
-        CallbackRequest<T>* request = new CallbackRequest<T>(GET_CALLBACK, key, cb);
-        submit<GET>(request);
+        CallbackOperation<T>* operation = new CallbackOperation<T>(GET_CALLBACK, key, cb);
+        submit<GET>(operation);
     }
     
     void set(T key, const std::string &value, void (*cb)(T key, std::string*)){
-        CallbackRequest<T>* request = new CallbackRequest<T>(SET_CALLBACK, key, new std::string(value), cb);
-        submit<SET>(request);
+        CallbackOperation<T>* operation = new CallbackOperation<T>(SET_CALLBACK, key, new std::string(value), cb);
+        submit<SET>(operation);
     }
     
     void scan(T key, size_t len, void (*cb)(T key, std::string*)){
-        CallbackRequest<T>* request = new CallbackRequest<T>(SCAN_CALLBACK, key, len, cb);
-        submit<SCAN>(request);
+        CallbackOperation<T>* operation = new CallbackOperation<T>(SCAN_CALLBACK, key, len, cb);
+        submit<SCAN>(operation);
     }
     
     void del(T key, void (*cb)(T key)){
-        CallbackRequest<T>* request = new CallbackRequest<T>(DEL_CALLBACK, key, cb);
-        submit<DEL>(request);
+        CallbackOperation<T>* operation = new CallbackOperation<T>(DEL_CALLBACK, key, cb);
+        submit<DEL>(operation);
     }
 
     inline std::pair<typename partition_map_t::iterator, bool> try_map(T key){
         return __data_to_partition->try_emplace(key, __partitions[round_robin_counter]);
     }
 
-    std::unordered_set<partition_t*> prepare_request(
-        Request<T>* request)
+    std::unordered_set<partition_t*> prepare_operation(
+        Operation<T>* operation)
     {
         std::unordered_set<partition_t*> partitions;
-        OperationType type = request->clean_type();
+        OperationType type = operation->clean_type();
         size_t range = 1;
         bool new_mapping = false;
         T key;
         partition_t* new_assignment;
         
         if (type == SCAN) {
-            range = request->args_len();
+            range = operation->args_len();
             if (range == 1){
-                auto [it, inserted] = try_map(request->key());
+                auto [it, inserted] = try_map(operation->key());
                 if (inserted){
                     new_assignment = __partitions[round_robin_counter];
                     partitions.insert(new_assignment);
@@ -178,31 +178,31 @@ public:
                 } else {
                     partitions.insert(it->second);
                 }
-                request->set_single_partition();
+                operation->set_single_partition();
             } else{
-                request->init_scan_data();
+                operation->init_scan_data();
                 new_assignment = nullptr;
                 for (size_t i = 0; i < range; i++) {
-                    key = request->key() + i;
+                    key = operation->key() + i;
                     auto [it, inserted] = try_map(key);
                     if (inserted){
                         if (new_assignment == nullptr){
                             new_assignment = __partitions[round_robin_counter];
                         }
-                        request->set_key_to_partition(i, new_assignment);
+                        operation->set_key_to_partition(i, new_assignment);
                     } else {
                         partitions.insert(it->second);
-                        request->set_key_to_partition(i, it->second);
+                        operation->set_key_to_partition(i, it->second);
                     }
                 }
                 if(new_assignment != nullptr){
                     partitions.insert(new_assignment);
                     round_robin_counter = (round_robin_counter+1) % __n_partitions;
                 }
-                request->init_coordination(partitions.size());
+                operation->init_coordination(partitions.size());
             }
         } else {
-            auto [it, inserted] = try_map(request->key());
+            auto [it, inserted] = try_map(operation->key());
             if (inserted){
                 new_assignment = __partitions[round_robin_counter];
                 partitions.insert(new_assignment);
@@ -215,10 +215,10 @@ public:
         return partitions;
     }
     
-    void dispatch(Request<T>* request){
-        std::unordered_set<partition_t*> partitions = prepare_request(request);
+    void dispatch(Operation<T>* operation){
+        std::unordered_set<partition_t*> partitions = prepare_operation(operation);
         for (auto partition : partitions) {
-            partition->push_request(request);
+            partition->push_operation(operation);
         }
     }
 
@@ -228,13 +228,13 @@ public:
         if constexpr(IntervalType == types::MICROSECONDS)
             interval_achieved = utils::to_us(now_ - __time_start) >= time_interval;
         else if constexpr(IntervalType == types::OPERATIONS)
-            interval_achieved = __n_dispatched_requests - __operation_start >= operation_interval;
+            interval_achieved = __n_dispatched_operations - __operation_start >= operation_interval;
         return interval_achieved;
     }
 
-    void schedule_and_answer(Request<T>* request) {
-        dispatch(request);
-        __n_dispatched_requests++;
+    void schedule_and_answer(Operation<T>* operation) {
+        dispatch(operation);
+        __n_dispatched_operations++;
 
         if constexpr(Rebalance) {
             if (!__repartitioning){
@@ -253,7 +253,7 @@ public:
                 if constexpr(IntervalType == types::MICROSECONDS)
                     __time_start = utils::now();
                 else if constexpr(IntervalType == types::OPERATIONS)
-                    __operation_start = __n_dispatched_requests;
+                    __operation_start = __n_dispatched_operations;
 
                 __repartitioning = false;
             }
@@ -263,8 +263,8 @@ public:
     void stop_signal(){
         for (size_t i = 0; i < __n_partitions; i++)
         {
-            Request<T>* end_request = new Request<T>(END);
-            __partitions[i]->push_request(end_request);
+            Operation<T>* end_operation = new Operation<T>(END);
+            __partitions[i]->push_operation(end_operation);
         }
     }
 
@@ -272,13 +272,13 @@ public:
     void scheduling_loop() {
         while(true){
             scheduling_queue.template wait<0>();
-            Request<T> *request = scheduling_queue.template pop<0>();
-            if (request->type() == END){
+            Operation<T> *operation = scheduling_queue.template pop<0>();
+            if (operation->type() == END){
                 stop_signal();
-                delete request;
+                delete operation;
                 break;
             }
-            schedule_and_answer(request);
+            schedule_and_answer(operation);
         }
         
         __schedule_end = utils::now();
@@ -286,13 +286,13 @@ public:
 
 
     void sync_repartition(partition_map_t * old_partition_map) {
-        Request<T> *sync_request = new Request<T>(REPARTITION);
-        sync_request->init_barrier(__n_partitions);
+        Operation<T> *sync_operation = new Operation<T>(REPARTITION);
+        sync_operation->init_barrier(__n_partitions);
         partition_t::add_old_partition_map(old_partition_map);
 
         for (size_t i = 0; i < __n_partitions; i++)
         {
-            __partitions[i]->push_request(sync_request);
+            __partitions[i]->push_operation(sync_operation);
         }
     }
 
@@ -312,9 +312,9 @@ public:
     }
 
     template<OperationType type>
-    void submit(Request<T>* request){
-        Request<T>* tracking_request = request->no_value_copy();
-        scheduling_queue.template push(request, tracking_request);
+    void submit(Operation<T>* operation){
+        Operation<T>* tracking_operation = operation->no_value_copy();
+        scheduling_queue.template push(operation, tracking_operation);
         scheduling_queue.template notify<0>();
         scheduling_queue.template notify<1>();
     }
@@ -346,23 +346,23 @@ public:
 
     void update_graph_loop() {
         while(true) {
-            __n_processed_requests++;
+            __n_processed_operations++;
             scheduling_queue.template wait<1>();
-            Request<T> *request = scheduling_queue.template pop<1>();
-            if (request->type() == END){
+            Operation<T> *operation = scheduling_queue.template pop<1>();
+            if (operation->type() == END){
                 __stop.store(true, std::memory_order_relaxed);
                 sem_post(&repart_semaphore);
-                delete request;
+                delete operation;
                 break;
             }
-            update_graph(request);
+            update_graph(operation);
 
             if constexpr(TL > 0){
-                graph_deletion_queue.push_back(request);
+                graph_deletion_queue.push_back(operation);
 
-                Request<T> *expired_request = graph_deletion_queue.front();
-                expire(expired_request);
-                delete expired_request;
+                Operation<T> *expired_operation = graph_deletion_queue.front();
+                expire(expired_operation);
+                delete expired_operation;
                 graph_deletion_queue.pop_front();
             }
 
@@ -392,39 +392,39 @@ public:
         }
     }
 
-    void update_graph(Request<T>* request) {
+    void update_graph(Operation<T>* operation) {
         size_t data_size = 1;
-        if (request->type() == SCAN) {
-            data_size = request->args_len();
+        if (operation->type() == SCAN) {
+            data_size = operation->args_len();
         }
 
         for (auto i = 0; i < data_size; i++) {
-            workload_graph.add_vertice(request->key()+i);
-            workload_graph.increment_vertice_weight(request->key()+i, 1);
+            workload_graph.add_vertice(operation->key()+i);
+            workload_graph.increment_vertice_weight(operation->key()+i, 1);
 
             for (auto j = i+1; j < data_size; j++) {
-                workload_graph.add_vertice(request->key()+j);
-                workload_graph.add_edge(request->key()+i, request->key()+j);
-                workload_graph.increment_edge_weight(request->key()+i, request->key()+j, 1);
+                workload_graph.add_vertice(operation->key()+j);
+                workload_graph.add_edge(operation->key()+i, operation->key()+j);
+                workload_graph.increment_edge_weight(operation->key()+i, operation->key()+j, 1);
             }
         }
     }
 
-    void expire(Request<T>* request) {
-        if(request->type() != DUMMY){
+    void expire(Operation<T>* operation) {
+        if(operation->type() != DUMMY){
             int data_size = 1;
-            if (request->type() == SCAN) {
-                data_size = request->args_len();
+            if (operation->type() == SCAN) {
+                data_size = operation->args_len();
             }
 
             for (int i = data_size-1; i >= 0; i--) {
                 for (int j = data_size-1; j >= i+1; j--) {
-                    workload_graph.increment_edge_weight(request->key()+i, request->key()+j, -1);
-                    workload_graph.remove_weightless_edge(request->key()+i, request->key()+j);
-                    workload_graph.remove_weightless_vertice(request->key()+j);
+                    workload_graph.increment_edge_weight(operation->key()+i, operation->key()+j, -1);
+                    workload_graph.remove_weightless_edge(operation->key()+i, operation->key()+j);
+                    workload_graph.remove_weightless_vertice(operation->key()+j);
                 }
-                workload_graph.increment_vertice_weight(request->key()+i, -1);
-                workload_graph.remove_weightless_vertice(request->key()+i);
+                workload_graph.increment_vertice_weight(operation->key()+i, -1);
+                workload_graph.remove_weightless_vertice(operation->key()+i);
             }
         }
     }
@@ -472,33 +472,33 @@ public:
         return data_to_partition;
     }
 
-    size_t n_executed_requests() const{
-        size_t n_executed_requests = 0;
+    size_t n_executed_operations() const{
+        size_t n_executed_operations = 0;
         for (size_t i = 0; i < __n_partitions; i++)
         {
-            n_executed_requests += __partitions[i]->n_executed_requests();
+            n_executed_operations += __partitions[i]->n_executed_operations();
         }
-        return n_executed_requests;
+        return n_executed_operations;
     }
 
-    size_t n_processed_requests() const{
-        return __n_processed_requests;
+    size_t n_processed_operations() const{
+        return __n_processed_operations;
     }
 
-    size_t n_enqueued_requests() const{
-        size_t n_enqueued_requests = 0;
+    size_t n_enqueued_operations() const{
+        size_t n_enqueued_operations = 0;
         for (size_t i = 0; i < __n_partitions; i++)
         {
-            n_enqueued_requests += __partitions[i]->request_queue_size();
+            n_enqueued_operations += __partitions[i]->operation_queue_size();
         }
-        return n_enqueued_requests;
+        return n_enqueued_operations;
     }
 
     std::vector<size_t> in_queue_amount() const{
         std::vector<size_t> in_queue;
         for (size_t i = 0; i < __n_partitions; i++)
         {
-            size_t amount = __partitions[i]->request_queue_size();
+            size_t amount = __partitions[i]->operation_queue_size();
             in_queue.push_back(amount);
         }
         return in_queue;
@@ -516,8 +516,8 @@ public:
         return __schedule_end;
     }
 
-    int n_dispatched_requests(){
-        return __n_dispatched_requests;
+    int n_dispatched_operations(){
+        return __n_dispatched_operations;
     }
 
     int error_count(){
@@ -557,7 +557,7 @@ public:
 
     size_t __n_partitions;
     int round_robin_counter = 0;
-    int __n_dispatched_requests = 0;
+    int __n_dispatched_operations = 0;
 
     partition_t** __partitions;
     partition_map_t* __data_to_partition;
@@ -568,7 +568,7 @@ public:
     std::thread scheduling_thread;
     cpu_set_t scheduler_cpu_set;
 
-    std::deque<Request<T>*> graph_deletion_queue;
+    std::deque<Operation<T>*> graph_deletion_queue;
 
     model::Graph<T> workload_graph;
     model::CutMethod repartition_method;
@@ -587,9 +587,9 @@ public:
     std::vector<types::duration> __reconstruction_duration;
     types::time_point __schedule_end;
 
-    model::Queue<Request<T>*> scheduling_queue;
+    model::Queue<Operation<T>*> scheduling_queue;
 
-    size_t __n_processed_requests = 0;
+    size_t __n_processed_operations = 0;
 
     partition_map_t* updated_data_to_partition;
     InputGraph<T> input_graph;
