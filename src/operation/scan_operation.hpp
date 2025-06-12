@@ -40,6 +40,10 @@ public:
         __key_to_addr = new char*[__len];
     }
 
+    inline void init_multi_storage_data(){
+        this->__storage = new char*[this->__len];
+    }
+
     inline void init_coordination(size_t involved_partitions){
         if constexpr(utils::ENABLE_LINEARIZABLE){
             pthread_barrier_init(&__synchronizer.barrier, NULL, involved_partitions);
@@ -56,12 +60,12 @@ public:
         return __key_to_addr != nullptr;
     }
 
-    template<typename PartitionT>
-    inline void set_key_to_partition(size_t &idx, PartitionT* &p_addr){
+    template<typename Worker_T>
+    inline void worker(size_t &idx, Worker_T* &p_addr){
         __key_to_addr[idx] = reinterpret_cast<char*>(p_addr);
     }
-    template<typename PartitionT>
-    inline bool key_in_partition(size_t &idx, PartitionT* p_addr){
+    template<typename Worker_T>
+    inline bool worker_manages_key(size_t &idx, Worker_T* p_addr){
         return __key_to_addr[idx] == reinterpret_cast<char*>(p_addr);
     }
 

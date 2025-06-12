@@ -27,6 +27,7 @@ add_definitions( -DQ_SIZE=${Q_SIZE} )
 target_link_libraries(
     main
         PRIVATE
+            unordered_dense
             pthread
             types
             utils

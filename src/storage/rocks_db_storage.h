@@ -14,7 +14,7 @@ namespace kvstorage {
 class RocksDBStorage : public Storage {
 public:
     RocksDBStorage(){}
-    RocksDBStorage(size_t version);
+    void init();
 
     int read(int key, std::string &value);
     void write(int key, const std::string &value);

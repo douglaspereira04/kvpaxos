@@ -63,9 +63,30 @@ public:
 
     inline T key() const {return __key;}
 
+    template<typename Storage_T>
+    inline void storage(Storage_T *storage_){
+        __storage = reinterpret_cast<char**>(storage_);
+    }
+    
+    template<typename Storage_T>
+    inline Storage_T* storage(){
+        return reinterpret_cast<Storage_T*>(__storage);
+    }
+
+    template<typename Storage_T>
+    inline void storage(size_t idx, Storage_T *storage_){
+        __storage[idx] = reinterpret_cast<char*>(storage_);
+    }
+
+    template<typename Storage_T>
+    inline Storage_T* storage(size_t idx){
+        return reinterpret_cast<Storage_T**>(__storage)[idx];
+    }
+
 protected:
     OperationType __type;
     T __key;
+    char**__storage;
 };
 
 }

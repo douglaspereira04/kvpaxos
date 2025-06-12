@@ -15,11 +15,10 @@ class TBBStorage : public Storage {
 
 typedef tbb::concurrent_unordered_map<int, std::string> storage_t;
 public:
-    TBBStorage() {
+    TBBStorage() {}
+
+    void init(){
         storage_ = storage_t();
-    }
-    TBBStorage(size_t version) {
-        TBBStorage();
     }
 
     int read(int key, std::string &value);

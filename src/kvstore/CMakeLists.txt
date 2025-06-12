@@ -21,7 +21,6 @@ ENDIF()
 IF(${REPARTITIONING} STREQUAL "ON")
     target_compile_definitions(kvstore PUBLIC REPARTITIONING)
 ENDIF()
-
 target_link_libraries(kvstore
     PUBLIC
         queue

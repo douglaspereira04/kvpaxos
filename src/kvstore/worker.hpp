@@ -44,11 +44,11 @@ typedef Worker<T, QSize> worker_t;
 typedef std::unordered_map<T, worker_t*> worker_map_t;
 typedef std::queue<Operation<T>*> operation_queue_t;
 public:
-    Worker(size_t id)
+    Worker(size_t id, storage_t *storage)
         : __id{id},
           __n_executed_operations{0}
     {
-        storage[__id] = storage_t(0);
+        __storage = storage;
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
     }
     
@@ -111,41 +111,15 @@ public:
         return __n_executed_operations;
     }
 
-
-    static void add_old_partition_map(std::unordered_map<int, worker_t*>* version_map){
-        version_maps_mtx.lock();
-        version_maps.push_back(version_map);
-        version_maps_mtx.unlock();
-    }
-
-    static void create_storage(size_t partitions_){
-        partitions = partitions_;
-        storage = new storage_t[partitions];
-    }
 private:
 
-    inline void read(T &key, std::string& val){
-        int len = storage[__id].read(key, val);
+    inline void read(storage_t* storage, T &key, std::string& val){
+        int len = storage->read(key, val);
         if (len >= 0){
-            return;
-        } else {
-            for (size_t i = version_count-1; i >= 0; i--)
-            {
-                version_maps_mtx.lock_shared();
-                worker_map_t *map = version_maps.at(i);
-                version_maps_mtx.unlock_shared();
-
-                auto map_it = map->find(key);
-                if (map_it != map->end()){
-                    size_t prev_id = map_it->second->__id;
-                    int len_old = prev_storage[i][prev_id].read(key, val);
-                    if (len_old >= 0){
-                        storage[__id].write(key, val);
-                        return;
-                    }
-                }
+            if (storage != __storage){
+                __storage->write(key, val);
             }
-            
+            return;
         }
         __error_count++;
     }
@@ -153,22 +127,23 @@ private:
     inline void read_some(ScanOperation<T>* operation, T &key, size_t &len){
         for (size_t i = 0; i < len; i++)
         {
-            if (operation->key_in_partition(i, this)){
+            if (operation->worker_manages_key(i, this)){
+                storage_t* storage = operation->template storage<storage_t>(i);
                 T key_i = key + i;
-                read(key_i, operation->get_scaned_value(i));
+                read(storage, key_i, operation->get_scaned_value(i));
             }
         }
         
 
     }
-    inline void read_range(T &key, size_t &len, std::string* values){
+    inline void read_range(storage_t* storage, T &key, size_t &len, std::string* values){
 
         if constexpr(utils::ENABLE_ANSWER){
             __output_file << "scan( " << key << ", "<< len << " ): [";
         }
         for (auto i = 0; i < len; i++) {
             T key_i = key+i;
-            read(key_i, values[i]);
+            read(storage, key_i, values[i]);
             if constexpr(utils::ENABLE_ANSWER){
                  __output_file << "\"" << values[i] << "\", ";
             }
@@ -213,17 +188,18 @@ private:
     template<OperationType TYPE>
     inline void get(GetOperation<T> *operation){
         T key = operation->key();
+        storage_t* storage = operation->template storage<storage_t>();
         if constexpr(TYPE == GET_CALLBACK){
             GetCallbackOperation<T>* get_cb = static_cast<GetCallbackOperation<T>*>(operation);
             std::string value;
-            read(key, value);
+            read(storage, key, value);
             print_read(key, value);
             get_cb->callback(&value);
             delete get_cb;
         } else if constexpr(TYPE == GET_FUTURE){
             GetFutureOperation<T>* get_future = static_cast<GetFutureOperation<T>*>(operation);
             std::string *value = get_future->value();
-            read(key, *value);
+            read(storage, key, *value);
             print_read(key, *value);
             get_future->notify();
         }
@@ -234,7 +210,7 @@ private:
     inline void set(SetOperation<T> *operation){
         T key = operation->key();
         std::string value = operation->value();
-        storage[__id].write(key, value);
+        __storage->write(key, value);
         print_write(key, value);
         if constexpr(TYPE == SET_CALLBACK){
             SetCallbackOperation<T>* set_cb = static_cast<SetCallbackOperation<T>*>(operation);
@@ -249,7 +225,7 @@ private:
     template<OperationType TYPE>
     inline void del(DelOperation<T> *operation){
         T key = operation->key();
-        storage[__id].del(key);
+        __storage->del(key);
         print_del(key);
         if constexpr(TYPE == DEL_CALLBACK){
             DelCallbackOperation<T>* del_cb = static_cast<DelCallbackOperation<T>*>(operation);
@@ -289,7 +265,8 @@ private:
             }
         } else {
             std::string *values = operation->get_scaned_values();
-            read_range(key, len, values);
+            storage_t *storage = operation->template storage<storage_t>();
+            read_range(storage, key, len, values);
             print_scan(true, key, len, values);
             if constexpr(TYPE == SCAN_CALLBACK){
                 ScanCallbackOperation<T>* scan_cb = static_cast<ScanCallbackOperation<T>*>(operation);
@@ -304,20 +281,13 @@ private:
     }
 
     inline void repart(RepartitionOperation<T>* operation){
+        __storage = operation->template storage<storage_t>()+__id;
+        __storage->init();
+
         int coordinator = operation->barrier_wait();
-        if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
-            prev_storage.push_back(storage);
-            version_count++;
-            storage = new storage_t[partitions];
-            if constexpr(utils::ENABLE_ANSWER){
-                __output_file << "repartition() \n";
-            }
-        }
-        coordinator = operation->barrier_wait();
         if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
             delete operation;
         }
-        storage[__id] = storage_t(version_count);
     }
 
     void thread_loop() {
@@ -367,7 +337,7 @@ private:
 
     size_t __id;
     size_t __n_executed_operations;
-    static storage_t *storage;
+    storage_t *__storage;
     cpu_set_t cpu_set;
 
     std::thread worker_thread_;
@@ -378,33 +348,11 @@ private:
     sem_t remaining_space_;
 
     size_t __error_count = 0;
-    static size_t partitions;
-    static std::vector<storage_t*> prev_storage;
-    static int version_count;
-    static std::vector<worker_map_t*> version_maps;
-    static std::shared_mutex version_maps_mtx;
 
     std::ofstream __output_file;
 
 
 };
-template<typename T, size_t QSize>
-std::vector<storage_t*> Worker<T, QSize>::prev_storage;
-
-template<typename T, size_t QSize>
-int Worker<T, QSize>::version_count = 0;
-
-template<typename T, size_t QSize>
-size_t Worker<T, QSize>::partitions = 0;
-
-template<typename T, size_t QSize>
-storage_t* Worker<T, QSize>::storage;
-
-template<typename T, size_t QSize>
-std::vector<std::unordered_map<T, Worker<T, QSize>*>*> Worker<T, QSize>::version_maps;
-
-template<typename T, size_t QSize>
-std::shared_mutex Worker<T, QSize>::version_maps_mtx;
 
 }
 

@@ -41,7 +41,9 @@ class KVStore{
 
 typedef kvpaxos::Worker<T, QSize> worker_t;
 typedef std::unordered_map<T, worker_t*> worker_map_t;
+typedef std::unordered_map<T, storage_t*> storage_map_t;
 typedef model::Queue<Operation<T>*, TrackingInfo<T>*> schedule_queue_t;
+typedef std::unordered_set<worker_t*> worker_set_t;
 public:
 
     KVStore() {}
@@ -63,12 +65,18 @@ public:
 
         __rr_counter = 0;
         __n_dispatched_operations = 0;
+        __involved_workers =  worker_set_t();
+        __involved_workers.reserve(__n_partitions);
 
-        worker_t::create_storage(__n_partitions);
+        __level = 0;
+        __storages = new storage_t[__n_partitions];
         __workers = new worker_t*[__n_partitions];
         for (auto i = 0; i < __n_partitions; i++) {
-            __workers[i] = new worker_t(i);
+            __storages[i].init();
+            __storages[i].level(0);
+            __workers[i] = new worker_t(i, &__storages[i]);
         }
+        __storage_map = storage_map_t();
         __worker_map = new worker_map_t();
 
         scheduling_thread = std::thread(&KVStore<T, Rebalance, TL, QSize, IntervalType>::scheduling_loop, this);
@@ -190,11 +198,61 @@ public:
         submit<DEL>(operation);
     }
 
-    inline std::pair<typename worker_map_t::iterator, bool> try_map(T key){
-        return __worker_map->try_emplace(key, __workers[__rr_counter]);
+    inline void prepare_single(Operation<T> *operation){
+        T key = operation->key();
+        auto [worker_it, worker_emplaced] = __worker_map->try_emplace(key, __workers[__rr_counter]);
+        __involved_workers.insert(worker_it->second);
+
+        auto [storage_it, storage_emplaced] = __storage_map.try_emplace(key, &__storages[__rr_counter]);
+        operation->storage(storage_it->second);
+        if (!storage_emplaced) {
+            storage_t* other_storage = storage_it->second;
+            if (other_storage->level() < __level){
+                storage_it->second = &__storages[__rr_counter];
+            }
+        }
+
+        if (worker_emplaced){
+            __rr_counter = (__rr_counter+1) % __n_partitions;
+        }
     }
 
-    std::unordered_set<worker_t*> prepare_operation(
+    inline void prepare_range(ScanOperation<T>* operation){
+        T key = operation->key();
+        size_t len = operation->len();
+
+        operation->init_scan_data();
+        operation->init_multi_storage_data();
+
+        bool new_mapping = false;
+        for (size_t i = 0; i < len; i++) {
+            T key_i = operation->key()+i;
+            auto [worker_it, worker_emplaced] = __worker_map->try_emplace(key_i, __workers[__rr_counter]);
+            operation->worker(i, worker_it->second);
+
+            auto [storage_it, storage_emplaced] = __storage_map.try_emplace(key_i, &__storages[__rr_counter]);
+            operation->storage(i, storage_it->second);
+            if (!storage_emplaced) {
+                storage_t* other_storage = storage_it->second;
+                if (other_storage->level() < __level){
+                    storage_it->second = &__storages[__rr_counter];
+                }
+            }
+
+            if (worker_emplaced){
+                new_mapping = true;
+            } else {
+                __involved_workers.insert(worker_it->second);
+            }
+        }
+        if(new_mapping){
+            __involved_workers.insert(__workers[__rr_counter]);
+            __rr_counter = (__rr_counter+1) % __n_partitions;
+        }
+        operation->init_coordination(__involved_workers.size());
+    }
+
+    void prepare_operation(
         Operation<T>* operation)
     {
         std::unordered_set<worker_t*> workers;
@@ -207,54 +265,20 @@ public:
             ScanOperation<T>* scan_op = static_cast<ScanOperation<T>*>(operation);
             range = scan_op->len();
             if (range == 1){
-                auto [it, inserted] = try_map(scan_op->key());
-                if (inserted){
-                    new_assignment = __workers[__rr_counter];
-                    workers.insert(new_assignment);
-                    __rr_counter = (__rr_counter+1) % __n_partitions;
-                } else {
-                    workers.insert(it->second);
-                }
+                prepare_single(operation);
                 scan_op->set_is_single_partition();
             } else{
-                scan_op->init_scan_data();
-                new_assignment = nullptr;
-                for (size_t i = 0; i < range; i++) {
-                    key = scan_op->key() + i;
-                    auto [it, inserted] = try_map(key);
-                    if (inserted){
-                        if (new_assignment == nullptr){
-                            new_assignment = __workers[__rr_counter];
-                        }
-                        scan_op->set_key_to_partition(i, new_assignment);
-                    } else {
-                        workers.insert(it->second);
-                        scan_op->set_key_to_partition(i, it->second);
-                    }
-                }
-                if(new_assignment != nullptr){
-                    workers.insert(new_assignment);
-                    __rr_counter = (__rr_counter+1) % __n_partitions;
-                }
-                scan_op->init_coordination(workers.size());
+                prepare_range(scan_op);
             }
         } else {
-            auto [it, inserted] = try_map(operation->key());
-            if (inserted){
-                new_assignment = __workers[__rr_counter];
-                workers.insert(new_assignment);
-                __rr_counter = (__rr_counter+1) % __n_partitions;
-            } else {
-                workers.insert(it->second);
-            }
+            prepare_single(operation);
         }
-
-        return workers;
     }
     
     void dispatch(Operation<T>* operation){
-        std::unordered_set<worker_t*> workers = prepare_operation(operation);
-        for (auto worker : workers) {
+        __involved_workers.clear();
+        prepare_operation(operation);
+        for (worker_t* worker : __involved_workers) {
             worker->push_operation(operation);
         }
     }
@@ -323,11 +347,12 @@ public:
 
 
     void sync_repartition(worker_map_t * old_map) {
-        RepartitionOperation<T> *sync_operation = new RepartitionOperation<T>(__n_partitions);
-        worker_t::add_old_partition_map(old_map);
+        __level++;
+        RepartitionOperation<T> *sync_operation = new RepartitionOperation<T>(__n_partitions, __storages);
 
         for (size_t i = 0; i < __n_partitions; i++)
         {
+            __storages[i].level(__level);
             __workers[i]->push_operation(sync_operation);
         }
     }
@@ -644,7 +669,11 @@ public:
 
     int __operation_start = 0;
     
+    worker_set_t __involved_workers;
 
+    storage_map_t __storage_map;
+    storage_t* __storages;
+    size_t __level;
 };
 
 };
