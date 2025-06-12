@@ -7,25 +7,25 @@ add_subdirectory(storage)
 add_subdirectory(graph)
 add_subdirectory(kvstore)
 
-add_executable(replica replica.cpp)
+add_executable(main main.cpp)
 
 IF(${INFO} STREQUAL "ON")
-    target_compile_definitions(replica PUBLIC INFO)
+    target_compile_definitions(main PUBLIC INFO)
 ENDIF()
 IF(${LINEARIZABLE} STREQUAL "ON")
-    target_compile_definitions(replica PUBLIC LINEARIZABLE)
+    target_compile_definitions(main PUBLIC LINEARIZABLE)
 ENDIF()
 IF(${ANSWER} STREQUAL "ON")
-    target_compile_definitions(replica PUBLIC ANSWER)
+    target_compile_definitions(main PUBLIC ANSWER)
 ENDIF()
 IF(${REPARTITIONING} STREQUAL "ON")
-    target_compile_definitions(replica PUBLIC REPARTITIONING)
+    target_compile_definitions(main PUBLIC REPARTITIONING)
 ENDIF()
 add_definitions( -DTRACK_LENGTH=${TRACK_LENGTH} )
 add_definitions( -DQ_SIZE=${Q_SIZE} )
 
 target_link_libraries(
-    replica
+    main
         PRIVATE
             pthread
             types
@@ -35,13 +35,13 @@ target_link_libraries(
             kvstore
 )
 
-target_include_directories(replica
+target_include_directories(main
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_include_directories(
-    replica
+    main
         PUBLIC
             "${CMAKE_SOURCE_DIR}/external/rocksdb/include"
             "${CMAKE_SOURCE_DIR}/external/KaHIP/interface"

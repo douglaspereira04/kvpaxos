@@ -1,6 +1,6 @@
 add_library(kvstore
     kvstore.cpp
-    partition.cpp
+    worker.cpp
     input_graph.cpp
 )
 

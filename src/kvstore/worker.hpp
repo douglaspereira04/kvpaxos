@@ -1,5 +1,5 @@
-#ifndef KVPAXOS_PARTITION_H
-#define KVPAXOS_PARTITION_H
+#ifndef KVPAXOS_WORKER_H
+#define KVPAXOS_WORKER_H
 
 
 #include <pthread.h>
@@ -38,13 +38,13 @@ using namespace workload;
 typedef RocksDBStorage storage_t;
 
 template <typename T, size_t QSize = 0>
-class Partition {
+class Worker {
 
-typedef Partition<T, QSize> partition_t;
-typedef std::unordered_map<T, partition_t*> partition_map_t;
+typedef Worker<T, QSize> worker_t;
+typedef std::unordered_map<T, worker_t*> worker_map_t;
 typedef std::queue<Operation<T>*> operation_queue_t;
 public:
-    Partition(size_t id)
+    Worker(size_t id)
         : __id{id},
           __n_executed_operations{0}
     {
@@ -52,7 +52,7 @@ public:
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
     }
     
-    ~Partition() {
+    ~Worker() {
         if (worker_thread_.joinable()) {
             worker_thread_.join();
         }
@@ -66,7 +66,7 @@ public:
             sem_init(&remaining_space_, 0, QSize);
         }
 
-        worker_thread_ = std::thread(&partition_t::thread_loop, this);
+        worker_thread_ = std::thread(&worker_t::thread_loop, this);
         utils::set_affinity(__id+5, worker_thread_, cpu_set);
     }
 
@@ -112,7 +112,7 @@ public:
     }
 
 
-    static void add_old_partition_map(std::unordered_map<int, partition_t*>* version_map){
+    static void add_old_partition_map(std::unordered_map<int, worker_t*>* version_map){
         version_maps_mtx.lock();
         version_maps.push_back(version_map);
         version_maps_mtx.unlock();
@@ -132,7 +132,7 @@ private:
             for (size_t i = version_count-1; i >= 0; i--)
             {
                 version_maps_mtx.lock_shared();
-                partition_map_t *map = version_maps.at(i);
+                worker_map_t *map = version_maps.at(i);
                 version_maps_mtx.unlock_shared();
 
                 auto map_it = map->find(key);
@@ -220,7 +220,6 @@ private:
             print_read(key, value);
             get_cb->callback(&value);
             delete get_cb;
-            assert(false);
         } else if constexpr(TYPE == GET_FUTURE){
             GetFutureOperation<T>* get_future = static_cast<GetFutureOperation<T>*>(operation);
             std::string *value = get_future->value();
@@ -273,8 +272,8 @@ private:
             print_scan(is_coordinator, key, len, values);
             if constexpr(TYPE == SCAN_CALLBACK){
                 ScanCallbackOperation<T>* scan_cb = static_cast<ScanCallbackOperation<T>*>(operation);
-                scan_cb->callback(values);
                 if (is_coordinator) {
+                    scan_cb->callback(values);
                     scan_cb->destroy_multi_partition_scan();
                     delete[] values;
                     delete scan_cb;
@@ -304,6 +303,23 @@ private:
         }
     }
 
+    inline void repart(RepartitionOperation<T>* operation){
+        int coordinator = operation->barrier_wait();
+        if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
+            prev_storage.push_back(storage);
+            version_count++;
+            storage = new storage_t[partitions];
+            if constexpr(utils::ENABLE_ANSWER){
+                __output_file << "repartition() \n";
+            }
+        }
+        coordinator = operation->barrier_wait();
+        if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
+            delete operation;
+        }
+        storage[__id] = storage_t(version_count);
+    }
+
     void thread_loop() {
         Operation<T> *operation;
 
@@ -313,74 +329,38 @@ private:
             OperationType type = operation->type();
             switch (type){
             case GET_FUTURE:
-            {
                 get<GET_FUTURE>(static_cast<GetOperation<T>*>(operation));
                 break;
-            }
             case GET_CALLBACK:
-            {
                 get<GET_CALLBACK>(static_cast<GetOperation<T>*>(operation));
                 break;
-            }
             case SET:
-            {
                 set<SET>(static_cast<SetOperation<T>*>(operation));
                 break;
-            }
             case SET_CALLBACK:
-            {
                 set<SET_CALLBACK>(static_cast<SetOperation<T>*>(operation));
                 break;
-            }
             case SCAN_FUTURE:
-            {
                 scan<SCAN_FUTURE>(static_cast<ScanOperation<T>*>(operation));
                 break;
-            }
             case SCAN_CALLBACK:
-            {
                 scan<SCAN_CALLBACK>(static_cast<ScanOperation<T>*>(operation));
                 break;
-            }
             case DEL:
-            {
                 del<DEL>(static_cast<DelOperation<T>*>(operation));
                 break;
-            }
             case DEL_CALLBACK:
-            {
                 del<DEL_CALLBACK>(static_cast<DelOperation<T>*>(operation));
                 break;
-            }
             case REPARTITION:
-            {
-                RepartitionOperation<T>* rep_op = static_cast<RepartitionOperation<T>*>(operation);
-                int coordinator = rep_op->barrier_wait();
-                if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
-                    prev_storage.push_back(storage);
-                    version_count++;
-                    storage = new storage_t[partitions];
-                    if constexpr(utils::ENABLE_ANSWER){
-                        __output_file << "repartition() \n";
-                    }
-                }
-                coordinator = rep_op->barrier_wait();
-                if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
-                    delete rep_op;
-                }
-                storage[__id] = storage_t(version_count);
+                repart(static_cast<RepartitionOperation<T>*>(operation));
                 continue;
-            }
             case END:
-            {
                 __output_file << "end() \n";
                 return;
-            }
             default:
-            {
                 std::raise(SIGINT);
                 return;
-            }
             }
         }
     }
@@ -401,7 +381,7 @@ private:
     static size_t partitions;
     static std::vector<storage_t*> prev_storage;
     static int version_count;
-    static std::vector<partition_map_t*> version_maps;
+    static std::vector<worker_map_t*> version_maps;
     static std::shared_mutex version_maps_mtx;
 
     std::ofstream __output_file;
@@ -409,22 +389,22 @@ private:
 
 };
 template<typename T, size_t QSize>
-std::vector<storage_t*> Partition<T, QSize>::prev_storage;
+std::vector<storage_t*> Worker<T, QSize>::prev_storage;
 
 template<typename T, size_t QSize>
-int Partition<T, QSize>::version_count = 0;
+int Worker<T, QSize>::version_count = 0;
 
 template<typename T, size_t QSize>
-size_t Partition<T, QSize>::partitions = 0;
+size_t Worker<T, QSize>::partitions = 0;
 
 template<typename T, size_t QSize>
-storage_t* Partition<T, QSize>::storage;
+storage_t* Worker<T, QSize>::storage;
 
 template<typename T, size_t QSize>
-std::vector<std::unordered_map<T, Partition<T, QSize>*>*> Partition<T, QSize>::version_maps;
+std::vector<std::unordered_map<T, Worker<T, QSize>*>*> Worker<T, QSize>::version_maps;
 
 template<typename T, size_t QSize>
-std::shared_mutex Partition<T, QSize>::version_maps_mtx;
+std::shared_mutex Worker<T, QSize>::version_maps_mtx;
 
 }
 
