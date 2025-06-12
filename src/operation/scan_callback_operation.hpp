@@ -14,10 +14,11 @@ public:
     ScanCallbackOperation(){}
 
 
-    ScanCallbackOperation(T key, size_t len, void (*callback_function)(T key, std::string* value)){
+    ScanCallbackOperation(T key, size_t len, std::string *values, void (*callback_function)(T key, std::string* value)){
         this->__type = SCAN_CALLBACK;
         this->__key = key;
         this->__len = len;
+        this->__values = values;
         CallbackOperation<T>::__set_callback(callback_function);
     }
 

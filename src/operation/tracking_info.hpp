@@ -22,24 +22,19 @@ public:
         __type = type;
     }
 
-    template<OperationType type>
+    template<OperationType TYPE>
     static TrackingInfo<T>* get_tracking_info(Operation<T>* operation){
         TrackingInfo<T>* tracking_info;
+        constexpr OperationType type = generic_type<TYPE>();
+        tracking_info = new TrackingInfo<T>(type);
         if constexpr(
-            type == GET || type == GET_CALLBACK ||
-            type == SET || type == SET_CALLBACK ||
-            type == SCAN || type == SCAN_CALLBACK ||
-            type == DEL || type == DEL_CALLBACK
+            type == GET || type == SET || 
+            type == SCAN || type == DEL
         ) {
-            constexpr OperationType generic_type = static_cast<OperationType>(static_cast<int>(type) & ~0x1);
-            tracking_info = new TrackingInfo<T>(generic_type);
             tracking_info->__key = operation->key();
-        } else {
-            tracking_info = new TrackingInfo<T>(type);
         }
-
     
-        if constexpr(type == SCAN || type == SCAN_CALLBACK) {
+        if constexpr(type == SCAN) {
             tracking_info->__len = static_cast<ScanOperation<T>*>(operation)->len();
         } 
         return tracking_info;

@@ -24,7 +24,7 @@ public:
         delete __value;
     }
 
-    inline const std::string& value() const {return *__value;}
+    inline std::string& value() const {return *__value;}
 
 protected:
     std::string* __value;

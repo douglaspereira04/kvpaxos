@@ -26,6 +26,8 @@
 #include "set_operation.hpp"
 #include "scan_operation.hpp"
 #include "del_operation.hpp"
+#include "scan_future_operation.hpp"
+#include "get_future_operation.hpp"
 #include "repartition_operation.hpp"
 
 
@@ -122,7 +124,7 @@ public:
     }
 private:
 
-    void read(T &key, std::string& val){
+    inline void read(T &key, std::string& val){
         int len = storage[__id].read(key, val);
         if (len >= 0){
             return;
@@ -148,7 +150,7 @@ private:
         __error_count++;
     }
 
-    inline void scan_some(ScanOperation<T>* operation, T &key, size_t &len){
+    inline void read_some(ScanOperation<T>* operation, T &key, size_t &len){
         for (size_t i = 0; i < len; i++)
         {
             if (operation->key_in_partition(i, this)){
@@ -159,7 +161,7 @@ private:
         
 
     }
-    inline void scan(T &key, size_t &len, std::string* values){
+    inline void read_range(T &key, size_t &len, std::string* values){
 
         if constexpr(utils::ENABLE_ANSWER){
             __output_file << "scan( " << key << ", "<< len << " ): [";
@@ -183,7 +185,7 @@ private:
         }
     }
 
-    inline void print_write(T &key, std::string &value){
+    inline void print_write(T &key, const std::string &value){
         if constexpr(utils::ENABLE_ANSWER){
             __output_file << "write( " << key << ", " << value << " )\n";
         }
@@ -208,132 +210,146 @@ private:
         }
     }
 
+    template<OperationType TYPE>
+    inline void get(GetOperation<T> *operation){
+        T key = operation->key();
+        if constexpr(TYPE == GET_CALLBACK){
+            GetCallbackOperation<T>* get_cb = static_cast<GetCallbackOperation<T>*>(operation);
+            std::string value;
+            read(key, value);
+            print_read(key, value);
+            get_cb->callback(&value);
+            delete get_cb;
+            assert(false);
+        } else if constexpr(TYPE == GET_FUTURE){
+            GetFutureOperation<T>* get_future = static_cast<GetFutureOperation<T>*>(operation);
+            std::string *value = get_future->value();
+            read(key, *value);
+            print_read(key, *value);
+            get_future->notify();
+        }
+        __n_executed_operations++;
+    }
+
+    template<OperationType TYPE>
+    inline void set(SetOperation<T> *operation){
+        T key = operation->key();
+        std::string value = operation->value();
+        storage[__id].write(key, value);
+        print_write(key, value);
+        if constexpr(TYPE == SET_CALLBACK){
+            SetCallbackOperation<T>* set_cb = static_cast<SetCallbackOperation<T>*>(operation);
+            set_cb->callback(&value);
+            delete set_cb;
+        } else {
+            delete operation;
+        }
+        __n_executed_operations++;
+    }
+
+    template<OperationType TYPE>
+    inline void del(DelOperation<T> *operation){
+        T key = operation->key();
+        storage[__id].del(key);
+        print_del(key);
+        if constexpr(TYPE == DEL_CALLBACK){
+            DelCallbackOperation<T>* del_cb = static_cast<DelCallbackOperation<T>*>(operation);
+            del_cb->callback();
+            delete del_cb;
+        } else {
+            delete operation;
+        }
+        __n_executed_operations++;
+    }
+
+    template<OperationType TYPE>
+    inline void scan(ScanOperation<T> *operation){
+        size_t len = operation->len();
+        T key = operation->key();
+        if (operation->is_multi_partition()){
+            read_some(operation, key, len);
+            bool is_coordinator = operation->is_coordinator();
+            std::string *values = operation->get_scaned_values();
+            print_scan(is_coordinator, key, len, values);
+            if constexpr(TYPE == SCAN_CALLBACK){
+                ScanCallbackOperation<T>* scan_cb = static_cast<ScanCallbackOperation<T>*>(operation);
+                scan_cb->callback(values);
+                if (is_coordinator) {
+                    scan_cb->destroy_multi_partition_scan();
+                    delete[] values;
+                    delete scan_cb;
+                    __n_executed_operations++;
+                }
+            } else if constexpr(TYPE == SCAN_FUTURE){
+                ScanFutureOperation<T>* scan_future = static_cast<ScanFutureOperation<T>*>(operation);
+                if (is_coordinator){
+                    scan_future->notify();
+                    scan_future->destroy_multi_partition_scan();
+                    __n_executed_operations++;
+                }
+            }
+        } else {
+            std::string *values = operation->get_scaned_values();
+            read_range(key, len, values);
+            print_scan(true, key, len, values);
+            if constexpr(TYPE == SCAN_CALLBACK){
+                ScanCallbackOperation<T>* scan_cb = static_cast<ScanCallbackOperation<T>*>(operation);
+                scan_cb->callback(values);
+                delete scan_cb;
+            } else {
+                ScanFutureOperation<T>* scan_future = static_cast<ScanFutureOperation<T>*>(operation);
+                scan_future->notify();
+            }
+            __n_executed_operations++;
+        }
+    }
 
     void thread_loop() {
-        std::string value;
-        T key;
-        OperationType type;
         Operation<T> *operation;
 
         while (true) {
 
             operation = pop_operation();
-            type = operation->type();
-            key = operation->key();
-
+            OperationType type = operation->type();
             switch (type){
-            case GET:
+            case GET_FUTURE:
             {
-                read(key, value);
-                print_read(key, value);
-                GetCallbackOperation<T>* get_op = static_cast<GetCallbackOperation<T>*>(operation);
-                delete get_op;
-                __n_executed_operations++;
+                get<GET_FUTURE>(static_cast<GetOperation<T>*>(operation));
                 break;
             }
             case GET_CALLBACK:
             {
-                read(key, value);
-                print_read(key, value);
-                GetCallbackOperation<T>* get_op = static_cast<GetCallbackOperation<T>*>(operation);
-                get_op->callback(&value);
-                __n_executed_operations++;
+                get<GET_CALLBACK>(static_cast<GetOperation<T>*>(operation));
                 break;
             }
             case SET:
             {
-                SetOperation<T>* set_op = static_cast<SetOperation<T>*>(operation);
-                value = set_op->value();
-                storage[__id].write(key, value);
-                print_write(key, value);
-                delete set_op;
-                __n_executed_operations++;
+                set<SET>(static_cast<SetOperation<T>*>(operation));
                 break;
             }
             case SET_CALLBACK:
             {
-                SetCallbackOperation<T>* set_op = static_cast<SetCallbackOperation<T>*>(operation);
-                value = set_op->value();
-                storage[__id].write(key, value);
-                print_write(key, value);
-                set_op->callback(&value);
-                delete set_op;
-                __n_executed_operations++;
+                set<SET_CALLBACK>(static_cast<SetOperation<T>*>(operation));
                 break;
             }
-            case SCAN:
+            case SCAN_FUTURE:
             {
-                ScanOperation<T>* scan_op = static_cast<ScanOperation<T>*>(operation);
-                size_t len = scan_op->len();
-                if (scan_op->is_multi_partition()){
-                    scan_some(scan_op, key, len);
-                    bool is_coordinator = scan_op->is_coordinator();
-                    print_scan(is_coordinator, key, len, scan_op->get_scaned_values());
-                    if constexpr(utils::ENABLE_LINEARIZABLE){
-                        is_coordinator = scan_op->is_coordinator();
-                    }
-                    if (is_coordinator) {
-                        scan_op->destroy_multi_partition_scan();
-                        delete scan_op;
-                        __n_executed_operations++;
-                    }
-                    continue;
-                } else {
-                    std::string values[len];
-                    scan(key, len, values);
-                    delete scan_op;
-                    print_scan(true, key, len, values);
-                    __n_executed_operations++;
-                }
+                scan<SCAN_FUTURE>(static_cast<ScanOperation<T>*>(operation));
                 break;
             }
             case SCAN_CALLBACK:
             {
-                ScanCallbackOperation<T>* scan_op = static_cast<ScanCallbackOperation<T>*>(operation);
-                size_t len = scan_op->len();
-                if (scan_op->is_multi_partition()){
-                    scan_some(scan_op, key, len);
-                    bool is_coordinator = scan_op->is_coordinator();
-                    print_scan(is_coordinator, key, len, scan_op->get_scaned_values());
-                    if constexpr(utils::ENABLE_LINEARIZABLE){
-                        scan_op->callback(scan_op->get_scaned_values());
-                        is_coordinator = scan_op->is_coordinator();
-                    } else {
-                        scan_op->callback(scan_op->get_scaned_values());
-                    }
-                    if (is_coordinator) {
-                        scan_op->destroy_multi_partition_scan();
-                        delete scan_op;
-                        __n_executed_operations++;
-                    }
-                    continue;
-                } else {
-                    std::string values[len];
-                    scan(key, len, values);
-                    print_scan(true, key, len, values);
-                    scan_op->callback(&value);
-                    delete scan_op;
-                    __n_executed_operations++;
-                }
+                scan<SCAN_CALLBACK>(static_cast<ScanOperation<T>*>(operation));
                 break;
             }
             case DEL:
             {
-                storage[__id].del(key);
-                print_del(key);
-                DelOperation<T>* del_op = static_cast<DelOperation<T>*>(operation);
-                delete del_op;
-                __n_executed_operations++;
+                del<DEL>(static_cast<DelOperation<T>*>(operation));
                 break;
             }
             case DEL_CALLBACK:
             {
-                storage[__id].del(key);
-                print_del(key);
-                DelCallbackOperation<T>* del_op = static_cast<DelCallbackOperation<T>*>(operation);
-                static_cast<DelCallbackOperation<T>*>(del_op)->callback();
-                delete del_op;
-                __n_executed_operations++;
+                del<DEL_CALLBACK>(static_cast<DelOperation<T>*>(operation));
                 break;
             }
             case REPARTITION:

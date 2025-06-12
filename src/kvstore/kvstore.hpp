@@ -21,9 +21,13 @@
 
 #include "operation.hpp"
 #include "get_callback_operation.hpp"
+#include "get_future_operation.hpp"
 #include "set_callback_operation.hpp"
+#include "set_operation.hpp"
 #include "scan_callback_operation.hpp"
+#include "scan_future_operation.hpp"
 #include "del_callback_operation.hpp"
+#include "del_operation.hpp"
 #include "repartition_operation.hpp"
 #include "tracking_info.hpp"
 
@@ -150,13 +154,40 @@ public:
     }
     
     void scan(T key, size_t len, void (*cb)(T key, std::string*)){
-        ScanCallbackOperation<T>* operation = new ScanCallbackOperation<T>(key, len, cb);
+        std::string *values = new std::string[len];
+        ScanCallbackOperation<T>* operation = new ScanCallbackOperation<T>(key, len, values, cb);
         submit<SCAN_CALLBACK>(operation);
     }
     
     void del(T key, void (*cb)(T key)){
         DelCallbackOperation<T>* operation = new DelCallbackOperation<T>(key, cb);
         submit<DEL_CALLBACK>(operation);
+    }
+    
+    std::string get(T key){
+        std::string value;
+        GetFutureOperation<T> operation(key, &value);
+        submit<GET_FUTURE>(&operation);
+        operation.wait();
+        return value;
+    }
+    
+    void set(T key, const std::string &value){
+        SetOperation<T>* operation = new SetOperation<T>(key, new std::string(value));
+        submit<SET>(operation);
+    }
+    
+    std::vector<std::string> scan(T key, size_t len){
+        std::vector<std::string> values(len);
+        ScanFutureOperation<T> operation(key, len, values.data());
+        submit<SCAN_FUTURE>(&operation);
+        operation.wait();
+        return values;
+    }
+    
+    void del(T key){
+        DelOperation<T>* operation = new DelOperation<T>(key);
+        submit<DEL>(operation);
     }
 
     inline std::pair<typename partition_map_t::iterator, bool> try_map(T key){
@@ -167,13 +198,12 @@ public:
         Operation<T>* operation)
     {
         std::unordered_set<partition_t*> partitions;
-        OperationType type = operation->clean_type();
         size_t range = 1;
         bool new_mapping = false;
         T key;
         partition_t* new_assignment;
         
-        if (type == SCAN) {
+        if (operation->is_scan()) {
             ScanOperation<T>* scan_op = static_cast<ScanOperation<T>*>(operation);
             range = scan_op->len();
             if (range == 1){

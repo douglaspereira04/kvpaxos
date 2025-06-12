@@ -9,6 +9,8 @@ add_library(operation
     set_callback_operation.cpp
     scan_callback_operation.cpp
     del_callback_operation.cpp
+    get_future_operation.cpp
+    scan_future_operation.cpp
     tracking_info.cpp
 )
 

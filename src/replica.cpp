@@ -126,20 +126,20 @@ void operation_from_file(KVStore *kvstore, std::ifstream &operations_file){
 	switch (type)
 	{
 	case types::READ:
-		kvstore->get(key, do_nothing_with_kv);
+		kvstore->get(key);
 		break;
 	case types::WRITE:
 		if (utils::ENABLE_ANSWER){
-			kvstore->set(key, value, do_nothing_with_kv);
+			kvstore->set(key, value);
 		} else {
-			kvstore->set(key, template_value, do_nothing_with_kv);
+			kvstore->set(key, template_value);
 		}
 		break;
 	case types::SCAN:
-		kvstore->scan(key, len, do_nothing_with_kv);
+		kvstore->scan(key, len);
 		break;
 	case types::DEL:
-		kvstore->del(key, do_nothing_with_k);
+		kvstore->del(key);
 		break;
 	default:
 		std::cout << "ERROR" << std::endl;

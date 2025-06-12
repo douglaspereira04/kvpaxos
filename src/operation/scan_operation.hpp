@@ -21,16 +21,16 @@ class ScanOperation: public Operation<T> {
 public:
     ScanOperation(){}
 
-    ScanOperation(T key, size_t len)
-        : Operation<T>(SET, key){
+    ScanOperation(T key, size_t len, std::string* values)
+        : Operation<T>(SCAN, key){
         __len = len;
+        __values = values;
     }
 
     void destroy_multi_partition_scan(){
         if constexpr(utils::ENABLE_LINEARIZABLE){
             pthread_barrier_destroy(&__synchronizer.barrier);
         }
-        delete[] __values;
         delete[] __key_to_addr;
     }
 
@@ -38,7 +38,6 @@ public:
 
     inline void init_scan_data(){
         __key_to_addr = new char*[__len];
-        __values = new std::string[__len];
     }
 
     inline void init_coordination(size_t involved_partitions){
@@ -50,11 +49,11 @@ public:
     }
 
     inline void set_is_single_partition(){
-        __values = nullptr;
+        __key_to_addr = nullptr;
     }
 
     inline bool is_multi_partition(){
-        return __values != nullptr;
+        return __key_to_addr != nullptr;
     }
 
     template<typename PartitionT>
