@@ -36,6 +36,7 @@
 #include <fstream>
 
 #include "kvstore.hpp"
+
 using namespace workload;
 
 #if defined(REPARTITIONING)
@@ -75,6 +76,8 @@ static const std::string template_value(VALUE_SIZE, '*');
 void
 metrics_loop(int sleep_duration, KVStore* kvstore)
 {
+
+	ankerl::unordered_dense::map<int, std::string> m;
 	size_t n_ops = atol(params[N_OPERATIONS]);
 	size_t n_initial_keys = atol(params[N_INITIAL_KEYS]);
 	std::cout << "Executed,Arrivals,VM,RSS,Used Disk,Graph Vertices,Graph Edges";

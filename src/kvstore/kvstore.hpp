@@ -30,6 +30,7 @@
 #include "del_operation.hpp"
 #include "repartition_operation.hpp"
 #include "tracking_info.hpp"
+#include "ankerl/unordered_dense.h"
 
 namespace kvpaxos {
 
@@ -38,10 +39,9 @@ using namespace kvstorage;
 
 template <typename T, bool Rebalance, size_t TL = 0, size_t QSize = 0, types::interval_type IntervalType = types::OPERATIONS>
 class KVStore{
-
 typedef kvpaxos::Worker<T, QSize> worker_t;
-typedef std::unordered_map<T, worker_t*> worker_map_t;
-typedef std::unordered_map<T, storage_t*> storage_map_t;
+typedef ankerl::unordered_dense::map<T, worker_t*> worker_map_t;
+typedef ankerl::unordered_dense::map<T, storage_t*> storage_map_t;
 typedef model::Queue<Operation<T>*, TrackingInfo<T>*> schedule_queue_t;
 typedef std::unordered_set<worker_t*> worker_set_t;
 public:
@@ -55,12 +55,12 @@ public:
         __n_partitions = n_partitions;
         if constexpr(Rebalance) {
             if (dh == 0) {
-                scheduling_queue = schedule_queue_t(SEM_VALUE_MAX, 0);
+                __scheduling_queue = new schedule_queue_t(SEM_VALUE_MAX, 0);
             } else {
-                scheduling_queue = schedule_queue_t(1, dh);
+                __scheduling_queue = new schedule_queue_t(1, dh);
             }
         } else {
-            scheduling_queue = schedule_queue_t(SEM_VALUE_MAX, 0);
+            __scheduling_queue = new schedule_queue_t(SEM_VALUE_MAX, 0);
         }
 
         __rr_counter = 0;
@@ -72,8 +72,8 @@ public:
         __storages = new storage_t[__n_partitions];
         __workers = new worker_t*[__n_partitions];
         for (auto i = 0; i < __n_partitions; i++) {
-            __storages[i].init();
             __storages[i].level(0);
+            __storages[i].init();
             __workers[i] = new worker_t(i, &__storages[i]);
         }
         __storage_map = storage_map_t();
@@ -134,6 +134,7 @@ public:
             delete __workers[i];
         }
         delete[] __workers;
+        delete __scheduling_queue;
     }
 
     void run() {
@@ -208,7 +209,7 @@ public:
         if (!storage_emplaced) {
             storage_t* other_storage = storage_it->second;
             if (other_storage->level() < __level){
-                storage_it->second = &__storages[__rr_counter];
+                storage_it->second = &__storages[worker_it->second->id()];
             }
         }
 
@@ -235,7 +236,7 @@ public:
             if (!storage_emplaced) {
                 storage_t* other_storage = storage_it->second;
                 if (other_storage->level() < __level){
-                    storage_it->second = &__storages[__rr_counter];
+                    storage_it->second = &__storages[worker_it->second->id()];
                 }
             }
 
@@ -332,8 +333,8 @@ public:
 
     void scheduling_loop() {
         while(true){
-            scheduling_queue.template wait<0>();
-            Operation<T> *operation = scheduling_queue.template pop<Operation<T>*>();
+            Operation<T>* operation;
+            __scheduling_queue->template pop(operation);
             if (operation->type() == END){
                 stop_signal();
                 delete operation;
@@ -348,8 +349,9 @@ public:
 
     void sync_repartition(worker_map_t * old_map) {
         __level++;
+        __old_storages.push_back(__storages);
+        __storages = new storage_t[__n_partitions];
         RepartitionOperation<T> *sync_operation = new RepartitionOperation<T>(__n_partitions, __storages);
-
         for (size_t i = 0; i < __n_partitions; i++)
         {
             __storages[i].level(__level);
@@ -375,9 +377,7 @@ public:
     template<OperationType type>
     void submit(Operation<T>* operation){
         TrackingInfo<T>* tracking_info = TrackingInfo<T>::template get_tracking_info<type>(operation);
-        scheduling_queue.template push(operation, tracking_info);
-        scheduling_queue.template notify<0>();
-        scheduling_queue.template notify<1>();
+        __scheduling_queue->template push(operation, tracking_info);
     }
 
     void update_partition_scheme(){
@@ -407,8 +407,8 @@ public:
     void update_graph_loop() {
         while(true) {
             __n_processed_operations++;
-            scheduling_queue.template wait<1>();
-            TrackingInfo<T> *tracking_info = scheduling_queue.template pop<TrackingInfo<T>*>();
+            TrackingInfo<T> *tracking_info;
+            __scheduling_queue->template pop(tracking_info);
             if (tracking_info->type() == END){
                 __stop.store(true, std::memory_order_relaxed);
                 sem_post(&repart_semaphore);
@@ -647,7 +647,7 @@ public:
     std::vector<types::duration> __reconstruction_duration;
     types::time_point __schedule_end;
 
-    schedule_queue_t scheduling_queue;
+    schedule_queue_t* __scheduling_queue;
 
     size_t __n_processed_operations = 0;
 
@@ -674,6 +674,8 @@ public:
     storage_map_t __storage_map;
     storage_t* __storages;
     size_t __level;
+
+    std::vector<storage_t*> __old_storages;
 };
 
 };

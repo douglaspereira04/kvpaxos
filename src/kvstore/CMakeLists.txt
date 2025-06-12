@@ -23,6 +23,8 @@ IF(${REPARTITIONING} STREQUAL "ON")
 ENDIF()
 target_link_libraries(kvstore
     PUBLIC
+        unordered_dense
+        readerwriterqueue
         queue
         types
         utils

@@ -25,18 +25,13 @@ set(ROCKSDB_BUILD_SHARED OFF CACHE BOOL "Disable RocksDB shared")
 
 include(cmake/add_libmetis.cmake)
 include(cmake/add_libkahip.cmake)
+include(cmake/add_unordered_dense.cmake)
+include(cmake/add_readerwriterqueue.cmake)
 
 # Disable zlib programs/tests, build static
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static")
 set(ZLIB_BUILD_SHARED OFF CACHE BOOL "Build static zlib")
 set(SKIP_INSTALL_ALL ON CACHE BOOL "Skip install targets for zlib")
-
-# Add unordered_dense header-only library
-add_library(unordered_dense INTERFACE)
-
-target_include_directories(unordered_dense INTERFACE
-    "${CMAKE_SOURCE_DIR}/external/unordered_dense"
-)
 
 add_subdirectory(external/zlib)
 add_subdirectory(external/rocksdb)

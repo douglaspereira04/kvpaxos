@@ -30,6 +30,7 @@
 #include "get_future_operation.hpp"
 #include "repartition_operation.hpp"
 
+#include <readerwriterqueue.h>
 
 namespace kvpaxos {
 using namespace kvstorage;
@@ -42,7 +43,8 @@ class Worker {
 
 typedef Worker<T, QSize> worker_t;
 typedef std::unordered_map<T, worker_t*> worker_map_t;
-typedef std::queue<Operation<T>*> operation_queue_t;
+typedef moodycamel::BlockingReaderWriterQueue<Operation<T>*> operation_queue_t;
+
 public:
     Worker(size_t id, storage_t *storage)
         : __id{id},
@@ -61,17 +63,19 @@ public:
     }
 
     void start_worker_thread() {
-        sem_init(&semaphore_, 0, 0);
+        sem_init(&__available, 0, 0);
         if constexpr(QSize > 0){
-            sem_init(&remaining_space_, 0, QSize);
+            sem_init(&__remaining_space, 0, QSize);
         }
 
         worker_thread_ = std::thread(&worker_t::thread_loop, this);
         utils::set_affinity(__id+5, worker_thread_, cpu_set);
     }
 
-    size_t operation_queue_size() const {
-        return __operations_queue.size();
+    size_t operation_queue_size() {
+        int size;
+        sem_getvalue(&__available, &size);
+        return static_cast<size_t>(size);
     }
 
     size_t error_count() {
@@ -80,24 +84,18 @@ public:
 
     void push_operation(Operation<T> *operation) {
         if constexpr(QSize > 0){
-            sem_wait(&remaining_space_);
+            sem_wait(&__remaining_space);
         }
-        __queue_mutex.lock();
-            __operations_queue.push(operation);
-        __queue_mutex.unlock();
-        sem_post(&semaphore_);
+        __operations_queue.enqueue(operation);
+        sem_post(&__available);
     }
 
     Operation<T> * pop_operation() {
         Operation<T> *operation;
-        sem_wait(&semaphore_);
-
-        __queue_mutex.lock();
-            operation = __operations_queue.front();
-            __operations_queue.pop();
-        __queue_mutex.unlock();
+        sem_wait(&__available);
+        __operations_queue.try_dequeue(operation);
         if constexpr(QSize > 0){
-            sem_post(&remaining_space_);
+            sem_post(&__remaining_space);
         }
         return operation;
     }
@@ -281,7 +279,7 @@ private:
     }
 
     inline void repart(RepartitionOperation<T>* operation){
-        __storage = operation->template storage<storage_t>()+__id;
+        __storage = &operation->template storage<storage_t>()[__id];
         __storage->init();
 
         int coordinator = operation->barrier_wait();
@@ -341,15 +339,15 @@ private:
     cpu_set_t cpu_set;
 
     std::thread worker_thread_;
-    sem_t semaphore_;
+    sem_t __available;
     operation_queue_t __operations_queue;
-    std::mutex __queue_mutex;
 
-    sem_t remaining_space_;
+    sem_t __remaining_space;
 
     size_t __error_count = 0;
 
     std::ofstream __output_file;
+
 
 
 };
