@@ -111,7 +111,7 @@ public:
 
 private:
 
-    inline void read(storage_t* storage, T &key, std::string& val){
+    inline void read(storage_t* &storage, T &key, std::string& val){
         int len = storage->read(key, val);
         if (len >= 0){
             if (storage != __storage){
@@ -122,7 +122,7 @@ private:
         __error_count++;
     }
 
-    inline void read_some(ScanOperation<T>* operation, T &key, size_t &len){
+    inline void read_some(ScanOperation<T>* &operation, T &key, size_t &len){
         for (size_t i = 0; i < len; i++)
         {
             if (operation->worker_manages_key(i, this)){
@@ -134,21 +134,16 @@ private:
         
 
     }
-    inline void read_range(storage_t* storage, T &key, size_t &len, std::string* values){
-
-        if constexpr(utils::ENABLE_ANSWER){
-            __output_file << "scan( " << key << ", "<< len << " ): [";
-        }
-        for (auto i = 0; i < len; i++) {
-            T key_i = key+i;
-            read(storage, key_i, values[i]);
-            if constexpr(utils::ENABLE_ANSWER){
-                 __output_file << "\"" << values[i] << "\", ";
+    inline void read_range(ScanOperation<T>* &operation, T &key, size_t &len, std::string* &values){
+        if (len > 1){
+            for (auto i = 0; i < len; i++) {
+                T key_i = key+i;
+                storage_t* storage = operation->template storage<storage_t>(i);
+                read(storage, key_i, values[i]);
             }
-        }
-
-        if constexpr(utils::ENABLE_ANSWER){
-            __output_file << "]\n";
+        } else {
+            storage_t* storage = operation->template storage<storage_t>();
+            read(storage, key, values[0]);
         }
     }
 
@@ -262,8 +257,7 @@ private:
             }
         } else {
             std::string *values = operation->get_scaned_values();
-            storage_t *storage = operation->template storage<storage_t>();
-            read_range(storage, key, len, values);
+            read_range(operation, key, len, values);
             print_scan(true, key, len, values);
             if constexpr(TYPE == SCAN_CALLBACK){
                 ScanCallbackOperation<T>* scan_cb = static_cast<ScanCallbackOperation<T>*>(operation);

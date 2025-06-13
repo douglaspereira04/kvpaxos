@@ -253,7 +253,12 @@ public:
             __involved_workers.insert(__workers[__rr_counter]);
             __rr_counter = (__rr_counter+1) % __n_partitions;
         }
-        operation->init_coordination(__involved_workers.size());
+
+        if (__involved_workers.size() > 0) {
+            operation->init_coordination(__involved_workers.size());
+        } else {
+            operation->set_is_single_partition();
+        }
     }
 
     void prepare_operation(
@@ -462,13 +467,12 @@ public:
         }
 
         for (auto i = 0; i < data_size; i++) {
-            workload_graph.add_vertice(tracking_info->key()+i);
-            workload_graph.increment_vertice_weight(tracking_info->key()+i, 1);
+            T key_i = tracking_info->key()+i;
+            workload_graph.increment_vertice_weight(key_i, 1);
 
             for (auto j = i+1; j < data_size; j++) {
-                workload_graph.add_vertice(tracking_info->key()+j);
-                workload_graph.add_edge(tracking_info->key()+i, tracking_info->key()+j);
-                workload_graph.increment_edge_weight(tracking_info->key()+i, tracking_info->key()+j, 1);
+                T key_j = tracking_info->key()+j;
+                workload_graph.increment_edge_weight(key_i, key_j, 1);
             }
         }
     }
@@ -481,13 +485,12 @@ public:
             }
 
             for (int i = data_size-1; i >= 0; i--) {
+                T key_i = tracking_info->key()+i;
                 for (int j = data_size-1; j >= i+1; j--) {
-                    workload_graph.increment_edge_weight(tracking_info->key()+i, tracking_info->key()+j, -1);
-                    workload_graph.remove_weightless_edge(tracking_info->key()+i, tracking_info->key()+j);
-                    workload_graph.remove_weightless_vertice(tracking_info->key()+j);
+                    T key_j = tracking_info->key()+j;
+                    workload_graph.decrement_edge_weight(key_i, key_j, 1);
                 }
-                workload_graph.increment_vertice_weight(tracking_info->key()+i, -1);
-                workload_graph.remove_weightless_vertice(tracking_info->key()+i);
+                workload_graph.decrement_vertice_weight(key_i, 1);
             }
         }
     }

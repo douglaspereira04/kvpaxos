@@ -23,6 +23,7 @@ IF(${REPARTITIONING} STREQUAL "ON")
 ENDIF()
 target_link_libraries(kvstore
     PUBLIC
+        absl::btree
         unordered_dense
         readerwriterqueue
         queue

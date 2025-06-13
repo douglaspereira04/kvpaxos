@@ -27,6 +27,7 @@ include(cmake/add_libmetis.cmake)
 include(cmake/add_libkahip.cmake)
 include(cmake/add_unordered_dense.cmake)
 include(cmake/add_readerwriterqueue.cmake)
+include(cmake/add_abseil.cmake)
 
 # Disable zlib programs/tests, build static
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static")

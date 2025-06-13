@@ -3,7 +3,7 @@
 
 #include "graph.hpp"
 #include <vector>
-#include <unordered_map>
+#include "ankerl/unordered_dense.h"
 
 namespace kvpaxos {
 
@@ -18,7 +18,7 @@ struct InputGraph{
     std::vector<int> x_edges;
     std::vector<int> edges;
     std::vector<int> edges_weight;
-    std::unordered_map<T,int> vertice_to_pos;
+    ankerl::unordered_dense::map<T,int> vertice_to_pos;
 };
 
 }
