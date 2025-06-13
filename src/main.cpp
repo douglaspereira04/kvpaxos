@@ -94,14 +94,14 @@ metrics_loop(int sleep_duration, KVStore* kvstore)
 		executed = kvstore->n_executed_operations();
 		std::cout << executed << ",";
 
-		if constexpr(utils::ENABLE_INFO){
-			std::cout << arrived << ",";
-			double vm, rss;
-			utils::process_mem_usage(vm, rss);
-			std::cout << vm << ",";
-			std::cout << rss << ",";
-			std::cout << utils::used_disk(".") << ",";
+		std::cout << arrived << ",";
+		double vm, rss;
+		utils::process_mem_usage(vm, rss);
+		std::cout << vm << ",";
+		std::cout << rss << ",";
+		std::cout << utils::used_disk(".") << ",";
 
+		if constexpr(utils::ENABLE_INFO){
 			std::cout << kvstore->graph_vertices() << ",";
 			std::cout << kvstore->graph_edges() << ",";
 
@@ -110,6 +110,13 @@ metrics_loop(int sleep_duration, KVStore* kvstore)
 			{
 				std::cout << in_queue[i] << ",";
 			}
+		} else {
+			std::cout << ",,";
+			for (int i = 0; i < n_partitions; i++)
+			{
+				std::cout << ",";
+			}
+
 		}
 
 		std::cout << "\n";
@@ -248,9 +255,7 @@ workload_loop(std::ifstream &operations_file, KVStore *kvstore)
 				operation_from_file(kvstore, operations_file);
 			}
 
-			if constexpr(utils::ENABLE_INFO){
-				arrived++;
-			}
+			arrived++;
 			auto duration = std::chrono::nanoseconds(interval_distribution(generator));
 			auto now = utils::now();
 			while(now < begin + duration){now = utils::now();}
@@ -264,9 +269,7 @@ workload_loop(std::ifstream &operations_file, KVStore *kvstore)
 			} else {
 				operation_from_file(kvstore, operations_file);
 			}
-			if constexpr(utils::ENABLE_INFO){
-				arrived++;
-			}
+			arrived++;
 		}
 	}
 	kvstore->stop();
