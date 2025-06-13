@@ -5,3 +5,7 @@ target_link_libraries(utils PUBLIC types)
 IF(${INFO} STREQUAL "ON")
     target_compile_definitions(utils PUBLIC INFO)
 ENDIF()
+
+IF(${ANSWER} STREQUAL "ON")
+    target_compile_definitions(utils PUBLIC ANSWER)
+ENDIF()

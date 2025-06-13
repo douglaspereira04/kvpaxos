@@ -16,6 +16,7 @@ static const int N_INITIAL_KEYS = 2;
 static const int OPERATIONS_PATH = 3;
 static const int OPERATIONS_RATE = 4;
 static const int OPERATIONS_RATE_SEED = 5;
+static const int SNAPSHOT_SCAN = 6;
 
 static char* *params;
 
@@ -115,7 +116,12 @@ void operation_from_file(std::ifstream &operations_file, std::ofstream &output_f
 	}
 	case types::SCAN:
 	{
-		std::vector<std::string> values = storage->scan(key, len);
+		std::vector<std::string> values;
+		if (params[SNAPSHOT_SCAN]){
+			values = storage->snapshot_scan(key, len);
+		} else {
+			values = storage->scan(key, len);
+		}
 		print_scan(key, len, values.data(), output_file);
 		break;
 	}
