@@ -257,7 +257,6 @@ private:
                 ScanFutureOperation<T>* scan_future = static_cast<ScanFutureOperation<T>*>(operation);
                 if (is_coordinator){
                     scan_future->notify();
-                    scan_future->destroy_multi_partition_scan();
                     __n_executed_operations++;
                 }
             }

@@ -61,6 +61,7 @@ static const int OPERATIONS_PATH = 6;
 static const int OPERATIONS_RATE = 7;
 static const int OPERATIONS_RATE_SEED = 8;
 static const int QUEUE_HEAD_DISTANCE = 9;
+static const int CALLBACK = 10;
 
 static char* *params;
 
@@ -119,13 +120,12 @@ metrics_loop(int sleep_duration, KVStore* kvstore)
 void do_nothing_with_kv(int key, std::string *value){}
 void do_nothing_with_k(int key){}
 
-void operation_from_file(KVStore *kvstore, std::ifstream &operations_file){
+void operation_from_file_cb(KVStore *kvstore, std::ifstream &operations_file){
 	types::RequestType type;
 	int key;
 	size_t len;
 	std::string value;
 	utils::read_operation(type, key, len, value, operations_file);
-
 	switch (type)
 	{
 	case types::READ:
@@ -143,6 +143,37 @@ void operation_from_file(KVStore *kvstore, std::ifstream &operations_file){
 		break;
 	case types::DEL:
 		kvstore->del(key, do_nothing_with_k);
+		break;
+	default:
+		std::cout << "ERROR" << std::endl;
+		break;
+	}
+}
+
+void operation_from_file(KVStore *kvstore, std::ifstream &operations_file){
+	types::RequestType type;
+	int key;
+	size_t len;
+	std::string value;
+	utils::read_operation(type, key, len, value, operations_file);
+	bool use_callback = atoi(params[CALLBACK]);
+	switch (type)
+	{
+	case types::READ:
+		kvstore->get(key);
+		break;
+	case types::WRITE:
+		if (utils::ENABLE_ANSWER){
+			kvstore->set(key, value);
+		} else {
+			kvstore->set(key, template_value);
+		}
+		break;
+	case types::SCAN:
+		kvstore->scan(key, len);
+		break;
+	case types::DEL:
+		kvstore->del(key);
 		break;
 	default:
 		std::cout << "ERROR" << std::endl;
@@ -172,10 +203,16 @@ initialize_kvstore(std::ifstream &operations_file)
 	kvstore->run();
 
 	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
+
 	if (n_initial_keys > 0) {
+		const bool use_callback = atoi(params[CALLBACK]);
 		for (int i = 0; i < n_initial_keys; i++)
 		{
-			operation_from_file(kvstore, operations_file);
+			if (use_callback){
+				operation_from_file_cb(kvstore, operations_file);
+			} else {
+				operation_from_file(kvstore, operations_file);
+			}
 		}
 		
 		bool wait = true;
@@ -203,8 +240,13 @@ workload_loop(std::ifstream &operations_file, KVStore *kvstore)
 		interval_distribution = std::poisson_distribution<long>(1.0E9/ops_rate);
 
 		auto begin = utils::now();
+		const bool use_callback = atoi(params[CALLBACK]);
 		for (int i = 0; i < n_ops && operations_file.peek() != EOF; i++) {
-			operation_from_file(kvstore, operations_file);
+			if (use_callback){
+				operation_from_file_cb(kvstore, operations_file);
+			} else {
+				operation_from_file(kvstore, operations_file);
+			}
 
 			if constexpr(utils::ENABLE_INFO){
 				arrived++;
@@ -215,8 +257,13 @@ workload_loop(std::ifstream &operations_file, KVStore *kvstore)
 			begin = now;
 		}
 	} else {
+		const bool use_callback = atoi(params[CALLBACK]);
 		for (int i = 0; i < n_ops && operations_file.peek() != EOF; i++) {
-			operation_from_file(kvstore, operations_file);
+			if (use_callback){
+				operation_from_file_cb(kvstore, operations_file);
+			} else {
+				operation_from_file(kvstore, operations_file);
+			}
 			if constexpr(utils::ENABLE_INFO){
 				arrived++;
 			}

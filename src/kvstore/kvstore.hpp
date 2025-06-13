@@ -191,6 +191,9 @@ public:
         ScanFutureOperation<T> operation(key, len, values.data());
         submit<SCAN_FUTURE>(&operation);
         operation.wait();
+        if (operation.is_multi_partition()){
+            operation.destroy_multi_partition_scan();
+        }
         return values;
     }
     
