@@ -10,20 +10,20 @@
 
 
 namespace kvstorage {
+template<typename T>
+class TBBStorage : public Storage<T> {
 
-class TBBStorage : public Storage {
-
-typedef tbb::concurrent_unordered_map<int, std::string> storage_t;
+typedef tbb::concurrent_unordered_map<T, std::string> storage_t;
 public:
     TBBStorage() {}
 
     void init(){
         storage_ = storage_t();
-    }
+    };
 
-    int read(int key, std::string &value);
-    void write(int key, const std::string &value);
-    void del(int key);
+    int read(T &key, std::string &value);
+    void write(T &key, const std::string &value);
+    void del(T &key);
 
 
 private:
@@ -31,7 +31,8 @@ private:
 
 };
 
-inline int TBBStorage::read(int key, std::string &value) {
+template<typename T>
+inline int TBBStorage<T>::read(T &key, std::string &value) {
     std::string compressed;
     try {
          compressed = storage_.at(key);
@@ -42,12 +43,14 @@ inline int TBBStorage::read(int key, std::string &value) {
     return value.length();
 }
 
-inline void TBBStorage::write(int key, const std::string &value) {
+template<typename T>
+inline void TBBStorage<T>::write(T &key, const std::string &value) {
     auto compressed_value = compress(value);
     storage_[key] = compressed_value;
 }
 
-inline void TBBStorage::del(int key) {
+template<typename T>
+inline void TBBStorage<T>::del(T &key) {
     std::string null_value("null");
     write(key, null_value);
 }

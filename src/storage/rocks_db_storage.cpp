@@ -1,7 +1,8 @@
 #include "rocks_db_storage.h"
 
 namespace kvstorage {
-void RocksDBStorage::init(){
+template<typename T>
+void RocksDBStorage<T>::init(){
     rocksdb::Options options;
     options.create_if_missing = true;
     std::string path = 
@@ -13,13 +14,16 @@ void RocksDBStorage::init(){
     rocksdb::Status status;
     size_t i = 0;
     do {
-    status = rocksdb::DB::Open(options, path, &__storage);
-} while(!status.ok() && 10 > i++);
-assert(status.ok());
+        status = rocksdb::DB::Open(options, path, &__storage);
+    } while(!status.ok() && 10 > i++);
+    assert(status.ok());
 }
 
-std::atomic_int RocksDBStorage::db_counter = 0;
-std::string RocksDBStorage::id = std::to_string(
+template<typename T>
+std::atomic_int RocksDBStorage<T>::db_counter = 0;
+
+template<typename T>
+std::string RocksDBStorage<T>::id = std::to_string(
     std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()
     ).count()

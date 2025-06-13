@@ -11,14 +11,15 @@
 
 namespace kvstorage {
 
-class RocksDBStorage : public Storage {
+template<typename T>
+class RocksDBStorage : public Storage<T> {
 public:
     RocksDBStorage(){}
     void init();
 
-    int read(int key, std::string &value);
-    void write(int key, const std::string &value);
-    void del(int key);
+    int read(T &key, std::string &value);
+    void write(T &key, const std::string &value);
+    void del(T &key);
 
 
 private:
@@ -28,7 +29,8 @@ private:
 
 };
 
-inline int RocksDBStorage::read(int key, std::string &value) {
+template<typename T>
+inline int RocksDBStorage<T>::read(T &key, std::string &value) {
     rocksdb::Status status;
     status = __storage->Get(rocksdb::ReadOptions(), std::to_string(key), &value);
     if (status.IsNotFound()) {
@@ -37,13 +39,17 @@ inline int RocksDBStorage::read(int key, std::string &value) {
     return value.size();
 }
 
-inline void RocksDBStorage::write(int key, const std::string &value) {
+template<typename T>
+inline void RocksDBStorage<T>::write(T &key, const std::string &value) {
     __storage->Put(rocksdb::WriteOptions(), std::to_string(key), value);
 }
 
-inline void RocksDBStorage::del(int key) {
+template<typename T>
+inline void RocksDBStorage<T>::del(T &key) {
     __storage->Delete(rocksdb::WriteOptions(), std::to_string(key));
 }
+
+template class kvstorage::RocksDBStorage<int>;
 
 };
 

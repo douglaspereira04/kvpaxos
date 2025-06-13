@@ -34,16 +34,16 @@
 
 namespace kvpaxos {
 
-using namespace kvstorage;
 
-
-template <typename T, bool Rebalance, size_t TL = 0, size_t QSize = 0, types::interval_type IntervalType = types::OPERATIONS>
+template <typename T, typename storage_t, bool Rebalance, size_t TL = 0, size_t QSize = 0, types::interval_type IntervalType = types::OPERATIONS>
 class KVStore{
-typedef kvpaxos::Worker<T, QSize> worker_t;
+typedef KVStore<T, storage_t, Rebalance, TL, QSize, IntervalType> kvstore_t;
+typedef kvpaxos::Worker<T, storage_t, QSize> worker_t;
 typedef ankerl::unordered_dense::map<T, worker_t*> worker_map_t;
 typedef ankerl::unordered_dense::map<T, storage_t*> storage_map_t;
 typedef model::Queue<Operation<T>*, TrackingInfo<T>*> schedule_queue_t;
 typedef std::unordered_set<worker_t*> worker_set_t;
+
 public:
 
     KVStore() {}
@@ -79,7 +79,7 @@ public:
         __storage_map = storage_map_t();
         __worker_map = new worker_map_t();
 
-        scheduling_thread = std::thread(&KVStore<T, Rebalance, TL, QSize, IntervalType>::scheduling_loop, this);
+        scheduling_thread = std::thread(&kvstore_t::scheduling_loop, this);
         utils::set_affinity(2,scheduling_thread, scheduler_cpu_set);
 
         if constexpr(Rebalance) {
@@ -111,10 +111,10 @@ public:
             }
 
             sem_init(&repart_semaphore, 0, 0);
-            reparting_thread = std::thread(&KVStore<T, Rebalance, TL, QSize, IntervalType>::partitioning_loop, this);
+            reparting_thread = std::thread(&kvstore_t::partitioning_loop, this);
             utils::set_affinity(4, reparting_thread, reparting_cpu_set);
 
-            graph_thread = std::thread(&KVStore<T, Rebalance, TL, QSize, IntervalType>::update_graph_loop, this);
+            graph_thread = std::thread(&kvstore_t::update_graph_loop, this);
             utils::set_affinity(3, graph_thread, graph_cpu_set);
         }
 

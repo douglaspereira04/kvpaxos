@@ -34,7 +34,7 @@
 #include "utils.h"
 #include "operation.hpp"
 #include <fstream>
-
+#include "rocks_db_storage.h"
 #include "kvstore.hpp"
 
 using namespace workload;
@@ -45,7 +45,7 @@ using namespace workload;
     const bool ENABLE_REPARTITION = false;
 #endif
 
-typedef kvpaxos::KVStore<int, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, types::OPERATIONS> KVStore;
+typedef kvpaxos::KVStore<int, kvstorage::RocksDBStorage<int>, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, types::OPERATIONS> KVStore;
 
 
 static int verbose = 0;

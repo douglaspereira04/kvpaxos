@@ -15,7 +15,6 @@
 #include <csignal>
 #include <iostream>
 #include "utils.h"
-#include "rocks_db_storage.h"
 
 #include "operation.hpp"
 #include "get_callback_operation.hpp"
@@ -33,15 +32,12 @@
 #include <readerwriterqueue.h>
 
 namespace kvpaxos {
-using namespace kvstorage;
 using namespace workload;
 
-typedef RocksDBStorage storage_t;
 
-template <typename T, size_t QSize = 0>
+template <typename T, typename storage_t, size_t QSize = 0>
 class Worker {
-
-typedef Worker<T, QSize> worker_t;
+typedef Worker<T, storage_t, QSize> worker_t;
 typedef std::unordered_map<T, worker_t*> worker_map_t;
 typedef moodycamel::BlockingReaderWriterQueue<Operation<T>*> operation_queue_t;
 
