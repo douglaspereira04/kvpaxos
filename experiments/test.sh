@@ -23,7 +23,7 @@ for ((i=0; i<${#workloads[@]}; i++)); do
         if [ "$version" = "rep" ]; then
             for track_length_ in "${track_length[@]}"; do
                 for q_size_ in "${q_size[@]}"; do
-                    file_name=${version}_t${track_length_}_q${q_size_}_p${p_}_dt${deltat[$i]}_w${workloads[$i]}.csv
+                    file_name=${version}_c${callback}_t${track_length_}_q${q_size_}_p${p_}_dt${deltat[$i]}_w${workloads[$i]}.csv
                     echo ./${version}_${track_length_}_${q_size_} ${requests[$i]}  $p_  $n_initial_keys  ${deltat[$i]}  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed  $deltah $callback
                     ./${version}_${track_length_}_${q_size_} ${requests[$i]}  $p_  $n_initial_keys  ${deltat[$i]}  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed  $deltah $callback > output/$file_name
                     if [ $? -ne 0 ]; then
@@ -35,7 +35,7 @@ for ((i=0; i<${#workloads[@]}; i++)); do
                 done;
             done;
         else
-            file_name=${version}_p${p_}_w${workloads[$i]}.csv
+            file_name=${version}_c${callback}_p${p_}_w${workloads[$i]}.csv
             echo ./${version} ${requests[$i]}  $p_  $n_initial_keys  0  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed  0 $callback
             ./${version} ${requests[$i]}  $p_  $n_initial_keys  0  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed  0 $callback > output/$file_name
             if [ $? -ne 0 ]; then
