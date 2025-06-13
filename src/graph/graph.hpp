@@ -54,6 +54,9 @@ public:
         auto [from_it, emplaced_from] = edges_weight_.try_emplace(from, edges_weight_t());
         if (emplaced_from){
             from_it->second.emplace(to, value);
+            if constexpr(utils::ENABLE_INFO){
+                n_edges_++;
+            }
         } else {
             from_it->second.find(to)->second += value;
         }

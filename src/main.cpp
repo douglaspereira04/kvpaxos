@@ -100,7 +100,7 @@ metrics_loop(int sleep_duration, KVStore* kvstore)
 			utils::process_mem_usage(vm, rss);
 			std::cout << vm << ",";
 			std::cout << rss << ",";
-			std::cout << utils::used_disk(".");
+			std::cout << utils::used_disk(".") << ",";
 
 			std::cout << kvstore->graph_vertices() << ",";
 			std::cout << kvstore->graph_edges() << ",";

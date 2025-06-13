@@ -367,21 +367,6 @@ public:
         }
     }
 
-    void map_key(T key) {
-        auto partition_id = __rr_counter;
-        __worker_map->emplace(key, __workers[partition_id]);
-
-        __rr_counter = (__rr_counter+1) % __n_partitions;
-    }
-
-    void map_key(T key, int partition_id) {
-        __worker_map->emplace(key, __workers[partition_id]);
-    }
-
-    bool mapped(T key) const {
-        return __worker_map->find(key) != __worker_map->end();
-    }
-
     template<OperationType type>
     void submit(Operation<T>* operation){
         TrackingInfo<T>* tracking_info = TrackingInfo<T>::template get_tracking_info<type>(operation);
@@ -391,6 +376,7 @@ public:
     void update_partition_scheme(){
         worker_map_t *old_map =  __worker_map;
         __worker_map = __updated_worker_map;
+        __updated_worker_map = old_map;
 
         sync_repartition(old_map);
     }
@@ -452,8 +438,9 @@ public:
                 break;
             }
             if (__n_partitions > 1){
-                __updated_worker_map = partitioning(input_graph);
+                partitioning(input_graph);
             } else {
+                delete __updated_worker_map;
                 __updated_worker_map = new worker_map_t(*__worker_map);
             }
             __update.store(true, std::memory_order_release);
@@ -496,7 +483,7 @@ public:
     }
 
 
-    worker_map_t* partitioning(InputGraph<T> &graph) {
+    void partitioning(InputGraph<T> &graph) {
         
         if constexpr(utils::ENABLE_INFO){
             __repartition_timestamps.push_back(utils::now());
@@ -518,8 +505,9 @@ public:
             __repartition_end_timestamps.push_back(utils::now());
             reconstruction_begin = utils::now();
         }
-        worker_map_t* worker_map = new worker_map_t();
-        worker_map->reserve(graph.vertice_to_pos.size());
+
+        __updated_worker_map->clear();
+        __updated_worker_map->reserve(graph.vertice_to_pos.size());
 
         for (auto& it : graph.vertice_to_pos) {
             T key = it.first;
@@ -529,13 +517,12 @@ public:
                 printf("ERROR: worker was %d!\n", worker);
                 fflush(stdout);
             }
-            worker_map->emplace(key, __workers[worker]);
+            __updated_worker_map->emplace(key, __workers[worker]);
         }
 
         if constexpr(utils::ENABLE_INFO){
             __reconstruction_duration.push_back(utils::now() - reconstruction_begin);
         }
-        return worker_map;
     }
 
     size_t n_executed_operations() const{
