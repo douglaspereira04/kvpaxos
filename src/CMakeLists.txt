@@ -1,38 +1,28 @@
 add_subdirectory(compresser)
 add_subdirectory(types)
 add_subdirectory(utils)
-add_subdirectory(request)
 add_subdirectory(storage)
-add_subdirectory(scheduler)
 
-add_executable(replica replica.cpp)
+add_executable(main main.cpp)
 
 IF(${INFO} STREQUAL "ON")
-    target_compile_definitions(replica PUBLIC INFO)
+    target_compile_definitions(main PUBLIC INFO)
 ENDIF()
 IF(${ANSWER} STREQUAL "ON")
-    target_compile_definitions(replica PUBLIC ANSWER)
+    target_compile_definitions(main PUBLIC ANSWER)
 ENDIF()
-add_definitions( -DQ_SIZE=${Q_SIZE} )
 
 target_link_libraries(
-    replica
+    main
         PRIVATE
             pthread
             types
             utils
-            request
             rocksdb
-            scheduler
+            storage
 )
 
-target_include_directories(replica
+target_include_directories(main
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-target_include_directories(
-    replica
-        PUBLIC
-            "${CMAKE_SOURCE_DIR}/external/rocksdb/include"
 )

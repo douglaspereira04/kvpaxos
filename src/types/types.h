@@ -11,28 +11,29 @@
 
 
 #include <chrono>
+namespace types {
+	typedef std::chrono::_V2::system_clock::time_point time_point;
+	typedef std::chrono::_V2::system_clock::duration duration;
 
-typedef std::chrono::_V2::system_clock::time_point time_point;
-typedef std::chrono::_V2::system_clock::duration duration;
-
-enum RequestType
-{
-	READ,
-	WRITE,
-	SCAN,
-	DEL,
-	REPARTITION,
-	END,
-	DUMMY,
-	ERROR
-};
+	enum RequestType
+	{
+		READ,
+		WRITE,
+		SCAN,
+		DEL,
+		REPARTITION,
+		END,
+		DUMMY,
+		ERROR
+	};
 
 
-enum interval_type
-{
-	MICROSECONDS,
-	OPERATIONS
-	
-};
+	enum interval_type
+	{
+		MICROSECONDS,
+		OPERATIONS
+		
+	};
+}
 
 #endif

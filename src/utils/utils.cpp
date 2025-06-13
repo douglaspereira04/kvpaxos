@@ -37,4 +37,35 @@ void process_mem_usage(double& vm_usage, double& resident_set)
     resident_set = rss * page_size_kb;
 }
 
+void read_operation(types::RequestType &type, std::string &key, size_t &len, std::string &value, std::ifstream &file) {    
+    getline(file, value, ',');
+    type = static_cast<types::RequestType>(atoi(value.c_str()));
+    switch (type)
+    {
+    case types::READ:
+        getline(file, key);
+        break;
+    case types::WRITE:
+        if constexpr(ENABLE_ANSWER){
+            getline(file, key, ',');
+            getline(file, value);
+        } else {
+            getline(file, key);
+        }
+        break;
+    case types::SCAN:
+        getline(file, key, ',');
+        getline(file, value);
+        len = atol(value.c_str());
+        break;
+    case types::DEL:
+        getline(file, key);
+        break;
+    
+    default:
+        type = types::END;
+        break;
+    }
+}
+
 }

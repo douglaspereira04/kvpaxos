@@ -14,12 +14,12 @@ namespace kvstorage {
 class RocksDBStorage : public Storage {
 public:
     RocksDBStorage(){}
-    RocksDBStorage(size_t version);
+    void init();
 
-    int read(int key, std::string &value);
-    void write(int key, const std::string &value);
-    void del(int key);
-
+    int read(std::string &key, std::string &value);
+    void write(std::string &key, const std::string &value);
+    void del(std::string &key);
+    std::vector<std::string> scan(std::string &key, size_t len);
 
 private:
     rocksdb::DB* __storage;
@@ -28,21 +28,35 @@ private:
 
 };
 
-inline int RocksDBStorage::read(int key, std::string &value) {
+inline int RocksDBStorage::read(std::string &key, std::string &value) {
     rocksdb::Status status;
-    status = __storage->Get(rocksdb::ReadOptions(), std::to_string(key), &value);
+    status = __storage->Get(rocksdb::ReadOptions(), key, &value);
     if (status.IsNotFound()) {
         return -1;
     }
     return value.size();
 }
 
-inline void RocksDBStorage::write(int key, const std::string &value) {
-    __storage->Put(rocksdb::WriteOptions(), std::to_string(key), value);
+inline std::vector<std::string> RocksDBStorage::scan(std::string &key, size_t len) {
+    rocksdb::Status status;
+    std::unique_ptr<rocksdb::Iterator> it(__storage->NewIterator(rocksdb::ReadOptions()));
+    std::vector<std::string> values;
+    values.reserve(len);
+    for (it->Seek(key); it->Valid() && len > 0; it->Next(), len--) {
+        values.push_back(it->value().ToString());
+    }
+    if (!it->status().ok()) {
+        abort();
+    }
+    return values;
 }
 
-inline void RocksDBStorage::del(int key) {
-    __storage->Delete(rocksdb::WriteOptions(), std::to_string(key));
+inline void RocksDBStorage::write(std::string &key, const std::string &value) {
+    __storage->Put(rocksdb::WriteOptions(), key, value);
+}
+
+inline void RocksDBStorage::del(std::string &key) {
+    __storage->Delete(rocksdb::WriteOptions(), key);
 }
 
 };

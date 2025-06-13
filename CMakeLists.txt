@@ -4,8 +4,6 @@ project(kvstore CXX)
 set (CMAKE_CXX_STANDARD 17)
 
 option(INF "description" ON)
-option(ANSWER "description" ON)
-set(Q_SIZE "0" CACHE STRING "WORKER THREADS QUEUE SIZE (0 for INFINITY)")
 
 
 # Disable RocksDB extra stuff
