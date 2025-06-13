@@ -3,7 +3,6 @@ project(kvstore CXX)
 
 set (CMAKE_CXX_STANDARD 17)
 
-option(INF "description" ON)
 option(ANSWER "description" ON)
 
 

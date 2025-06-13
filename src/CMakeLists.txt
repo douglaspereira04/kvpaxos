@@ -5,9 +5,6 @@ add_subdirectory(storage)
 
 add_executable(main main.cpp)
 
-IF(${INFO} STREQUAL "ON")
-    target_compile_definitions(main PUBLIC INFO)
-ENDIF()
 IF(${ANSWER} STREQUAL "ON")
     target_compile_definitions(main PUBLIC ANSWER)
 ENDIF()

@@ -73,14 +73,12 @@ void metrics_loop(int sleep_duration) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
 		std::cout << executed << ",";
 
-		if constexpr(utils::ENABLE_INFO){
-			std::cout << arrived << ",";
-			double vm, rss;
-			utils::process_mem_usage(vm, rss);
-			std::cout << vm << ",";
-			std::cout << rss << ",";
-			std::cout << utils::used_disk(".");
-		}
+		std::cout << arrived << ",";
+		double vm, rss;
+		utils::process_mem_usage(vm, rss);
+		std::cout << vm << ",";
+		std::cout << rss << ",";
+		std::cout << utils::used_disk(".");
 
 		std::cout << "\n";
 	}
@@ -166,9 +164,7 @@ workload_loop(std::ifstream &operations_file, std::ofstream& output_file)
 		auto begin = utils::now();
 		for (int i = 0; i < n_ops && operations_file.peek() != EOF; i++) {
 			operation_from_file(operations_file, output_file);
-			if constexpr(utils::ENABLE_INFO){
-				arrived++;
-			}
+			arrived++;
 			auto duration = std::chrono::nanoseconds(interval_distribution(generator));
 			auto now = utils::now();
 			while(now < begin + duration){now = utils::now();}
@@ -177,9 +173,7 @@ workload_loop(std::ifstream &operations_file, std::ofstream& output_file)
 	} else {
 		for (int i = 0; i < n_ops && operations_file.peek() != EOF; i++) {
 			operation_from_file(operations_file, output_file);
-			if constexpr(utils::ENABLE_INFO){
-				arrived++;
-			}
+			arrived++;
 		}
 	}
 }

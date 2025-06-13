@@ -29,12 +29,6 @@ void process_mem_usage(double& vm_usage, double& resident_set);
 
 std::uintmax_t used_disk(const char* path);
 
-#if defined(INFO)
-	static const bool ENABLE_INFO = true;
-#else
-    static const bool ENABLE_INFO = false;
-#endif
-
 #if defined(ANSWER)
 	static const bool ENABLE_ANSWER = true;
 #else
