@@ -83,8 +83,8 @@ public:
         utils::set_affinity(2,scheduling_thread, scheduler_cpu_set);
 
         if constexpr(Rebalance) {
-            workload_graph = model::Graph<T>();
-
+            __workload_graph = model::Graph<T>();
+            __input_graph = InputGraph<T>(__workload_graph);
             if constexpr(IntervalType == types::MICROSECONDS){
                 __time_start = utils::now();
                 time_interval = std::chrono::microseconds(repartition_interval);
@@ -294,11 +294,12 @@ public:
 
     inline bool interval_achieved(){
         bool interval_achieved;
-        types::time_point now_ = utils::now();
-        if constexpr(IntervalType == types::MICROSECONDS)
+        if constexpr(IntervalType == types::MICROSECONDS){
+            types::time_point now_ = utils::now();
             interval_achieved = utils::to_us(now_ - __time_start) >= time_interval;
-        else if constexpr(IntervalType == types::OPERATIONS)
+        } else if constexpr(IntervalType == types::OPERATIONS) {
             interval_achieved = __n_dispatched_operations - __operation_start >= operation_interval;
+        }
         return interval_achieved;
     }
 
@@ -320,11 +321,11 @@ public:
                 }
                 __update.store(false, std::memory_order_relaxed);
 
-                if constexpr(IntervalType == types::MICROSECONDS)
+                if constexpr(IntervalType == types::MICROSECONDS){
                     __time_start = utils::now();
-                else if constexpr(IntervalType == types::OPERATIONS)
+                } else if constexpr(IntervalType == types::OPERATIONS){
                     __operation_start = __n_dispatched_operations;
-
+                }
                 __repartitioning = false;
             }
         }
@@ -387,7 +388,7 @@ public:
             begin = utils::now();
         }
 
-        input_graph = InputGraph<T>(workload_graph);
+        __input_graph.update();
         if constexpr(utils::ENABLE_INFO){
             __graph_copy_duration.push_back(utils::now() - begin);
         }
@@ -422,7 +423,7 @@ public:
 
             if(__repartition_signal.load(std::memory_order_acquire)){
                 __repartition_signal.store(false, std::memory_order_relaxed);
-                if(workload_graph.n_vertex() > 0){
+                if(__workload_graph.n_vertex() > 0){
                     order_partitioning();
                 }
             }
@@ -438,7 +439,7 @@ public:
                 break;
             }
             if (__n_partitions > 1){
-                partitioning(input_graph);
+                partitioning();
             } else {
                 delete __updated_worker_map;
                 __updated_worker_map = new worker_map_t(*__worker_map);
@@ -455,11 +456,11 @@ public:
 
         for (auto i = 0; i < data_size; i++) {
             T key_i = tracking_info->key()+i;
-            workload_graph.increment_vertice_weight(key_i, 1);
+            __workload_graph.increment_vertice_weight(key_i, 1);
 
             for (auto j = i+1; j < data_size; j++) {
                 T key_j = tracking_info->key()+j;
-                workload_graph.increment_edge_weight(key_i, key_j, 1);
+                __workload_graph.increment_edge_weight(key_i, key_j, 1);
             }
         }
     }
@@ -475,15 +476,15 @@ public:
                 T key_i = tracking_info->key()+i;
                 for (int j = data_size-1; j >= i+1; j--) {
                     T key_j = tracking_info->key()+j;
-                    workload_graph.decrement_edge_weight(key_i, key_j, 1);
+                    __workload_graph.decrement_edge_weight(key_i, key_j, 1);
                 }
-                workload_graph.decrement_vertice_weight(key_i, 1);
+                __workload_graph.decrement_vertice_weight(key_i, 1);
             }
         }
     }
 
 
-    void partitioning(InputGraph<T> &graph) {
+    void partitioning() {
         
         if constexpr(utils::ENABLE_INFO){
             __repartition_timestamps.push_back(utils::now());
@@ -491,10 +492,10 @@ public:
 
         std::vector<int> scheme = move(
             model::multilevel_cut(
-                graph.vertice_weight, 
-                graph.x_edges, 
-                graph.edges, 
-                graph.edges_weight,
+                __input_graph.vertice_weight, 
+                __input_graph.x_edges, 
+                __input_graph.edges, 
+                __input_graph.edges_weight,
                 __n_partitions, 
                 __repartition_method
             )
@@ -507,9 +508,9 @@ public:
         }
 
         __updated_worker_map->clear();
-        __updated_worker_map->reserve(graph.vertice_to_pos.size());
+        __updated_worker_map->reserve(__input_graph.vertice_to_pos.size());
 
-        for (auto& it : graph.vertice_to_pos) {
+        for (auto& it : __input_graph.vertice_to_pos) {
             T key = it.first;
             int position = it.second;
             int worker = scheme[position];  
@@ -558,11 +559,11 @@ public:
     }
 
     size_t graph_vertices(){
-        return workload_graph.n_vertex();
+        return __workload_graph.n_vertex();
     }
 
     size_t graph_edges(){
-        return workload_graph.n_edges();
+        return __workload_graph.n_edges();
     }
 
     types::time_point schedule_end(){
@@ -623,7 +624,7 @@ public:
 
     std::deque<TrackingInfo<T>*> __expiration_queue;
 
-    model::Graph<T> workload_graph;
+    model::Graph<T> __workload_graph;
     model::CutMethod __repartition_method;
     pthread_barrier_t repartition_barrier;
 
@@ -645,7 +646,7 @@ public:
     size_t __n_processed_operations = 0;
 
     worker_map_t* __updated_worker_map;
-    InputGraph<T> input_graph;
+    InputGraph<T> __input_graph;
 
     sem_t repart_semaphore;
 

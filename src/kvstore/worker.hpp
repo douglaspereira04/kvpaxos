@@ -314,9 +314,10 @@ private:
                 continue;
             case END:
                 __output_file << "end() \n";
+                delete operation;
                 return;
             default:
-                std::raise(SIGINT);
+                abort();
                 return;
             }
         }
