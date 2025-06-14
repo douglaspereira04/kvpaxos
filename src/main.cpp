@@ -34,6 +34,7 @@
 #include "utils.h"
 #include "operation.hpp"
 #include <fstream>
+#include <queue>
 #include "rocks_db_storage.h"
 #include "kvstore.hpp"
 
@@ -73,6 +74,12 @@ static long ops_rate_seed;
 static const int VALUE_SIZE = 1024;
 static const std::string template_value(VALUE_SIZE, '*');
 
+struct operation_data_t {
+	types::RequestType type;
+	int key;
+	size_t len;
+	std::string value;
+};
 
 void
 metrics_loop(int sleep_duration, KVStore* kvstore)
@@ -127,12 +134,11 @@ metrics_loop(int sleep_duration, KVStore* kvstore)
 void do_nothing_with_kv(int key, std::string *value){}
 void do_nothing_with_k(int key){}
 
-void operation_from_file_cb(KVStore *kvstore, std::ifstream &operations_file){
-	types::RequestType type;
-	int key;
-	size_t len;
-	std::string value;
-	utils::read_operation(type, key, len, value, operations_file);
+void operate_cb(KVStore *kvstore, operation_data_t &operation_data){
+	types::RequestType type = operation_data.type;
+	int key = operation_data.key;
+	size_t len = operation_data.len;
+	std::string value = operation_data.value;
 	switch (type)
 	{
 	case types::READ:
@@ -157,13 +163,11 @@ void operation_from_file_cb(KVStore *kvstore, std::ifstream &operations_file){
 	}
 }
 
-void operation_from_file(KVStore *kvstore, std::ifstream &operations_file){
-	types::RequestType type;
-	int key;
-	size_t len;
-	std::string value;
-	utils::read_operation(type, key, len, value, operations_file);
-	bool use_callback = atoi(params[CALLBACK]);
+void operate(KVStore *kvstore, operation_data_t &operation_data){
+	types::RequestType type = operation_data.type;
+	int key = operation_data.key;
+	size_t len = operation_data.len;
+	std::string value = operation_data.value;
 	switch (type)
 	{
 	case types::READ:
@@ -189,7 +193,7 @@ void operation_from_file(KVStore *kvstore, std::ifstream &operations_file){
 }
 
 static KVStore*
-initialize_kvstore(std::ifstream &operations_file)
+initialize_kvstore(std::queue<operation_data_t> &operation_queue)
 {
 	auto n_partitions = atoi(params[N_PARTITIONS]);
 	auto repartition_interval = atoi(params[REPARTITION_INTERVAL]);
@@ -214,11 +218,13 @@ initialize_kvstore(std::ifstream &operations_file)
 	if (n_initial_keys > 0) {
 		const bool use_callback = atoi(params[CALLBACK]);
 		for (int i = 0; i < n_initial_keys; i++)
-		{
+		{	
+			operation_data_t operation_data = std::move(operation_queue.front());
+			operation_queue.pop();
 			if (use_callback){
-				operation_from_file_cb(kvstore, operations_file);
+				operate_cb(kvstore, operation_data);
 			} else {
-				operation_from_file(kvstore, operations_file);
+				operate(kvstore, operation_data);
 			}
 		}
 		
@@ -238,7 +244,7 @@ initialize_kvstore(std::ifstream &operations_file)
 }
 
 void
-workload_loop(std::ifstream &operations_file, KVStore *kvstore)
+workload_loop(std::queue<operation_data_t> &operation_queue, KVStore *kvstore)
 {
 	size_t n_ops = atol(params[N_OPERATIONS]);
 	std::mt19937 generator(ops_rate_seed);
@@ -248,11 +254,13 @@ workload_loop(std::ifstream &operations_file, KVStore *kvstore)
 
 		auto begin = utils::now();
 		const bool use_callback = atoi(params[CALLBACK]);
-		for (int i = 0; i < n_ops && operations_file.peek() != EOF; i++) {
+		for (int i = 0; i < n_ops && operation_queue.size() > 0; i++) {
+			operation_data_t operation_data = std::move(operation_queue.front());
+			operation_queue.pop();
 			if (use_callback){
-				operation_from_file_cb(kvstore, operations_file);
+				operate_cb(kvstore, operation_data);
 			} else {
-				operation_from_file(kvstore, operations_file);
+				operate(kvstore, operation_data);
 			}
 
 			arrived++;
@@ -263,11 +271,13 @@ workload_loop(std::ifstream &operations_file, KVStore *kvstore)
 		}
 	} else {
 		const bool use_callback = atoi(params[CALLBACK]);
-		for (int i = 0; i < n_ops && operations_file.peek() != EOF; i++) {
+		for (int i = 0; i < n_ops && operation_queue.size() > 0; i++) {
+			operation_data_t operation_data = std::move(operation_queue.front());
+			operation_queue.pop();
 			if (use_callback){
-				operation_from_file_cb(kvstore, operations_file);
+				operate_cb(kvstore, operation_data);
 			} else {
-				operation_from_file(kvstore, operations_file);
+				operate(kvstore, operation_data);
 			}
 			arrived++;
 		}
@@ -280,13 +290,21 @@ static void
 run()
 {
 	
+	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
 	size_t n_ops = atol(params[N_OPERATIONS]);
 	ops_rate = atol(params[OPERATIONS_RATE]);
 	ops_rate_seed = atol(params[OPERATIONS_RATE_SEED]);
 	std::string operations_path = params[OPERATIONS_PATH];
 	std::ifstream operations_file(operations_path);
+	std::queue<operation_data_t> operation_queue;
+	for (int i = 0; i < (n_ops + n_initial_keys) && operations_file.peek() != EOF; i++) {
+		operation_data_t operation_data;
+		utils::read_operation(operation_data.type, operation_data.key, operation_data.len, operation_data.value, operations_file);
+		operation_queue.push(std::move(operation_data));
+	}
+	operations_file.close();
 
-	KVStore* kvstore = initialize_kvstore(ref(operations_file));
+	KVStore* kvstore = initialize_kvstore(ref(operation_queue));
 	
 	std::thread throughput_thread = std::thread(
 		metrics_loop, SLEEP, kvstore
@@ -295,13 +313,12 @@ run()
 	utils::set_affinity(0,throughput_thread, throughput_cpu_set);
 	
 	auto start_execution_timestamp = utils::now();
-	auto workload_thread = std::thread(workload_loop, ref(operations_file), kvstore);
+	auto workload_thread = std::thread(workload_loop, ref(operation_queue), kvstore);
 	cpu_set_t workload_cpu_set;
 	utils::set_affinity(1,workload_thread, workload_cpu_set);
 	workload_thread.join();
 	throughput_thread.join();
 	kvstore->join();
-	operations_file.close();
 
 	auto end_scheduling = kvstore->schedule_end();
 	auto end_execution_timestamp = utils::now();
