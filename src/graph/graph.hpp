@@ -104,58 +104,16 @@ public:
         }
     }
 
-
-
-    /*
-        Stores the graph as required by KAHIP and METIS in
-        vertice_weight, x_edges, edges and edges_weight.
-        The returned structure is a map of vertice keys 
-        to the corresponding position in vertice_weight vector/array
-    */
-    ankerl::unordered_dense::map<T, int> multilevel_cut_data(
-        std::vector<int> &vertice_weight, 
-        std::vector<int> &x_edges, 
-        std::vector<int> &edges, 
-        std::vector<int> &edges_weight){
-
-        ankerl::unordered_dense::map<T, int> vertice_positions;
-        int i = 0;
-        vertice_weight.reserve(vertex_weight_.size());
-        vertice_positions.reserve(vertex_weight_.size());
-        for (auto& v_w : vertex_weight_) {
-            vertice_weight.push_back(v_w.second);
-            vertice_positions.emplace(v_w.first, i);
-            i++;
-        }
-
-        x_edges.reserve(vertex_weight_.size());
-        x_edges.push_back(0);
-        for (auto& v_w : vertex_weight_) {
-            auto last_edge_index = x_edges.back();
-            auto n_neighbours = 0;
-
-            auto from_it = edges_weight_.find(v_w.first);
-            if (from_it != edges_weight_.end()){
-                for (auto& to_it: from_it->second) {
-                    auto v_p_it = vertice_positions.find(to_it.first);
-                    if(v_p_it != vertice_positions.end()){
-                        auto neighbour = v_p_it->second;
-                        auto weight = to_it.second;
-                        edges.push_back(neighbour);
-                        edges_weight.push_back(weight);
-                        n_neighbours++;
-                    }
-                }
-            }
-            x_edges.push_back(last_edge_index + n_neighbours);
-        }
-
-        return vertice_positions;
-    }
-
     size_t n_vertex() const {return vertex_weight_.size();}
     size_t n_edges() const {return n_edges_;}
 
+    inline const vertex_weight_t& vertex_weight(){
+        return vertex_weight_;
+    }
+
+    inline const edges_weights_t& edges_weight(){
+        return edges_weight_;
+    }
 
 private:
     vertex_weight_t vertex_weight_;
