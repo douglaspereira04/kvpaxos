@@ -48,10 +48,12 @@ public:
     void pop(TorU &curr_value){
         if constexpr(std::is_same_v<TorU, T>){
             sem_wait(&semaphores[1]);
+            sem_wait(&ahead_sems[0]);
             t_queue.try_pop(curr_value);
             sem_post(&ahead_sems[1]);
         } else if constexpr(std::is_same_v<TorU, U>){
             sem_wait(&semaphores[0]);
+            sem_wait(&ahead_sems[1]);
             u_queue.try_pop(curr_value);
             sem_post(&ahead_sems[0]);
         }

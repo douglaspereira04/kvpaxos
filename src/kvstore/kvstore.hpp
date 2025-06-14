@@ -57,10 +57,10 @@ public:
             if (dh == 0) {
                 __scheduling_queue = new schedule_queue_t(SEM_VALUE_MAX, 0);
             } else {
-                __scheduling_queue = new schedule_queue_t(1, dh);
+                __scheduling_queue = new schedule_queue_t(dh, dh);
             }
         } else {
-            __scheduling_queue = new schedule_queue_t(SEM_VALUE_MAX, 0);
+            __scheduling_queue = new schedule_queue_t(SEM_VALUE_MAX, SEM_VALUE_MAX);
         }
 
         __rr_counter = 0;
@@ -315,16 +315,16 @@ public:
                 }
             } else if(__update.load(std::memory_order_acquire) == true){
                 update_partition_scheme();
-
+                
                 if constexpr(utils::ENABLE_INFO){
                     __repartition_apply_timestamp.push_back(utils::now());
                 }
                 __update.store(false, std::memory_order_relaxed);
 
                 if constexpr(IntervalType == types::MICROSECONDS){
-                    __time_start = utils::now();
+                    __time_start += time_interval;
                 } else if constexpr(IntervalType == types::OPERATIONS){
-                    __operation_start = __n_dispatched_operations;
+                    __operation_start += operation_interval;
                 }
                 __repartitioning = false;
             }
@@ -422,8 +422,8 @@ public:
             }
 
             if(__repartition_signal.load(std::memory_order_acquire)){
-                __repartition_signal.store(false, std::memory_order_relaxed);
-                if(__workload_graph.n_vertex() > 0){
+                if(__workload_graph.n_vertex() > 1){
+                    __repartition_signal.store(false, std::memory_order_relaxed);
                     order_partitioning();
                 }
             }
@@ -441,8 +441,8 @@ public:
             if (__n_partitions > 1){
                 partitioning();
             } else {
-                delete __updated_worker_map;
-                __updated_worker_map = new worker_map_t(*__worker_map);
+                __updated_worker_map->clear();
+                *__updated_worker_map = worker_map_t(*__worker_map);
             }
             __update.store(true, std::memory_order_release);
         }

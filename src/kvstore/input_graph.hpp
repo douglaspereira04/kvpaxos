@@ -10,8 +10,8 @@ namespace kvpaxos {
 template <typename T>
 struct InputGraph{
     InputGraph(){}
-    InputGraph(model::Graph<T> &graph){
-        __graph = &graph;
+    InputGraph(model::Graph<T> *graph){
+        __graph = graph;
     }
     void update(){
         multilevel_cut_data();
