@@ -6,6 +6,7 @@
 #include "utils.h"
 #include <fstream>
 #include "rocks_db_storage.h"
+#include <queue>
 
 static int verbose = 0;
 static int SLEEP = 1000;
@@ -27,6 +28,13 @@ static long ops_rate_seed;
 
 static const int VALUE_SIZE = 1024;
 static const std::string template_value(VALUE_SIZE, '*');
+
+struct operation_data_t {
+	types::RequestType type;
+	std::string key;
+	size_t len;
+	std::string value;
+};
 
 static size_t executed = 0;
 
@@ -86,12 +94,11 @@ void metrics_loop(int sleep_duration) {
 }
 
 
-void operation_from_file(std::ifstream &operations_file, std::ofstream &output_file) {
-	types::RequestType type;
-	std::string key;
-	size_t len;
-	std::string value;
-	utils::read_operation(type, key, len, value, operations_file);
+void operate(operation_data_t &operation_data, std::ofstream &output_file){
+	types::RequestType type = operation_data.type;
+	std::string key = operation_data.key;
+	size_t len = operation_data.len;
+	std::string value = operation_data.value;
 
 	switch (type)
 	{
@@ -138,7 +145,7 @@ void operation_from_file(std::ifstream &operations_file, std::ofstream &output_f
 	executed++;
 }
 
-void initialize_kvstore(std::ifstream &operations_file, std::ofstream &output_file) {
+void initialize_kvstore(std::queue<operation_data_t> &operation_queue, std::ofstream &output_file) {
 
 	storage  = new storage_t();
 	storage->init();
@@ -147,13 +154,15 @@ void initialize_kvstore(std::ifstream &operations_file, std::ofstream &output_fi
 	if (n_initial_keys > 0) {
 		for (int i = 0; i < n_initial_keys; i++)
 		{
-			operation_from_file(operations_file, output_file);
+			operation_data_t operation_data = std::move(operation_queue.front());
+			operation_queue.pop();
+			operate(operation_data, output_file);
 		}
 	}
 }
 
 void
-workload_loop(std::ifstream &operations_file, std::ofstream& output_file)
+workload_loop(std::queue<operation_data_t> &operation_queue, std::ofstream& output_file)
 {
 	size_t n_ops = atol(params[N_OPERATIONS]);
 	std::mt19937 generator(ops_rate_seed);
@@ -162,8 +171,10 @@ workload_loop(std::ifstream &operations_file, std::ofstream& output_file)
 		interval_distribution = std::poisson_distribution<long>(1.0E9/ops_rate);
 
 		auto begin = utils::now();
-		for (int i = 0; i < n_ops && operations_file.peek() != EOF; i++) {
-			operation_from_file(operations_file, output_file);
+		for (int i = 0; i < n_ops && operation_queue.size() > 0; i++) {
+			operation_data_t operation_data = std::move(operation_queue.front());
+			operation_queue.pop();
+			operate(operation_data, output_file);
 			arrived++;
 			auto duration = std::chrono::nanoseconds(interval_distribution(generator));
 			auto now = utils::now();
@@ -171,8 +182,10 @@ workload_loop(std::ifstream &operations_file, std::ofstream& output_file)
 			begin = now;
 		}
 	} else {
-		for (int i = 0; i < n_ops && operations_file.peek() != EOF; i++) {
-			operation_from_file(operations_file, output_file);
+		for (int i = 0; i < n_ops && operation_queue.size() > 0; i++) {
+			operation_data_t operation_data = std::move(operation_queue.front());
+			operation_queue.pop();
+			operate(operation_data, output_file);
 			arrived++;
 		}
 	}
@@ -181,23 +194,30 @@ workload_loop(std::ifstream &operations_file, std::ofstream& output_file)
 
 static void run() {
 	std::ofstream output_file("operations_output");
+	auto n_initial_keys = atoi(params[N_INITIAL_KEYS]);
 	size_t n_ops = atol(params[N_OPERATIONS]);
 	ops_rate = atol(params[OPERATIONS_RATE]);
 	ops_rate_seed = atol(params[OPERATIONS_RATE_SEED]);
 	std::string operations_path = params[OPERATIONS_PATH];
 	std::ifstream operations_file(operations_path);
+	std::queue<operation_data_t> operation_queue;
+	for (int i = 0; i < (n_ops + n_initial_keys) && operations_file.peek() != EOF; i++) {
+		operation_data_t operation_data;
+		utils::read_operation(operation_data.type, operation_data.key, operation_data.len, operation_data.value, operations_file);
+		operation_queue.push(std::move(operation_data));
+	}
+	operations_file.close();
 
-	initialize_kvstore(ref(operations_file), output_file);
+	initialize_kvstore(ref(operation_queue), output_file);
 	
 	std::thread throughput_thread = std::thread(
 		metrics_loop, SLEEP
 	);
 	
 	auto start_execution_timestamp = utils::now();
-	workload_loop(ref(operations_file), output_file);
+	workload_loop(ref(operation_queue), output_file);
 
 	throughput_thread.join();
-	operations_file.close();
 
 	auto end_execution_timestamp = utils::now();
 
