@@ -47,7 +47,7 @@ std::vector<int> multilevel_cut(
         kaffpa(
             &n_vertex, vertice_weight.data(), x_edges.data(),
             edges_weight.data(), edges.data(), &n_partitions,
-            &imbalance, true, -1, STRONGSOCIAL, &objval,
+            &imbalance, true, -1, ECOSOCIAL, &objval,
             vertex_partitions.data()
         );
     }
