@@ -66,7 +66,7 @@ public:
         __rr_counter = 0;
         __n_dispatched_operations = 0;
         __involved_workers =  worker_set_t();
-        __involved_workers.reserve(__n_partitions);
+                __involved_workers.reserve(__n_partitions);
 
         __level = 0;
         __storages = new storage_t[__n_partitions];
@@ -84,7 +84,7 @@ public:
 
         if constexpr(Rebalance) {
             __workload_graph = model::Graph<T>();
-            __input_graph = InputGraph<T>(__workload_graph);
+            __input_graph = InputGraph<T>(&__workload_graph);
             if constexpr(IntervalType == types::MICROSECONDS){
                 __time_start = utils::now();
                 time_interval = std::chrono::microseconds(repartition_interval);

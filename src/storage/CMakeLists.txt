@@ -1,18 +1,21 @@
 add_library(storage
     rocks_db_storage.cpp
     storage.cpp
-    tbb_storage.cpp
+    stlmap_storage.cpp
+    lmdb_storage.cpp
 )
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LMDB REQUIRED lmdb)
 target_include_directories(storage
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+    PUBLIC 
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${LMDB_INCLUDE_DIRS}
 )
 
-find_package(TBB REQUIRED)
-# Link to RocksDB if only this module needs it
 target_link_libraries(storage
     PUBLIC
         compresser
         rocksdb
-        TBB::tbb
+        ${LMDB_LIBRARIES}
 )
