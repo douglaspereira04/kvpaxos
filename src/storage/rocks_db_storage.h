@@ -20,7 +20,6 @@ public:
     void write(std::string &key, const std::string &value);
     void del(std::string &key);
     std::vector<std::string> scan(std::string &key, size_t len);
-    std::vector<std::string> snapshot_scan(std::string &key, size_t len);
 
 private:
     rocksdb::DB* __storage;
@@ -39,20 +38,6 @@ inline int RocksDBStorage::read(std::string &key, std::string &value) {
 }
 
 inline std::vector<std::string> RocksDBStorage::scan(std::string &key, size_t len) {
-    rocksdb::Status status;
-    std::unique_ptr<rocksdb::Iterator> it(__storage->NewIterator(rocksdb::ReadOptions()));
-    std::vector<std::string> values;
-    values.reserve(len);
-    for (it->Seek(key); it->Valid() && len > 0; it->Next(), len--) {
-        values.push_back(it->value().ToString());
-    }
-    if (!it->status().ok()) {
-        abort();
-    }
-    return values;
-}
-
-inline std::vector<std::string> RocksDBStorage::snapshot_scan(std::string &key, size_t len) {
     rocksdb::Status status;
     rocksdb::ReadOptions read_options;
     read_options.snapshot = __storage->GetSnapshot();

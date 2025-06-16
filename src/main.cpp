@@ -6,6 +6,9 @@
 #include "utils.h"
 #include <fstream>
 #include "rocks_db_storage.h"
+#include "stlmap_storage.h"
+#include "lmdb_storage.h"
+#include "absl/container/btree_map.h"
 
 static int verbose = 0;
 static int SLEEP = 1000;
@@ -16,7 +19,6 @@ static const int N_INITIAL_KEYS = 2;
 static const int OPERATIONS_PATH = 3;
 static const int OPERATIONS_RATE = 4;
 static const int OPERATIONS_RATE_SEED = 5;
-static const int SNAPSHOT_SCAN = 6;
 
 static char* *params;
 
@@ -30,7 +32,7 @@ static const std::string template_value(VALUE_SIZE, '*');
 
 static size_t executed = 0;
 
-typedef kvstorage::RocksDBStorage storage_t;
+typedef kvstorage::LMDBStorage storage_t;
 
 
 storage_t *storage;
@@ -115,11 +117,7 @@ void operation_from_file(std::ifstream &operations_file, std::ofstream &output_f
 	case types::SCAN:
 	{
 		std::vector<std::string> values;
-		if (params[SNAPSHOT_SCAN]){
-			values = storage->snapshot_scan(key, len);
-		} else {
-			values = storage->scan(key, len);
-		}
+		values = storage->scan(key, len);
 		print_scan(key, len, values.data(), output_file);
 		break;
 	}

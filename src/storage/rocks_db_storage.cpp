@@ -13,12 +13,13 @@ void RocksDBStorage::init(){
     rocksdb::Status status;
     size_t i = 0;
     do {
-    status = rocksdb::DB::Open(options, path, &__storage);
-} while(!status.ok() && 10 > i++);
-assert(status.ok());
+        status = rocksdb::DB::Open(options, path, &__storage);
+    } while(!status.ok() && 10 > i++);
+    assert(status.ok());
 }
 
 std::atomic_int RocksDBStorage::db_counter = 0;
+
 std::string RocksDBStorage::id = std::to_string(
     std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()

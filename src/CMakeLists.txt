@@ -12,6 +12,7 @@ ENDIF()
 target_link_libraries(
     main
         PRIVATE
+            absl::btree
             pthread
             types
             utils
