@@ -48,7 +48,7 @@ using namespace workload;
     const bool ENABLE_REPARTITION = false;
 #endif
 
-typedef kvpaxos::KVStore<int, kvstorage::STLMapStorage<int, ankerl::unordered_dense::map>, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, types::OPERATIONS> KVStore;
+typedef kvpaxos::KVStore<int, kvstorage::RocksDBStorage<int>, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, types::OPERATIONS> KVStore;
 
 
 static int verbose = 0;
