@@ -60,21 +60,10 @@ public:
         } else {
             from_it->second.find(to)->second += value;
         }
-    
-        T reverse_from = to;
-        T reverse_to = from;
-        auto [reverse_from_it, emplaced_reverse_from] = edges_weight_.try_emplace(reverse_from, edges_weight_t());
-        if (emplaced_reverse_from){
-            reverse_from_it->second.emplace(reverse_to, value);
-        } else {
-            reverse_from_it->second.find(reverse_to)->second += value;
-        }
     }
 
 
     inline void decrement_edge_weight(T &from, T &to, int value) {
-        T reverse_from = to;
-        T reverse_to = from;
         auto from_it = edges_weight_.find(from);
         if (from_it != edges_weight_.end()) {
             auto to_it = from_it->second.find(to);
@@ -86,19 +75,9 @@ public:
                     } else {
                         from_it->second.erase(to_it);
                     }
-                    auto reverse_from_it  = edges_weight_.find(reverse_from);
-                    if (reverse_from_it->second.size() == 1){
-                        edges_weight_.erase(reverse_from_it);
-                    } else {
-                        reverse_from_it->second.erase(reverse_to);
-                    }
                     if constexpr(utils::ENABLE_INFO){
                         n_edges_--;
                     }
-                } else {
-                    auto reverse_from_it  = edges_weight_.find(reverse_from);
-                    auto reverse_to_it = reverse_from_it->second.find(reverse_to);
-                    reverse_to_it->second -= value;
                 }
             }
         }
