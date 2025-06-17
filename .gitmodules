@@ -4,3 +4,6 @@
 [submodule "external/oneTBB"]
 	path = external/oneTBB
 	url = https://github.com/oneapi-src/oneTBB.git
+[submodule "external/unordered_dense"]
+	path = external/unordered_dense
+	url = https://github.com/martinus/unordered_dense.git
