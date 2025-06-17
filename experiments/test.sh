@@ -12,8 +12,8 @@ versions=($1)
 partitions=($2)
 callback=($3)
 workloads=(ycsb_a ycsb_d ycsb_e)
-deltat=(5000000 5000000 500000)
-requests=(50000000 50000000 5000000)
+deltat=(1000000 1000000 100000)
+requests=(10000000 10000000 1000000)
 
 mkdir -p output
 rm -r /tmp/repart_kv_storage
@@ -21,9 +21,9 @@ for v_ in "${versions[@]}"; do
     for c_ in "${callback[@]}"; do
         for ((i=0; i<${#workloads[@]}; i++)); do
             if [ "${workloads[$i]}" = "ycsb_e" ]; then
-                track_length=(0 1000000)
+                track_length=(0 100000)
             else
-                track_length=(0 10000000)
+                track_length=(0 1000000)
             fi
             for p_ in "${partitions[@]}"; do
                 if [ "$v_" = "rep" ]; then
