@@ -12,7 +12,7 @@ versions=($1)
 partitions=($2)
 callback=($3)
 workloads=(ycsb_a ycsb_d ycsb_e)
-deltat=(1000000 1000000 100000)
+deltat=(5000000 5000000 500000)
 requests=(50000000 50000000 5000000)
 
 mkdir -p output

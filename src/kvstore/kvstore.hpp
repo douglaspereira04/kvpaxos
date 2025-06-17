@@ -55,7 +55,7 @@ public:
         __n_partitions = n_partitions;
         if constexpr(Rebalance) {
             if (dh == 0) {
-                __scheduling_queue = new schedule_queue_t(SEM_VALUE_MAX, 0);
+                __scheduling_queue = new schedule_queue_t(SEM_VALUE_MAX, SEM_VALUE_MAX);
             } else {
                 __scheduling_queue = new schedule_queue_t(dh, dh);
             }
