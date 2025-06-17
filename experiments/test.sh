@@ -6,7 +6,7 @@
 n_initial_keys=1000000
 arrival_rate_seed=1672270886
 workloads=(ycsb_a ycsb_d ycsb_e)
-requests=(50000000 50000000 5000000)
+requests=(10000000 10000000 1000000)
 
 mkdir -p output
 for ((i=0; i<${#workloads[@]}; i++)); do
