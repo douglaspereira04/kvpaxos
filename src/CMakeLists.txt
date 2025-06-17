@@ -44,7 +44,6 @@ target_include_directories(main
 target_include_directories(
     main
         PUBLIC
-            "${CMAKE_SOURCE_DIR}/external/rocksdb/include"
             "${CMAKE_SOURCE_DIR}/external/KaHIP/interface"
             "${CMAKE_SOURCE_DIR}/external/unordered_dense/include"
 )
