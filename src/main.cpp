@@ -40,7 +40,7 @@ struct operation_data_t {
 
 static size_t executed = 0;
 
-typedef kvstorage::LMDBStorage storage_t;
+typedef kvstorage::RocksDBStorage storage_t;
 
 
 storage_t *storage;
