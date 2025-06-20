@@ -1,5 +1,6 @@
 add_library(graph
     graph.cpp
+    edgeless_graph.cpp
     partitioning.cpp
 )
 
@@ -8,7 +9,11 @@ target_include_directories(graph
 )
 
 IF(${INFO} STREQUAL "ON")
-    target_compile_definitions(utils PUBLIC INFO)
+    target_compile_definitions(graph PUBLIC INFO)
+ENDIF()
+
+IF(${EDGES} STREQUAL "ON")
+    target_compile_definitions(graph PUBLIC EDGES)
 ENDIF()
 
 target_link_libraries(graph

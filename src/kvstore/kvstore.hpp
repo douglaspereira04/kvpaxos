@@ -16,6 +16,7 @@
 #include "utils.h"
 #include "input_graph.hpp"
 #include "graph.hpp"
+#include "edgeless_graph.hpp"
 #include "partitioning.h"
 #include "worker.hpp"
 
@@ -83,8 +84,13 @@ public:
         utils::set_affinity(2,scheduling_thread, scheduler_cpu_set);
 
         if constexpr(Rebalance) {
-            __workload_graph = model::Graph<T>();
-            __input_graph = InputGraph<T>(&__workload_graph);
+            __graph = model::Graph<T>();
+            __edgeless_graph = model::EdgelessGraph<T>();
+            if constexpr(utils::ENABLE_EDGES){
+                __input_graph = InputGraph<T>(&__graph);
+            } else {
+                __input_graph = InputGraph<T>(&__edgeless_graph);
+            }
             if constexpr(IntervalType == types::MICROSECONDS){
                 __time_start = utils::now();
                 time_interval = std::chrono::microseconds(repartition_interval);
@@ -422,7 +428,13 @@ public:
             }
 
             if(__repartition_signal.load(std::memory_order_acquire)){
-                if(__workload_graph.n_vertex() > 1){
+                bool has_vertices;
+                if constexpr(utils::ENABLE_EDGES){
+                    has_vertices = __graph.n_vertex() > 1;
+                } else {
+                    has_vertices = __edgeless_graph.n_vertex() > 1;
+                }
+                if(has_vertices){
                     __repartition_signal.store(false, std::memory_order_relaxed);
                     order_partitioning();
                 }
@@ -449,18 +461,26 @@ public:
     }
 
     void update_graph(TrackingInfo<T>* tracking_info) {
-        size_t data_size = 1;
-        if (tracking_info->type() == SCAN) {
-            data_size = tracking_info->len();
-        }
+        if(tracking_info->type() != DUMMY){
+            size_t data_size = 1;
+            if (tracking_info->type() == SCAN) {
+                data_size = tracking_info->len();
+            }
 
-        for (auto i = 0; i < data_size; i++) {
-            T key_i = tracking_info->key()+i;
-            __workload_graph.increment_vertice_weight(key_i, 1);
 
-            for (auto j = i+1; j < data_size; j++) {
-                T key_j = tracking_info->key()+j;
-                __workload_graph.increment_edge_weight(key_i, key_j, 1);
+            for (auto i = 0; i < data_size; i++) {
+                T key_i = tracking_info->key()+i;
+
+                if constexpr(utils::ENABLE_EDGES){
+                    __graph.increment_vertice_weight(key_i, 1);
+
+                    for (auto j = i+1; j < data_size; j++) {
+                        T key_j = tracking_info->key()+j;
+                        __graph.increment_edge_weight(key_i, key_j, 1);
+                    }
+                } else {
+                    __edgeless_graph.increment_vertice_weight(key_i, 1);
+                }
             }
         }
     }
@@ -474,11 +494,15 @@ public:
 
             for (int i = data_size-1; i >= 0; i--) {
                 T key_i = tracking_info->key()+i;
-                for (int j = data_size-1; j >= i+1; j--) {
-                    T key_j = tracking_info->key()+j;
-                    __workload_graph.decrement_edge_weight(key_i, key_j, 1);
+                if constexpr(utils::ENABLE_EDGES){
+                    for (int j = data_size-1; j >= i+1; j--) {
+                        T key_j = tracking_info->key()+j;
+                        __graph.decrement_edge_weight(key_i, key_j, 1);
+                    }
+                    __graph.decrement_vertice_weight(key_i, 1);
+                } else {
+                    __edgeless_graph.decrement_vertice_weight(key_i, 1);
                 }
-                __workload_graph.decrement_vertice_weight(key_i, 1);
             }
         }
     }
@@ -490,16 +514,24 @@ public:
             __repartition_timestamps.push_back(utils::now());
         }
 
-        std::vector<int> scheme = move(
+        std::vector<int> scheme;
+        if constexpr(utils::ENABLE_EDGES){
             model::multilevel_cut(
                 __input_graph.vertice_weight, 
                 __input_graph.x_edges, 
                 __input_graph.edges, 
                 __input_graph.edges_weight,
                 __n_partitions, 
-                __repartition_method
-            )
-        );
+                __repartition_method,
+                scheme
+            );
+        } else {
+            model::greedy_partition(
+                __input_graph.vertice_weight,
+                __n_partitions,
+                scheme
+            );
+        }
 
         types::time_point reconstruction_begin;
         if constexpr(utils::ENABLE_INFO){
@@ -559,11 +591,19 @@ public:
     }
 
     size_t graph_vertices(){
-        return __workload_graph.n_vertex();
+        if constexpr(utils::ENABLE_EDGES){
+            return __graph.n_vertex();
+        } else {
+            return __edgeless_graph.n_vertex();
+        }
     }
 
     size_t graph_edges(){
-        return __workload_graph.n_edges();
+        if constexpr(utils::ENABLE_EDGES){
+            return __graph.n_edges();
+        } else {
+            return __edgeless_graph.n_edges();
+        }
     }
 
     types::time_point schedule_end(){
@@ -624,7 +664,8 @@ public:
 
     std::deque<TrackingInfo<T>*> __expiration_queue;
 
-    model::Graph<T> __workload_graph;
+    model::Graph<T> __graph;
+    model::EdgelessGraph<T> __edgeless_graph;
     model::CutMethod __repartition_method;
     pthread_barrier_t repartition_barrier;
 

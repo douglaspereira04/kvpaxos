@@ -16,13 +16,14 @@ struct dummy_partition {
 };
 
 
-std::vector<int> multilevel_cut(
+void multilevel_cut(
     std::vector<int> &vertice_weight, 
     std::vector<int> &x_edges, 
     std::vector<int> &edges, 
     std::vector<int> &edges_weight,
     int n_partitions, 
-    CutMethod cut_method
+    CutMethod cut_method,
+    std::vector<int> &vertex_partitions
 )
 { 
     int n_constrains = 1;
@@ -35,7 +36,7 @@ std::vector<int> multilevel_cut(
 
     int objval;
     int n_vertex = vertice_weight.size();
-    auto vertex_partitions = std::vector<int>(n_vertex, 0);
+    vertex_partitions.resize(n_vertex);
     if (cut_method == METIS) {
         METIS_PartGraphKway(
             &n_vertex, &n_constrains, x_edges.data(), edges.data(),
@@ -51,8 +52,36 @@ std::vector<int> multilevel_cut(
             vertex_partitions.data()
         );
     }
+}
 
-    return vertex_partitions;
+
+
+void greedy_partition(const std::vector<int>& weights, int n_partitions, std::vector<int> &vertice_to_partition) {
+    const size_t n_vertices = weights.size();
+    vertice_to_partition.resize(n_vertices);
+    
+    priority_queue_t partition_queue;
+
+    for (int i = 0; i < n_partitions; i++){
+        partition_queue.emplace(0, i);
+    }
+
+    std::vector<std::pair<int, int>> sorted_vertices;
+    sorted_vertices.reserve(n_vertices);
+
+    for (size_t i = 0; i < n_vertices; i++){
+        sorted_vertices.emplace_back(weights[i], i);
+    }
+    std::sort(sorted_vertices.rbegin(), sorted_vertices.rend());
+
+    for (const auto& [weight, vertex] : sorted_vertices) {
+        auto [current_weight, partition] = partition_queue.top();
+        partition_queue.pop();
+
+        vertice_to_partition[vertex] = partition;
+
+        partition_queue.emplace(current_weight + weight, partition);
+    }
 }
 
 }

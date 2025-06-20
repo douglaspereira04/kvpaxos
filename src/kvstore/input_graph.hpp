@@ -2,7 +2,9 @@
 #define _KVPAXOS_INPUT_GRAPH_H_
 
 #include "graph.hpp"
+#include "edgeless_graph.hpp"
 #include <vector>
+#include "utils.h"
 #include "ankerl/unordered_dense.h"
 
 namespace kvpaxos {
@@ -12,9 +14,19 @@ struct InputGraph{
     InputGraph(){}
     InputGraph(model::Graph<T> *graph){
         __graph = graph;
+        assert(utils::ENABLE_EDGES);
     }
+    InputGraph(model::EdgelessGraph<T> *graph){
+        __edgeless_graph = graph;
+        assert(!utils::ENABLE_EDGES);
+    }
+
     void update(){
-        multilevel_cut_data();
+        if constexpr(utils::ENABLE_EDGES){
+            multilevel_cut_data();
+        } else {
+            greedy_partitioning_data();
+        }
     }
 
 
@@ -67,7 +79,13 @@ struct InputGraph{
         }
     }
 
+    void greedy_partitioning_data(){
+        vertice_weight = __edgeless_graph->vertex_weight();
+        vertice_to_pos = __edgeless_graph->vertice_to_pos();
+    }
+
     model::Graph<T> *__graph;
+    model::EdgelessGraph<T> *__edgeless_graph;
     std::vector<int> vertice_weight;
     std::vector<int> x_edges;
     std::vector<int> edges;

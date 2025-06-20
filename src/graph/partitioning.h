@@ -11,8 +11,11 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
 #include <vector>
+#include <queue>
+#include <algorithm>
+#include <utility>
+#include <functional>
 
 #include "graph.hpp"
 
@@ -29,14 +32,20 @@ const std::unordered_map<std::string, CutMethod> string_to_cut_method({
 });
 
 
-std::vector<int> multilevel_cut(
+void multilevel_cut(
     std::vector<int> &vertice_weight, 
     std::vector<int> &x_edges, 
     std::vector<int> &edges, 
     std::vector<int> &edges_weight,
     int n_partitions, 
-    CutMethod cut_method
+    CutMethod cut_method,
+    std::vector<int> &vertex_partitions
 );
+
+typedef std::pair<int, int> queue_entry_t;
+typedef std::priority_queue<queue_entry_t, std::vector<queue_entry_t>, std::greater<>> priority_queue_t;
+
+void greedy_partition(const std::vector<int>& weights, int n_partitions, std::vector<int> &vertice_to_partition);
 
 }
 

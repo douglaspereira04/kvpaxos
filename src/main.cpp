@@ -35,9 +35,6 @@
 #include "operation.hpp"
 #include <fstream>
 #include <queue>
-#include "rocks_db_storage.h"
-#include "lmdb_storage.h"
-#include "stlmap_storage.h"
 #include "kvstore.hpp"
 
 using namespace workload;
@@ -48,7 +45,21 @@ using namespace workload;
     const bool ENABLE_REPARTITION = false;
 #endif
 
-typedef kvpaxos::KVStore<int, kvstorage::RocksDBStorage<int>, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, types::OPERATIONS> KVStore;
+#if defined(ANKERL)
+#include "stlmap_storage.h"
+typedef kvstorage::STLMapStorage<int, ankerl::unordered_dense::map> storage_t;
+#elif defined(ROCKS_DB)
+#include "rocks_db_storage.h"
+typedef kvstorage::RocksDBStorage<int> storage_t;
+#elif defined(LMDB)
+#include "lmdb_storage.h"
+typedef kvstorage::LMDBStorage<int> storage_t;
+#elif defined(TKRZW)
+#include "tkrzw_storage.h"
+typedef kvstorage::TKRZWStorage<int> storage_t;
+#endif
+
+typedef kvpaxos::KVStore<int, storage_t, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, types::OPERATIONS> KVStore;
 
 
 static int verbose = 0;
