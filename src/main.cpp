@@ -51,6 +51,9 @@ typedef kvstorage::STLMapStorage<std::string, ankerl::unordered_dense::map> stor
 #elif defined(ROCKS_DB)
 #include "rocks_db_storage.h"
 typedef kvstorage::RocksDBStorage<std::string> storage_t;
+#elif defined(LEVEL_DB)
+#include "level_db_storage.h"
+typedef kvstorage::LevelDBStorage<std::string> storage_t;
 #elif defined(LMDB)
 #include "lmdb_storage.h"
 typedef kvstorage::LMDBStorage<std::string> storage_t;

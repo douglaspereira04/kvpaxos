@@ -4,6 +4,7 @@ add_library(storage
     stlmap_storage.cpp
     lmdb_storage.cpp
     tkrzw_storage.cpp
+    level_db_storage.cpp
 )
 
 find_package(PkgConfig REQUIRED)
@@ -20,6 +21,7 @@ target_link_libraries(storage
     PUBLIC
         compresser
         rocksdb
+        leveldb
         ${LMDB_LIBRARIES}
         ${TKRZW_LIBRARIES}
 )

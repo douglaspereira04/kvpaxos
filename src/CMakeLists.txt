@@ -15,6 +15,9 @@ ENDIF()
 IF(${ENGINE} STREQUAL "ROCKS_DB")
     target_compile_definitions(main PUBLIC ROCKS_DB)
 ENDIF()
+IF(${ENGINE} STREQUAL "LEVEL_DB")
+    target_compile_definitions(main PUBLIC LEVEL_DB)
+ENDIF()
 IF(${ENGINE} STREQUAL "LMDB")
     target_compile_definitions(main PUBLIC LMDB)
 ENDIF()
@@ -37,7 +40,6 @@ ENDIF()
 IF(${REPARTITIONING} STREQUAL "ON")
     target_compile_definitions(main PUBLIC REPARTITIONING)
 ENDIF()
-add_definitions( -DTRACK_LENGTH=${TRACK_LENGTH} )
 add_definitions( -DQ_SIZE=${Q_SIZE} )
 
 target_link_libraries(
@@ -49,6 +51,7 @@ target_link_libraries(
             utils
             operation
             rocksdb
+            leveldb
             kvstore
 )
 

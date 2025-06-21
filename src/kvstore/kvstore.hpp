@@ -270,7 +270,7 @@ public:
         return PrepareStatus::OK;
     }
 
-    PrepareStatus prepare_operation(
+    inline PrepareStatus prepare_operation(
         Operation<T>* operation)
     {
         PrepareStatus status;
@@ -285,10 +285,7 @@ public:
     
     void dispatch(Operation<T>* operation){
         __involved_workers.clear();
-        PrepareStatus status = prepare_operation(operation);
-        if (status != PrepareStatus::OK){
-            abort();
-        }
+        prepare_operation(operation);
         for (worker_t* worker : __involved_workers) {
             worker->push_operation(operation);
         }
