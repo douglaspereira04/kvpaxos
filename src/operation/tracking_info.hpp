@@ -44,7 +44,7 @@ public:
         return __type;
     }
 
-    inline T key(){
+    inline T &key(){
         return __key;
     }
 

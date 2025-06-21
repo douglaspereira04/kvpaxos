@@ -13,19 +13,18 @@ class GetCallbackOperation: public GetOperation<T>, public CallbackOperation<T> 
 public:
     GetCallbackOperation(){}
 
-    GetCallbackOperation(T key, void (*callback_function)(T key, std::string* value)){
+    GetCallbackOperation(T &key, void (*callback_function)(T &key, std::string* value)){
         this->__type = GET_CALLBACK;
-        this->__key = key;
+        this->__key = T(key);
         CallbackOperation<T>::__set_callback(callback_function);
     }
 
-
     inline void callback(std::string* value){
-        reinterpret_cast<void (*)(T, std::string*)>(this->__callback_function)(this->__key, value);
+        reinterpret_cast<void (*)(T&, std::string*)>(this->__callback_function)(this->__key, value);
     }
 
     inline void callback(){
-        reinterpret_cast<void (*)(T)>(this->__callback_function)(this->__key);
+        reinterpret_cast<void (*)(T&)>(this->__callback_function)(this->__key);
     }
 };
 

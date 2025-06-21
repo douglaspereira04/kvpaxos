@@ -158,28 +158,28 @@ public:
         submit<END>(new Operation<T>(END));
     }
     
-    void get(T key, void (*cb)(T key, std::string*)){
+    void get(T &key, void (*cb)(T &key, std::string*)){
         GetCallbackOperation<T>* operation = new GetCallbackOperation<T>(key, cb);
         submit<GET_CALLBACK>(operation);
     }
     
-    void set(T key, const std::string &value, void (*cb)(T key, std::string*)){
+    void set(T &key, const std::string &value, void (*cb)(T &key, std::string*)){
         SetCallbackOperation<T>* operation = new SetCallbackOperation<T>(key, new std::string(value), cb);
         submit<SET_CALLBACK>(operation);
     }
     
-    void scan(T key, size_t len, void (*cb)(T key, std::string*)){
+    void scan(T &key, size_t len, void (*cb)(T &key, std::string*)){
         std::string *values = new std::string[len];
         ScanCallbackOperation<T>* operation = new ScanCallbackOperation<T>(key, len, values, cb);
         submit<SCAN_CALLBACK>(operation);
     }
     
-    void del(T key, void (*cb)(T key)){
+    void del(T &key, void (*cb)(T &key)){
         DelCallbackOperation<T>* operation = new DelCallbackOperation<T>(key, cb);
         submit<DEL_CALLBACK>(operation);
     }
     
-    std::string get(T key){
+    std::string get(T &key){
         std::string value;
         GetFutureOperation<T> operation(key, &value);
         submit<GET_FUTURE>(&operation);
@@ -187,12 +187,12 @@ public:
         return value;
     }
     
-    void set(T key, const std::string &value){
+    void set(T &key, const std::string &value){
         SetOperation<T>* operation = new SetOperation<T>(key, new std::string(value));
         submit<SET>(operation);
     }
     
-    std::vector<std::string> scan(T key, size_t len){
+    std::vector<std::string> scan(T &key, size_t len){
         std::vector<std::string> values(len);
         ScanFutureOperation<T> operation(key, len, values.data());
         submit<SCAN_FUTURE>(&operation);
@@ -203,7 +203,7 @@ public:
         return values;
     }
     
-    void del(T key){
+    void del(T &key){
         DelOperation<T>* operation = new DelOperation<T>(key);
         submit<DEL>(operation);
     }

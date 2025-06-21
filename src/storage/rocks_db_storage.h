@@ -17,9 +17,9 @@ public:
     RocksDBStorage(){}
     void init();
 
-    int read(T &key, std::string &value);
-    void write(T &key, const std::string &value);
-    void del(T &key);
+    int read(const T &key, std::string &value);
+    void write(const T &key, const std::string &value);
+    void del(const T &key);
 
 
 private:
@@ -30,7 +30,7 @@ private:
 };
 
 template<typename T>
-inline int RocksDBStorage<T>::read(T &key, std::string &value) {
+inline int RocksDBStorage<T>::read(const T &key, std::string &value) {
     rocksdb::Status status;
     status = __storage->Get(rocksdb::ReadOptions(), std::to_string(key), &value);
     if (status.IsNotFound()) {
@@ -40,12 +40,12 @@ inline int RocksDBStorage<T>::read(T &key, std::string &value) {
 }
 
 template<typename T>
-inline void RocksDBStorage<T>::write(T &key, const std::string &value) {
+inline void RocksDBStorage<T>::write(const T &key, const std::string &value) {
     __storage->Put(rocksdb::WriteOptions(), std::to_string(key), value);
 }
 
 template<typename T>
-inline void RocksDBStorage<T>::del(T &key) {
+inline void RocksDBStorage<T>::del(const T &key) {
     __storage->Delete(rocksdb::WriteOptions(), std::to_string(key));
 }
 

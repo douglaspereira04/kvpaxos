@@ -11,7 +11,7 @@ class DelOperation: public Operation<T> {
 public:
     DelOperation(){}
 
-    DelOperation(T key)
+    DelOperation(T &key)
         : Operation<T>(DEL, key){}
 
 

@@ -14,9 +14,9 @@ public:
     ScanCallbackOperation(){}
 
 
-    ScanCallbackOperation(T key, size_t len, std::string *values, void (*callback_function)(T key, std::string* value)){
+    ScanCallbackOperation(T &key, size_t len, std::string *values, void (*callback_function)(T &key, std::string* value)){
         this->__type = SCAN_CALLBACK;
-        this->__key = key;
+        this->__key = T(key);
         this->__len = len;
         this->__values = values;
         CallbackOperation<T>::__set_callback(callback_function);
@@ -24,11 +24,11 @@ public:
 
 
     inline void callback(std::string* value){
-        reinterpret_cast<void (*)(T, std::string*)>(this->__callback_function)(this->__key, value);
+        reinterpret_cast<void (*)(T&, std::string*)>(this->__callback_function)(this->__key, value);
     }
 
     inline void callback(){
-        reinterpret_cast<void (*)(T)>(this->__callback_function)(this->__key);
+        reinterpret_cast<void (*)(T&)>(this->__callback_function)(this->__key);
     }
 };
 

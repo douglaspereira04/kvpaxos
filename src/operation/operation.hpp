@@ -48,7 +48,7 @@ public:
         __type{type}
     {}
 
-    Operation(OperationType type, T key):
+    Operation(OperationType type, T &key):
         __type{type},
         __key{key}
     {}
@@ -61,7 +61,7 @@ public:
         return generic_type(__type) == SCAN;
     }
 
-    inline T key() const {return __key;}
+    inline const T &key() const {return __key;}
 
     template<typename Storage_T>
     inline void storage(Storage_T *storage_){

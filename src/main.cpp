@@ -144,8 +144,8 @@ metrics_loop(int sleep_duration, KVStore* kvstore)
 	std::cout << std::flush;
 }
 
-void do_nothing_with_kv(int key, std::string *value){}
-void do_nothing_with_k(int key){}
+void do_nothing_with_kv(int &key, std::string *value){}
+void do_nothing_with_k(int &key){}
 
 void operate_cb(KVStore *kvstore, operation_data_t &operation_data){
 	types::RequestType type = operation_data.type;

@@ -12,7 +12,7 @@ class GetOperation: public Operation<T> {
 public:
     GetOperation(){}
 
-    GetOperation(T key)
+    GetOperation(T &key)
         : Operation<T>(GET, key){}
 
 };

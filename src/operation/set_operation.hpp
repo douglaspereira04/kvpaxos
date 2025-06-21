@@ -12,10 +12,10 @@ class SetOperation: public Operation<T> {
 public:
     SetOperation(){}
 
-    SetOperation(T key)
+    SetOperation(T &key)
         : Operation<T>(SET, key){}
 
-    SetOperation(T key, std::string *value)
+    SetOperation(T &key, std::string *value)
         : Operation<T>(SET, key){
         __value = value;
     }

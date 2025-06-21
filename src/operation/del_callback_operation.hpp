@@ -13,19 +13,19 @@ class DelCallbackOperation: public DelOperation<T>, public CallbackOperation<T> 
 public:
     DelCallbackOperation(){}
 
-    DelCallbackOperation(T key, void (*callback_function)(T key)){
+    DelCallbackOperation(T &key, void (*callback_function)(T &key)){
         this->__type = DEL_CALLBACK;
-        this->__key = key;
+        this->__key = T(key);
         CallbackOperation<T>::__set_callback(callback_function);
     }
 
 
     inline void callback(std::string* value){
-        reinterpret_cast<void (*)(T, std::string*)>(this->__callback_function)(this->__key, value);
+        reinterpret_cast<void (*)(T&, std::string*)>(this->__callback_function)(this->__key, value);
     }
 
     inline void callback(){
-        reinterpret_cast<void (*)(T)>(this->__callback_function)(this->__key);
+        reinterpret_cast<void (*)(T&)>(this->__callback_function)(this->__key);
     }
 };
 

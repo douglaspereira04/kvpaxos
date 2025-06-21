@@ -15,7 +15,7 @@ class ScanFutureOperation: public ScanOperation<T> {
 public:
     ScanFutureOperation(){}
 
-    ScanFutureOperation(T key, size_t len, std::string *values){
+    ScanFutureOperation(T &key, size_t len, std::string *values){
         this->__type = SCAN_FUTURE;
         this->__key = key;
         this->__len = len;

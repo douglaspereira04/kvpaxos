@@ -11,7 +11,7 @@ void TKRZWStorage<T>::init(){
     path += std::to_string(db_counter.fetch_add(1, std::memory_order_relaxed));
     tkrzw::Status status;
 
-    __storage = new tkrzw::TreeDBM();
+    __storage = new tkrzw::HashDBM();
     size_t i = 0;
     do {
         status = __storage->Open(path, true);

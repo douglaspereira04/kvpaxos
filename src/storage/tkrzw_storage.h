@@ -6,7 +6,7 @@
 #include <atomic>
 #include <filesystem>
 #include <cassert>
-#include "tkrzw_dbm_tree.h"
+#include "tkrzw_dbm_hash.h"
 
 #include "storage.h"
 
@@ -18,20 +18,20 @@ public:
     TKRZWStorage(){}
     void init();
 
-    int read(T &key, std::string &value);
-    void write(T &key, const std::string &value);
-    void del(T &key);
+    int read(const T &key, std::string &value);
+    void write(const T &key, const std::string &value);
+    void del(const T &key);
 
 
 private:
-    tkrzw::TreeDBM* __storage;
+    tkrzw::HashDBM* __storage;
     static std::atomic_int db_counter;
     static std::string id;
 
 };
 
 template<typename T>
-inline int TKRZWStorage<T>::read(T &key, std::string &value) {
+inline int TKRZWStorage<T>::read(const T &key, std::string &value) {
     tkrzw::Status status = __storage->Get(std::to_string(key), &value);
     if (!status.IsOK()) {
         return -1;
@@ -40,12 +40,12 @@ inline int TKRZWStorage<T>::read(T &key, std::string &value) {
 }
 
 template<typename T>
-inline void TKRZWStorage<T>::write(T &key, const std::string &value) {
+inline void TKRZWStorage<T>::write(const T &key, const std::string &value) {
     __storage->Set(std::to_string(key), value);
 }
 
 template<typename T>
-inline void TKRZWStorage<T>::del(T &key) {
+inline void TKRZWStorage<T>::del(const T &key) {
     __storage->Remove(std::to_string(key));
 }
 

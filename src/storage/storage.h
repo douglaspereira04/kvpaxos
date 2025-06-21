@@ -12,9 +12,9 @@ public:
     Storage() {};
     void init();
 
-    int read(T &key, std::string &value);
-    void write(T &key, const std::string &value);
-    void del(T &key);
+    int read(const T &key, std::string &value);
+    void write(const T &key, const std::string &value);
+    void del(const T &key);
 
     inline const size_t &level() const {
         return __level;

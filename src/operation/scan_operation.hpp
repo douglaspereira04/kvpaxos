@@ -21,7 +21,7 @@ class ScanOperation: public Operation<T> {
 public:
     ScanOperation(){}
 
-    ScanOperation(T key, size_t len, std::string* values)
+    ScanOperation(T &key, size_t len, std::string* values)
         : Operation<T>(SCAN, key){
         __len = len;
         __values = values;

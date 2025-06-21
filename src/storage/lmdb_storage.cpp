@@ -6,9 +6,9 @@ void LMDBStorage<T>::init(){
     std::string path = 
         std::string("/tmp/repart_kv_storage/") +
         id +
-        std::string("/");
+        std::string("/") +
+        std::to_string(db_counter.fetch_add(1, std::memory_order_relaxed));
     std::filesystem::create_directories(path);
-    path += std::to_string(db_counter.fetch_add(1, std::memory_order_relaxed));
     int rc;
 
     rc = mdb_env_create(&__env);
@@ -19,10 +19,11 @@ void LMDBStorage<T>::init(){
     mdb_env_set_maxdbs(__env, 1);
     mdb_env_set_mapsize(__env, 50ULL * 1024 * 1024 * 1024);
 
-    rc = mdb_env_open(__env, path.data(), 0, 0664);
+    rc = mdb_env_open(__env, path.data(), MDB_NOSYNC | MDB_NOMETASYNC, 0664);
     if (rc != 0) {
         abort();
     }
+    MDB_txn* __txn;
     mdb_txn_begin(__env, nullptr, 0, &__txn);
     rc = mdb_dbi_open(__txn, nullptr, 0, &__dbi);
     if (rc != 0) {
@@ -42,14 +43,17 @@ std::string LMDBStorage<T>::id = std::to_string(
 );
 
 template<typename T>
-inline int LMDBStorage<T>::read(T &key, std::string &value) {
+inline int LMDBStorage<T>::read(const T &key, std::string &value) {
+    MDB_txn* __txn;
+    MDB_val __key;
+    MDB_val __value;
 
     int rc = mdb_txn_begin(__env, nullptr, MDB_RDONLY, &__txn);
     if (rc != 0) {
         abort();
     }
     __key.mv_size = sizeof(T);
-    __key.mv_data = &key;
+    __key.mv_data = const_cast<void*>(static_cast<const void*>(&key));
 
     rc = mdb_get(__txn, __dbi, &__key, &__value);
     if (rc == MDB_SUCCESS) {
@@ -63,33 +67,51 @@ inline int LMDBStorage<T>::read(T &key, std::string &value) {
 }
 
 template<typename T>
-inline void LMDBStorage<T>::write(T &key, const std::string &value) {
+inline void LMDBStorage<T>::write(const T &key, const std::string &value) {
+    MDB_txn* __txn;
+    MDB_val __key;
+    MDB_val __value;
     int rc = mdb_txn_begin(__env, nullptr, 0, &__txn);
     if (rc != 0) {
         abort();
     }
 
     __key.mv_size = sizeof(T);
-    __key.mv_data = &key;
+    __key.mv_data = const_cast<void*>(static_cast<const void*>(&key));
     __value.mv_size = value.size();
-    __value.mv_data = const_cast<void*>(static_cast<const void*>(value.data()));
+    __value.mv_data = const_cast<void*>(static_cast<const void*>(value.c_str()));
 
     rc = mdb_put(__txn, __dbi, &__key, &__value, 0);
+    if (rc != 0){
+        abort();
+    }
 
-    mdb_txn_commit(__txn);
+    rc = mdb_txn_commit(__txn);
+    if (rc != 0){
+        abort();
+    }
 }
 
 template<typename T>
-inline void LMDBStorage<T>::del(T &key) {
+inline void LMDBStorage<T>::del(const T &key) {
+    MDB_txn* __txn;
+    MDB_val __key;
+    MDB_val __value;
     int rc = mdb_txn_begin(__env, nullptr, 0, &__txn);
     if (rc != 0) {
         abort();
     }
     __key.mv_size = sizeof(T);
-    __key.mv_data = &key;
+    __key.mv_data = const_cast<void*>(static_cast<const void*>(&key));
 
     rc = mdb_del(__txn, __dbi, &__key, nullptr);
+    if (rc != 0){
+        abort();
+    }
 
-    mdb_txn_commit(__txn);
+    rc = mdb_txn_commit(__txn);
+    if (rc != 0){
+        abort();
+    }
 }
 }

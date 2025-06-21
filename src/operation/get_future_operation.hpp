@@ -14,7 +14,7 @@ class GetFutureOperation: public GetOperation<T> {
 public:
     GetFutureOperation(){}
 
-    GetFutureOperation(T key, std::string *value){
+    GetFutureOperation(T &key, std::string *value){
         this->__type = GET_FUTURE;
         this->__key = key;
         this->__value = value;
