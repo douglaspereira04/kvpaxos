@@ -47,19 +47,19 @@ using namespace workload;
 
 #if defined(ANKERL)
 #include "stlmap_storage.h"
-typedef kvstorage::STLMapStorage<int, ankerl::unordered_dense::map> storage_t;
+typedef kvstorage::STLMapStorage<std::string, ankerl::unordered_dense::map> storage_t;
 #elif defined(ROCKS_DB)
 #include "rocks_db_storage.h"
-typedef kvstorage::RocksDBStorage<int> storage_t;
+typedef kvstorage::RocksDBStorage<std::string> storage_t;
 #elif defined(LMDB)
 #include "lmdb_storage.h"
-typedef kvstorage::LMDBStorage<int> storage_t;
+typedef kvstorage::LMDBStorage<std::string> storage_t;
 #elif defined(TKRZW)
 #include "tkrzw_storage.h"
-typedef kvstorage::TKRZWStorage<int> storage_t;
+typedef kvstorage::TKRZWStorage<std::string> storage_t;
 #endif
 
-typedef kvpaxos::KVStore<int, storage_t, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, types::OPERATIONS> KVStore;
+typedef kvpaxos::KVStore<std::string, storage_t, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, types::OPERATIONS> KVStore;
 
 
 static int verbose = 0;
@@ -89,7 +89,7 @@ static const std::string template_value(VALUE_SIZE, '*');
 
 struct operation_data_t {
 	types::RequestType type;
-	int key;
+	std::string key;
 	size_t len;
 	std::string value;
 };
@@ -144,12 +144,12 @@ metrics_loop(int sleep_duration, KVStore* kvstore)
 	std::cout << std::flush;
 }
 
-void do_nothing_with_kv(int &key, std::string *value){}
-void do_nothing_with_k(int &key){}
+void do_nothing_with_kv(std::string &key, std::string *value){}
+void do_nothing_with_k(std::string &key){}
 
 void operate_cb(KVStore *kvstore, operation_data_t &operation_data){
 	types::RequestType type = operation_data.type;
-	int key = operation_data.key;
+	std::string key = operation_data.key;
 	size_t len = operation_data.len;
 	std::string value = operation_data.value;
 	switch (type)
@@ -178,7 +178,7 @@ void operate_cb(KVStore *kvstore, operation_data_t &operation_data){
 
 void operate(KVStore *kvstore, operation_data_t &operation_data){
 	types::RequestType type = operation_data.type;
-	int key = operation_data.key;
+	std::string key = operation_data.key;
 	size_t len = operation_data.len;
 	std::string value = operation_data.value;
 	switch (type)

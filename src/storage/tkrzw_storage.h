@@ -32,8 +32,9 @@ private:
 
 template<typename T>
 inline int TKRZWStorage<T>::read(const T &key, std::string &value) {
-    tkrzw::Status status = __storage->Get(std::to_string(key), &value);
+    tkrzw::Status status = __storage->Get(key, &value);
     if (!status.IsOK()) {
+        abort();
         return -1;
     }
     return value.size();
@@ -41,15 +42,15 @@ inline int TKRZWStorage<T>::read(const T &key, std::string &value) {
 
 template<typename T>
 inline void TKRZWStorage<T>::write(const T &key, const std::string &value) {
-    __storage->Set(std::to_string(key), value);
+    __storage->Set(key, value);
 }
 
 template<typename T>
 inline void TKRZWStorage<T>::del(const T &key) {
-    __storage->Remove(std::to_string(key));
+    __storage->Remove(key);
 }
 
-template class kvstorage::TKRZWStorage<int>;
+template class kvstorage::TKRZWStorage<std::string>;
 
 };
 

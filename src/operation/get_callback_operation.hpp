@@ -15,7 +15,7 @@ public:
 
     GetCallbackOperation(T &key, void (*callback_function)(T &key, std::string* value)){
         this->__type = GET_CALLBACK;
-        this->__key = T(key);
+        this->__key = key;
         CallbackOperation<T>::__set_callback(callback_function);
     }
 

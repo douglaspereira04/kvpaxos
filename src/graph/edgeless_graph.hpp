@@ -62,10 +62,8 @@ public:
                 __available_pos.push(pos);
                 __vertex_to_pos.erase(it);
             }
-        }
-
-        if constexpr(utils::ENABLE_INFO){
-            abort();
+        } else {
+            final_weight = 0;
         }
         return final_weight;
     }

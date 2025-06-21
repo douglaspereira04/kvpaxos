@@ -30,7 +30,7 @@ private:
     static std::string id;
 };
 
-template class kvstorage::LMDBStorage<int>;
+template class kvstorage::LMDBStorage<std::string>;
 
 };
 

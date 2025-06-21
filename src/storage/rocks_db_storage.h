@@ -32,7 +32,7 @@ private:
 template<typename T>
 inline int RocksDBStorage<T>::read(const T &key, std::string &value) {
     rocksdb::Status status;
-    status = __storage->Get(rocksdb::ReadOptions(), std::to_string(key), &value);
+    status = __storage->Get(rocksdb::ReadOptions(), key, &value);
     if (status.IsNotFound()) {
         return -1;
     }
@@ -41,15 +41,15 @@ inline int RocksDBStorage<T>::read(const T &key, std::string &value) {
 
 template<typename T>
 inline void RocksDBStorage<T>::write(const T &key, const std::string &value) {
-    __storage->Put(rocksdb::WriteOptions(), std::to_string(key), value);
+    __storage->Put(rocksdb::WriteOptions(), key, value);
 }
 
 template<typename T>
 inline void RocksDBStorage<T>::del(const T &key) {
-    __storage->Delete(rocksdb::WriteOptions(), std::to_string(key));
+    __storage->Delete(rocksdb::WriteOptions(), key);
 }
 
-template class kvstorage::RocksDBStorage<int>;
+template class kvstorage::RocksDBStorage<std::string>;
 
 };
 

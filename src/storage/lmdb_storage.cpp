@@ -52,8 +52,8 @@ inline int LMDBStorage<T>::read(const T &key, std::string &value) {
     if (rc != 0) {
         abort();
     }
-    __key.mv_size = sizeof(T);
-    __key.mv_data = const_cast<void*>(static_cast<const void*>(&key));
+    __key.mv_size = key.size();
+    __key.mv_data = const_cast<void*>(static_cast<const void*>(key.c_str()));
 
     rc = mdb_get(__txn, __dbi, &__key, &__value);
     if (rc == MDB_SUCCESS) {
@@ -76,8 +76,8 @@ inline void LMDBStorage<T>::write(const T &key, const std::string &value) {
         abort();
     }
 
-    __key.mv_size = sizeof(T);
-    __key.mv_data = const_cast<void*>(static_cast<const void*>(&key));
+    __key.mv_size = key.size();
+    __key.mv_data = const_cast<void*>(static_cast<const void*>(key.c_str()));
     __value.mv_size = value.size();
     __value.mv_data = const_cast<void*>(static_cast<const void*>(value.c_str()));
 
@@ -101,8 +101,8 @@ inline void LMDBStorage<T>::del(const T &key) {
     if (rc != 0) {
         abort();
     }
-    __key.mv_size = sizeof(T);
-    __key.mv_data = const_cast<void*>(static_cast<const void*>(&key));
+    __key.mv_size = key.size();
+    __key.mv_data = const_cast<void*>(static_cast<const void*>(key.c_str()));
 
     rc = mdb_del(__txn, __dbi, &__key, nullptr);
     if (rc != 0){

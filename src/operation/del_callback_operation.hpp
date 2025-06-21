@@ -15,7 +15,7 @@ public:
 
     DelCallbackOperation(T &key, void (*callback_function)(T &key)){
         this->__type = DEL_CALLBACK;
-        this->__key = T(key);
+        this->__key = key;
         CallbackOperation<T>::__set_callback(callback_function);
     }
 
