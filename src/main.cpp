@@ -77,8 +77,7 @@ static const int REPARTITION_METHOD = 5;
 static const int OPERATIONS_PATH = 6;
 static const int OPERATIONS_RATE = 7;
 static const int OPERATIONS_RATE_SEED = 8;
-static const int QUEUE_HEAD_DISTANCE = 9;
-static const int CALLBACK = 10;
+static const int CALLBACK = 9;
 
 static char* *params;
 
@@ -219,12 +218,9 @@ initialize_kvstore(std::queue<operation_data_t> &operation_queue)
 		repartition_method_s
 	);
 
-	float q_head_distance = atoi(params[QUEUE_HEAD_DISTANCE]);
-
 	KVStore* kvstore = new KVStore(
 		repartition_interval, n_partitions,
-		repartition_method,
-		q_head_distance
+		repartition_method
 	);
 
 	kvstore->run();

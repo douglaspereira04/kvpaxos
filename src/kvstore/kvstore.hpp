@@ -56,16 +56,11 @@ public:
     KVStore() {}
     KVStore(int repartition_interval,
                 int n_partitions,
-                model::CutMethod repartition_method,
-                size_t dh
+                model::CutMethod repartition_method
     ) {
         __n_partitions = n_partitions;
         if constexpr(Rebalance) {
-            if (dh == 0) {
-                __scheduling_queue = new schedule_queue_t(SEM_VALUE_MAX, SEM_VALUE_MAX);
-            } else {
-                __scheduling_queue = new schedule_queue_t(dh, dh);
-            }
+            __scheduling_queue = new schedule_queue_t(repartition_interval, repartition_interval);
         } else {
             __scheduling_queue = new schedule_queue_t(SEM_VALUE_MAX, SEM_VALUE_MAX);
         }
