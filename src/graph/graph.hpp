@@ -30,23 +30,35 @@ public:
     }
 
 
-    inline void increment_vertice_weight(T &data, int weight) {
-        auto [it, emplaced] = vertex_weight_.try_emplace(data, 1);
+    inline int increment_vertice_weight(T &data, int weight) {
+        auto [it, emplaced] = vertex_weight_.try_emplace(data, weight);
         if (!emplaced) {
-            it->second++;
+            it->second += weight;
         }
+        return it->second;
     }
 
 
-    inline void decrement_vertice_weight(T &data, int weight) {
+    inline int decrement_vertice_weight(T &data, int weight) {
+        int final_weight;
         auto it = vertex_weight_.find(data);
         if (it != vertex_weight_.end()) {
-            if (it->second > 0){
-                it->second += weight;
-            } else {
+            it->second -= weight;
+            final_weight = it->second;
+            if constexpr(utils::ENABLE_INFO){
+                if (final_weight < 0){
+                    abort();
+                }
+            }
+            if (it->second == 0){
                 vertex_weight_.erase(it);
             }
         }
+
+        if constexpr(utils::ENABLE_INFO){
+            abort();
+        }
+        return final_weight;
     }
 
 
@@ -58,7 +70,10 @@ public:
                 n_edges_++;
             }
         } else {
-            from_it->second.find(to)->second += value;
+            auto [to_it, emplaced_to] = from_it->second.try_emplace(to, value);
+            if (!emplaced_to){
+                to_it->second += value;
+            }
         }
     }
 
@@ -69,7 +84,8 @@ public:
             auto to_it = from_it->second.find(to);
             if (to_it != from_it->second.end()){
                 to_it->second -= value;
-                if (to_it->second <= 0){
+                int curr_weight = to_it->second;
+                if (curr_weight == 0){
                     if (from_it->second.size() == 1){
                         edges_weight_.erase(from_it);
                     } else {
@@ -77,6 +93,11 @@ public:
                     }
                     if constexpr(utils::ENABLE_INFO){
                         n_edges_--;
+                    }
+                }
+                if constexpr(utils::ENABLE_INFO){
+                    if(curr_weight < 0){
+                        abort();
                     }
                 }
             }

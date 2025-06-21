@@ -55,33 +55,38 @@ void multilevel_cut(
 }
 
 
-
 void greedy_partition(const std::vector<int>& weights, int n_partitions, std::vector<int> &vertice_to_partition) {
     const size_t n_vertices = weights.size();
-    vertice_to_partition.resize(n_vertices);
-    
-    priority_queue_t partition_queue;
+    vertice_to_partition.clear();
+   
 
-    for (int i = 0; i < n_partitions; i++){
-        partition_queue.emplace(0, i);
+    priority_queue_t heap;
+    for (int i = 0; i < n_partitions; ++i) {
+        heap.emplace(0, i);
     }
 
-    std::vector<std::pair<int, int>> sorted_vertices;
-    sorted_vertices.reserve(n_vertices);
-
-    for (size_t i = 0; i < n_vertices; i++){
-        sorted_vertices.emplace_back(weights[i], i);
+    std::vector<std::pair<int, int>> vertices;
+    for (size_t pos = 0; pos < n_vertices; pos++) {
+        if (weights[pos] > 0) {
+            vertices.emplace_back(pos, weights[pos]);
+        }
     }
-    std::sort(sorted_vertices.rbegin(), sorted_vertices.rend());
+    vertice_to_partition.resize(vertices.size());
 
-    for (const auto& [weight, vertex] : sorted_vertices) {
-        auto [current_weight, partition] = partition_queue.top();
-        partition_queue.pop();
+    std::sort(vertices.begin(), vertices.end(), [](auto& a, auto& b) {
+        return a.second > b.second;
+    });
 
-        vertice_to_partition[vertex] = partition;
+    for (const auto& [pos, weight] : vertices) {
+        auto [current_weight, partition_id] = heap.top();
+        heap.pop();
 
-        partition_queue.emplace(current_weight + weight, partition);
+        vertice_to_partition[pos] = partition_id;
+        current_weight += weight;
+
+        heap.emplace(current_weight, partition_id);
     }
 }
+
 
 }

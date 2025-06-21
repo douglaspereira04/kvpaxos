@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <utility>
 #include <functional>
+#include "ankerl/unordered_dense.h"
 
 #include "graph.hpp"
 
@@ -44,6 +45,7 @@ void multilevel_cut(
 
 typedef std::pair<int, int> queue_entry_t;
 typedef std::priority_queue<queue_entry_t, std::vector<queue_entry_t>, std::greater<>> priority_queue_t;
+
 
 void greedy_partition(const std::vector<int>& weights, int n_partitions, std::vector<int> &vertice_to_partition);
 

@@ -33,6 +33,7 @@
 #include "tracking_info.hpp"
 #include "ankerl/unordered_dense.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/container/btree_set.h"
 
 namespace kvpaxos {
 
@@ -45,6 +46,7 @@ typedef ankerl::unordered_dense::map<T, worker_t*> worker_map_t;
 typedef ankerl::unordered_dense::map<T, storage_t*> storage_map_t;
 typedef model::Queue<Operation<T>*, TrackingInfo<T>*> schedule_queue_t;
 typedef absl::flat_hash_set<worker_t*> worker_set_t;
+typedef absl::btree_set<T> key_set_t;
 
 public:
 
@@ -210,13 +212,13 @@ public:
         T key = operation->key();
         auto [worker_it, worker_emplaced] = __worker_map->try_emplace(key, __workers[__rr_counter]);
         __involved_workers.insert(worker_it->second);
-
-        auto [storage_it, storage_emplaced] = __storage_map.try_emplace(key, &__storages[__rr_counter]);
-        operation->storage(storage_it->second);
+        storage_t* worker_storage = &__storages[worker_it->second->id()];
+        auto [storage_it, storage_emplaced] = __storage_map.try_emplace(key, worker_storage);
+        storage_t* storage = storage_it->second;
+        operation->storage(storage);
         if (!storage_emplaced) {
-            storage_t* other_storage = storage_it->second;
-            if (other_storage->level() < __level){
-                storage_it->second = &__storages[worker_it->second->id()];
+            if (worker_storage != storage){
+                storage_it->second = worker_storage;
             }
         }
 
@@ -233,19 +235,22 @@ public:
 
         for (size_t i = 0; i < len; i++) {
             T key_i = operation->key()+i;
-            auto [worker_it, worker_emplaced] = __worker_map->try_emplace(key_i, __workers[__rr_counter]);
-            operation->worker(i, worker_it->second);
 
-            auto [storage_it, storage_emplaced] = __storage_map.try_emplace(key_i, &__storages[__rr_counter]);
-            operation->storage(i, storage_it->second);
+            auto [worker_it, worker_emplaced] = __worker_map->try_emplace(key_i, __workers[__rr_counter]);
+            __involved_workers.insert(worker_it->second);
+            storage_t* worker_storage = &__storages[worker_it->second->id()];
+            auto [storage_it, storage_emplaced] = __storage_map.try_emplace(key_i, worker_storage);
+            storage_t* storage = storage_it->second;
+            operation->storage(i, storage);
             if (!storage_emplaced) {
-                storage_t* other_storage = storage_it->second;
-                if (other_storage->level() < __level){
-                    storage_it->second = &__storages[worker_it->second->id()];
+                if (worker_storage != storage){
+                    storage_it->second = worker_storage;
                 }
             }
-            __involved_workers.insert(worker_it->second);
-            __rr_counter = (__rr_counter+1) % __n_partitions;
+
+            if (worker_emplaced){
+                __rr_counter = (__rr_counter+1) % __n_partitions;
+            }
         }
 
         operation->init_coordination(__involved_workers.size());
@@ -435,24 +440,28 @@ public:
 
     void update_graph(TrackingInfo<T>* tracking_info) {
         if(tracking_info->type() != DUMMY){
-            size_t data_size = 1;
             if (tracking_info->type() == SCAN) {
-                data_size = tracking_info->len();
-            }
+                size_t len = tracking_info->len();
+                for (auto i = 0; i < len; i++) {
+                    T key_i = tracking_info->key()+i;
 
+                    if constexpr(utils::ENABLE_EDGES){
+                        __graph.increment_vertice_weight(key_i, 1);
 
-            for (auto i = 0; i < data_size; i++) {
-                T key_i = tracking_info->key()+i;
-
-                if constexpr(utils::ENABLE_EDGES){
-                    __graph.increment_vertice_weight(key_i, 1);
-
-                    for (auto j = i+1; j < data_size; j++) {
-                        T key_j = tracking_info->key()+j;
-                        __graph.increment_edge_weight(key_i, key_j, 1);
+                        for (auto j = i+1; j < len; j++) {
+                            T key_j = tracking_info->key()+j;
+                            __graph.increment_edge_weight(key_i, key_j, 1);
+                        }
+                    } else {
+                        __edgeless_graph.increment_vertice_weight(key_i, 1);
                     }
+                }
+            } else {
+                T key = tracking_info->key();
+                if constexpr(utils::ENABLE_EDGES){
+                    __graph.increment_vertice_weight(key, 1);
                 } else {
-                    __edgeless_graph.increment_vertice_weight(key_i, 1);
+                    __edgeless_graph.increment_vertice_weight(key, 1);
                 }
             }
         }
@@ -460,21 +469,28 @@ public:
 
     void expire(TrackingInfo<T>* tracking_info) {
         if(tracking_info->type() != DUMMY){
-            int data_size = 1;
             if (tracking_info->type() == SCAN) {
-                data_size = tracking_info->len();
-            }
+                size_t len = tracking_info->len();
+                for (auto i = 0; i < len; i++) {
+                    T key_i = tracking_info->key()+i;
 
-            for (int i = data_size-1; i >= 0; i--) {
-                T key_i = tracking_info->key()+i;
-                if constexpr(utils::ENABLE_EDGES){
-                    for (int j = data_size-1; j >= i+1; j--) {
-                        T key_j = tracking_info->key()+j;
-                        __graph.decrement_edge_weight(key_i, key_j, 1);
+                    if constexpr(utils::ENABLE_EDGES){
+                        __graph.decrement_vertice_weight(key_i, 1);
+
+                        for (auto j = i+1; j < len; j++) {
+                            T key_j = tracking_info->key()+j;
+                            __graph.decrement_edge_weight(key_i, key_j, 1);
+                        }
+                    } else {
+                        __edgeless_graph.decrement_vertice_weight(key_i, 1);
                     }
-                    __graph.decrement_vertice_weight(key_i, 1);
+                }
+            } else {
+                T key = tracking_info->key();
+                if constexpr(utils::ENABLE_EDGES){
+                    __graph.decrement_vertice_weight(key, 1);
                 } else {
-                    __edgeless_graph.decrement_vertice_weight(key_i, 1);
+                    __edgeless_graph.increment_vertice_weight(key, 1);
                 }
             }
         }
@@ -684,6 +700,9 @@ public:
     size_t __level;
 
     std::vector<storage_t*> __old_storages;
+
+    key_set_t __keys;
+    key_set_t __graph_keys;
 };
 
 };
