@@ -123,24 +123,12 @@ private:
         {
             if (operation->worker_manages_key(i, this)){
                 storage_t* storage = operation->template storage<storage_t>(i);
-                T key_i = key + i;
+                T key_i = operation->key(i);
                 read(storage, key_i, operation->get_scaned_value(i));
             }
         }
         
 
-    }
-    inline void read_range(ScanOperation<T>* &operation, T &key, size_t &len, std::string* &values){
-        if (len > 1){
-            for (auto i = 0; i < len; i++) {
-                T key_i = key+i;
-                storage_t* storage = operation->template storage<storage_t>(i);
-                read(storage, key_i, values[i]);
-            }
-        } else {
-            storage_t* storage = operation->template storage<storage_t>();
-            read(storage, key, values[0]);
-        }
     }
 
     inline void print_read(T &key, std::string &value){

@@ -261,6 +261,7 @@ public:
             auto [storage_it, storage_emplaced] = __storage_map.try_emplace(key_i, worker_storage);
             storage_t* storage = storage_it->second;
             operation->storage(i, storage);
+            operation->key(i, key_i);
             if (!storage_emplaced) {
                 if (worker_storage != storage){
                     storage_it->second = worker_storage;
