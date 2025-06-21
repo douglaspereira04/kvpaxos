@@ -41,9 +41,9 @@ enum PrepareStatus{
     NOT_FOUND = 1
 };
 
-template <typename T, typename storage_t, bool Rebalance, size_t TL = 0, size_t QSize = 0, types::interval_type IntervalType = types::OPERATIONS>
+template <typename T, typename storage_t, bool Rebalance, size_t QSize = 0, types::interval_type IntervalType = types::OPERATIONS>
 class KVStore{
-typedef KVStore<T, storage_t, Rebalance, TL, QSize, IntervalType> kvstore_t;
+typedef KVStore<T, storage_t, Rebalance, QSize, IntervalType> kvstore_t;
 typedef kvpaxos::Worker<T, storage_t, QSize> worker_t;
 typedef ankerl::unordered_dense::map<T, worker_t*> worker_map_t;
 typedef ankerl::unordered_dense::map<T, storage_t*> storage_map_t;
@@ -113,14 +113,6 @@ public:
             __repartition_signal.store(false, std::memory_order_seq_cst);
             __update.store(false, std::memory_order_seq_cst);
             __repartitioning = false;
-
-            if constexpr(TL > 0){
-                for (size_t i = 0; i < TL; i++)
-                {
-                    TrackingInfo<T> *dummy = new TrackingInfo<T>(DUMMY);
-                    __expiration_queue.push_back(dummy);
-                }
-            }
 
             sem_init(&repart_semaphore, 0, 0);
             reparting_thread = std::thread(&kvstore_t::partitioning_loop, this);
@@ -422,15 +414,6 @@ public:
             }
             update_graph(tracking_info);
 
-            if constexpr(TL > 0){
-                __expiration_queue.push_back(tracking_info);
-
-                TrackingInfo<T> *expired_info = __expiration_queue.front();
-                expire(expired_info);
-                delete expired_info;
-                __expiration_queue.pop_front();
-            }
-
             if(__repartition_signal.load(std::memory_order_acquire)){
                 bool has_vertices;
                 if constexpr(utils::ENABLE_EDGES){
@@ -688,8 +671,6 @@ public:
 
     std::thread scheduling_thread;
     cpu_set_t scheduler_cpu_set;
-
-    std::deque<TrackingInfo<T>*> __expiration_queue;
 
     model::Graph<T> __graph;
     model::EdgelessGraph<T> __edgeless_graph;

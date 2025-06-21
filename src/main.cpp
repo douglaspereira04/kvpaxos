@@ -59,7 +59,7 @@ typedef kvstorage::LMDBStorage<std::string> storage_t;
 typedef kvstorage::TKRZWStorage<std::string> storage_t;
 #endif
 
-typedef kvpaxos::KVStore<std::string, storage_t, ENABLE_REPARTITION, TRACK_LENGTH, Q_SIZE, types::OPERATIONS> KVStore;
+typedef kvpaxos::KVStore<std::string, storage_t, ENABLE_REPARTITION, Q_SIZE, types::OPERATIONS> KVStore;
 
 
 static int verbose = 0;
