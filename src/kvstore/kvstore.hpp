@@ -36,7 +36,10 @@
 #include "absl/container/btree_set.h"
 
 namespace kvpaxos {
-
+enum PrepareStatus{
+    OK = 0,
+    NOT_FOUND = 1
+};
 
 template <typename T, typename storage_t, bool Rebalance, size_t TL = 0, size_t QSize = 0, types::interval_type IntervalType = types::OPERATIONS>
 class KVStore{
@@ -208,8 +211,20 @@ public:
         submit<DEL>(operation);
     }
 
-    inline void prepare_single(Operation<T> *operation){
+    inline PrepareStatus prepare_single(Operation<T> *operation){
         T key = operation->key();
+
+        if (operation->is_set()){
+            __keys.insert(key);
+        } else if (operation->is_del()){
+            auto key_it = __keys.find(key);
+            if (key_it == __keys.end()){
+                return NOT_FOUND;
+            } else {
+                __keys.erase(key_it);
+            }
+        }
+
         auto [worker_it, worker_emplaced] = __worker_map->try_emplace(key, __workers[__rr_counter]);
         __involved_workers.insert(worker_it->second);
         storage_t* worker_storage = &__storages[worker_it->second->id()];
@@ -225,16 +240,20 @@ public:
         if (worker_emplaced){
             __rr_counter = (__rr_counter+1) % __n_partitions;
         }
+
+        return PrepareStatus::OK;
     }
 
-    inline void prepare_range(ScanOperation<T>* operation){
+    inline PrepareStatus prepare_range(ScanOperation<T>* operation){
         T key = operation->key();
         size_t len = operation->len();
 
         operation->init_scan_data();
 
-        for (size_t i = 0; i < len; i++) {
-            T key_i = operation->key()+i;
+        auto key_it = __keys.lower_bound(key);
+        size_t i = 0;
+        for (; i < len && key_it != __keys.end(); i++) {
+            T key_i = *key_it;
 
             auto [worker_it, worker_emplaced] = __worker_map->try_emplace(key_i, __workers[__rr_counter]);
             __involved_workers.insert(worker_it->second);
@@ -251,26 +270,36 @@ public:
             if (worker_emplaced){
                 __rr_counter = (__rr_counter+1) % __n_partitions;
             }
+            key_it++;
+        }
+
+        if (i < len){
+            PrepareStatus::NOT_FOUND;
         }
 
         operation->init_coordination(__involved_workers.size());
+        return PrepareStatus::OK;
     }
 
-    void prepare_operation(
+    PrepareStatus prepare_operation(
         Operation<T>* operation)
     {
-        
+        PrepareStatus status;
         if (operation->is_scan()) {
             ScanOperation<T>* scan_op = static_cast<ScanOperation<T>*>(operation);
-            prepare_range(scan_op);
+            status = prepare_range(scan_op);
         } else {
-            prepare_single(operation);
+            status = prepare_single(operation);
         }
+        return status;
     }
     
     void dispatch(Operation<T>* operation){
         __involved_workers.clear();
-        prepare_operation(operation);
+        PrepareStatus status = prepare_operation(operation);
+        if (status != PrepareStatus::OK){
+            abort();
+        }
         for (worker_t* worker : __involved_workers) {
             worker->push_operation(operation);
         }
@@ -442,26 +471,32 @@ public:
         if(tracking_info->type() != DUMMY){
             if (tracking_info->type() == SCAN) {
                 size_t len = tracking_info->len();
-                for (auto i = 0; i < len; i++) {
-                    T key_i = tracking_info->key()+i;
+                auto key_it = __graph_keys.lower_bound(tracking_info->key());
+                for (auto i = 0; i < len && key_it != __graph_keys.end(); i++) {
+                    T key_i = *key_it;
 
                     if constexpr(utils::ENABLE_EDGES){
                         __graph.increment_vertice_weight(key_i, 1);
-
-                        for (auto j = i+1; j < len; j++) {
-                            T key_j = tracking_info->key()+j;
+                        auto key_j_it = key_it;
+                        for (auto j = i+1; j < len && key_j_it != __graph_keys.end(); j++) {
+                            T key_j = *key_j_it;
                             __graph.increment_edge_weight(key_i, key_j, 1);
                         }
                     } else {
                         __edgeless_graph.increment_vertice_weight(key_i, 1);
                     }
+                    key_it++;
                 }
             } else {
+                int final_weight;
                 T key = tracking_info->key();
                 if constexpr(utils::ENABLE_EDGES){
-                    __graph.increment_vertice_weight(key, 1);
+                    final_weight = __graph.increment_vertice_weight(key, 1);
                 } else {
-                    __edgeless_graph.increment_vertice_weight(key, 1);
+                    final_weight = __edgeless_graph.increment_vertice_weight(key, 1);
+                }
+                if (final_weight == 1){
+                    __graph_keys.insert(key);
                 }
             }
         }
@@ -471,26 +506,32 @@ public:
         if(tracking_info->type() != DUMMY){
             if (tracking_info->type() == SCAN) {
                 size_t len = tracking_info->len();
-                for (auto i = 0; i < len; i++) {
-                    T key_i = tracking_info->key()+i;
+                auto key_it = __graph_keys.lower_bound(tracking_info->key());
+                for (auto i = 0; i < len && key_it != __graph_keys.end(); i++) {
+                    T key_i = *key_it;
 
                     if constexpr(utils::ENABLE_EDGES){
                         __graph.decrement_vertice_weight(key_i, 1);
-
-                        for (auto j = i+1; j < len; j++) {
-                            T key_j = tracking_info->key()+j;
+                        auto key_j_it = key_it;
+                        for (auto j = i+1; j < len && key_j_it != __graph_keys.end(); j++) {
+                            T key_j = *key_j_it;
                             __graph.decrement_edge_weight(key_i, key_j, 1);
                         }
                     } else {
                         __edgeless_graph.decrement_vertice_weight(key_i, 1);
                     }
+                    key_it++;
                 }
             } else {
+                int final_weight;
                 T key = tracking_info->key();
                 if constexpr(utils::ENABLE_EDGES){
-                    __graph.decrement_vertice_weight(key, 1);
+                    final_weight = __graph.decrement_vertice_weight(key, 1);
                 } else {
-                    __edgeless_graph.increment_vertice_weight(key, 1);
+                    final_weight = __edgeless_graph.decrement_vertice_weight(key, 1);
+                }
+                if (final_weight == 0){
+                    __graph_keys.erase(key);
                 }
             }
         }

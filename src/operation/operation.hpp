@@ -61,6 +61,18 @@ public:
         return generic_type(__type) == SCAN;
     }
 
+    inline bool is_get() const {
+        return generic_type(__type) == GET;
+    }
+
+    inline bool is_set() const {
+        return generic_type(__type) == SET;
+    }
+
+    inline bool is_del() const {
+        return generic_type(__type) == DEL;
+    }
+
     inline const T &key() const {return __key;}
 
     template<typename Storage_T>
