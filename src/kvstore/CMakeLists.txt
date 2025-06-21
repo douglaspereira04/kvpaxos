@@ -36,6 +36,7 @@ target_include_directories(storage
 target_link_libraries(kvstore
     PUBLIC
         absl::btree
+        absl::flat_hash_set
         unordered_dense
         readerwriterqueue
         queue

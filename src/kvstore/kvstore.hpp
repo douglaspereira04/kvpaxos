@@ -32,6 +32,7 @@
 #include "repartition_operation.hpp"
 #include "tracking_info.hpp"
 #include "ankerl/unordered_dense.h"
+#include "absl/container/flat_hash_set.h"
 
 namespace kvpaxos {
 
@@ -43,7 +44,7 @@ typedef kvpaxos::Worker<T, storage_t, QSize> worker_t;
 typedef ankerl::unordered_dense::map<T, worker_t*> worker_map_t;
 typedef ankerl::unordered_dense::map<T, storage_t*> storage_map_t;
 typedef model::Queue<Operation<T>*, TrackingInfo<T>*> schedule_queue_t;
-typedef std::unordered_set<worker_t*> worker_set_t;
+typedef absl::flat_hash_set<worker_t*> worker_set_t;
 
 public:
 

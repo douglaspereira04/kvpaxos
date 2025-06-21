@@ -32,12 +32,34 @@ public:
             pthread_barrier_destroy(&__synchronizer.barrier);
         }
         delete[] __key_to_addr;
+        delete[] __next_keys;
     }
 
     ~ScanOperation(){}
 
+    inline void key(size_t idx, T &key){
+        if (idx == 0){
+            this->__key = key;
+        } else {
+            __next_keys[idx-1] = key;
+        }
+    }
+
+    inline const T& key(){
+        return Operation<T>::key();
+    }
+
+    inline const T& key(size_t idx){
+        if (idx == 0){
+            return this->__key;
+        } else {
+            return __next_keys[idx-1];
+        }
+    }
+
     inline void init_scan_data(){
         __key_to_addr = new char*[__len];
+        __next_keys = new T[__len-1];
     }
 
     inline void init_multi_storage_data(){
@@ -98,6 +120,7 @@ protected:
     sync_t __synchronizer;
     std::string* __values;
     char** __key_to_addr; // TODO: Refactor to template parameter
+    T* __next_keys;
 };
 
 }
