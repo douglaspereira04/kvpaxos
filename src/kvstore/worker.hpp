@@ -230,40 +230,24 @@ private:
     inline void scan(ScanOperation<T> *operation){
         size_t len = operation->len();
         T key = operation->key();
-        if (operation->is_multi_partition()){
-            read_some(operation, key, len);
-            bool is_coordinator = operation->is_coordinator();
-            std::string *values = operation->get_scaned_values();
-            print_scan(is_coordinator, key, len, values);
-            if constexpr(TYPE == SCAN_CALLBACK){
-                ScanCallbackOperation<T>* scan_cb = static_cast<ScanCallbackOperation<T>*>(operation);
-                if (is_coordinator) {
-                    scan_cb->callback(values);
-                    scan_cb->destroy_multi_partition_scan();
-                    delete[] values;
-                    delete scan_cb;
-                    __n_executed_operations++;
-                }
-            } else if constexpr(TYPE == SCAN_FUTURE){
-                ScanFutureOperation<T>* scan_future = static_cast<ScanFutureOperation<T>*>(operation);
-                if (is_coordinator){
-                    scan_future->notify();
-                    __n_executed_operations++;
-                }
-            }
-        } else {
-            std::string *values = operation->get_scaned_values();
-            read_range(operation, key, len, values);
-            print_scan(true, key, len, values);
-            if constexpr(TYPE == SCAN_CALLBACK){
-                ScanCallbackOperation<T>* scan_cb = static_cast<ScanCallbackOperation<T>*>(operation);
+        read_some(operation, key, len);
+        bool is_coordinator = operation->is_coordinator();
+        std::string *values = operation->get_scaned_values();
+        print_scan(is_coordinator, key, len, values);
+        if constexpr(TYPE == SCAN_CALLBACK){
+            ScanCallbackOperation<T>* scan_cb = static_cast<ScanCallbackOperation<T>*>(operation);
+            if (is_coordinator) {
                 scan_cb->callback(values);
+                delete[] values;
                 delete scan_cb;
-            } else {
-                ScanFutureOperation<T>* scan_future = static_cast<ScanFutureOperation<T>*>(operation);
-                scan_future->notify();
+                __n_executed_operations++;
             }
-            __n_executed_operations++;
+        } else if constexpr(TYPE == SCAN_FUTURE){
+            ScanFutureOperation<T>* scan_future = static_cast<ScanFutureOperation<T>*>(operation);
+            if (is_coordinator){
+                scan_future->notify();
+                __n_executed_operations++;
+            }
         }
     }
 

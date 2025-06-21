@@ -27,15 +27,14 @@ public:
         __values = values;
     }
 
-    void destroy_multi_partition_scan(){
+    ~ScanOperation(){
         if constexpr(utils::ENABLE_LINEARIZABLE){
             pthread_barrier_destroy(&__synchronizer.barrier);
         }
         delete[] __key_to_addr;
         delete[] __next_keys;
+        delete[] this->__storage;
     }
-
-    ~ScanOperation(){}
 
     inline void key(size_t idx, T &key){
         if (idx == 0){
@@ -60,9 +59,6 @@ public:
     inline void init_scan_data(){
         __key_to_addr = new char*[__len];
         __next_keys = new T[__len-1];
-    }
-
-    inline void init_multi_storage_data(){
         this->__storage = new char*[this->__len];
     }
 
@@ -72,14 +68,6 @@ public:
         } else {
             __synchronizer.counter.store(involved_partitions, std::memory_order_relaxed);
         }
-    }
-
-    inline void set_is_single_partition(){
-        __key_to_addr = nullptr;
-    }
-
-    inline bool is_multi_partition(){
-        return __key_to_addr != nullptr;
     }
 
     template<typename Worker_T>

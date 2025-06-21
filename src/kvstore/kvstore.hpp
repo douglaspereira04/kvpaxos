@@ -198,9 +198,6 @@ public:
         ScanFutureOperation<T> operation(key, len, values.data());
         submit<SCAN_FUTURE>(&operation);
         operation.wait();
-        if (operation.is_multi_partition()){
-            operation.destroy_multi_partition_scan();
-        }
         return values;
     }
     
@@ -233,9 +230,7 @@ public:
         size_t len = operation->len();
 
         operation->init_scan_data();
-        operation->init_multi_storage_data();
 
-        bool new_mapping = false;
         for (size_t i = 0; i < len; i++) {
             T key_i = operation->key()+i;
             auto [worker_it, worker_emplaced] = __worker_map->try_emplace(key_i, __workers[__rr_counter]);
@@ -249,43 +244,20 @@ public:
                     storage_it->second = &__storages[worker_it->second->id()];
                 }
             }
-
-            if (worker_emplaced){
-                new_mapping = true;
-            } else {
-                __involved_workers.insert(worker_it->second);
-            }
-        }
-        if(new_mapping){
-            __involved_workers.insert(__workers[__rr_counter]);
+            __involved_workers.insert(worker_it->second);
             __rr_counter = (__rr_counter+1) % __n_partitions;
         }
 
-        if (__involved_workers.size() > 0) {
-            operation->init_coordination(__involved_workers.size());
-        } else {
-            operation->set_is_single_partition();
-        }
+        operation->init_coordination(__involved_workers.size());
     }
 
     void prepare_operation(
         Operation<T>* operation)
     {
-        std::unordered_set<worker_t*> workers;
-        size_t range = 1;
-        bool new_mapping = false;
-        T key;
-        worker_t* new_assignment;
         
         if (operation->is_scan()) {
             ScanOperation<T>* scan_op = static_cast<ScanOperation<T>*>(operation);
-            range = scan_op->len();
-            if (range == 1){
-                prepare_single(operation);
-                scan_op->set_is_single_partition();
-            } else{
-                prepare_range(scan_op);
-            }
+            prepare_range(scan_op);
         } else {
             prepare_single(operation);
         }
