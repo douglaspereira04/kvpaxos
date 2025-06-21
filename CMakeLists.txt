@@ -4,6 +4,7 @@ project(kvstore CXX)
 set (CMAKE_CXX_STANDARD 17)
 
 option(ANSWER "description" ON)
+set(ENGINE "TKRZW" CACHE STRING "ANKERL LMDB TKRZW LEVEL_DB")
 
 
 # Disable zlib programs/tests, build static

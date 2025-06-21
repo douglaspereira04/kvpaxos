@@ -5,11 +5,24 @@
 #include "types.h"
 #include "utils.h"
 #include <fstream>
-#include "rocks_db_storage.h"
-#include "stlmap_storage.h"
-#include "lmdb_storage.h"
-#include "absl/container/btree_map.h"
 #include <queue>
+
+#if defined(ANKERL)
+#include "stlmap_storage.h"
+typedef kvstorage::STLMapStorage<std::string, ankerl::unordered_dense::map> storage_t;
+#elif defined(ROCKS_DB)
+#include "rocks_db_storage.h"
+typedef kvstorage::RocksDBStorage<std::string> storage_t;
+#elif defined(LEVEL_DB)
+#include "level_db_storage.h"
+typedef kvstorage::LevelDBStorage<std::string> storage_t;
+#elif defined(LMDB)
+#include "lmdb_storage.h"
+typedef kvstorage::LMDBStorage<std::string> storage_t;
+#elif defined(TKRZW)
+#include "tkrzw_storage.h"
+typedef kvstorage::TKRZWStorage<std::string> storage_t;
+#endif
 
 static int verbose = 0;
 static int SLEEP = 1000;
@@ -39,9 +52,6 @@ struct operation_data_t {
 };
 
 static size_t executed = 0;
-
-typedef kvstorage::RocksDBStorage storage_t;
-
 
 storage_t *storage;
 

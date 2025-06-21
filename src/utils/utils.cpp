@@ -37,7 +37,8 @@ void process_mem_usage(double& vm_usage, double& resident_set)
     resident_set = rss * page_size_kb;
 }
 
-void read_operation(types::RequestType &type, std::string &key, size_t &len, std::string &value, std::ifstream &file) {    
+void read_operation(types::RequestType &type, std::string &key, size_t &len, std::string &value, std::ifstream &file)
+{    
     getline(file, value, ',');
     type = static_cast<types::RequestType>(atoi(value.c_str()));
     switch (type)

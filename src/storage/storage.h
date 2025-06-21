@@ -7,15 +7,16 @@
 
 namespace kvstorage {
 
+template<typename T>
 class Storage {
 public:
     Storage() {};
     void init();
 
-    int read(std::string &key, std::string &value);
-    void write(std::string &key, const std::string &value);
-    void del(std::string &key);
-    std::vector<std::string> scan(std::string &key, size_t len);
+    int read(const T &key, std::string &value);
+    void write(const T &key, const std::string &value);
+    void del(const T &key);
+    std::vector<T> scan(const T &key, size_t len);
 
     inline const size_t &level() const {
         return __level;

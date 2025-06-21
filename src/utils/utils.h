@@ -35,12 +35,6 @@ std::uintmax_t used_disk(const char* path);
     static const bool ENABLE_ANSWER = false;
 #endif
 
-#if defined(SNAPSHOT_SCAN)
-	static const bool ENABLE_SNAPSHOT_SCAN = true;
-#else
-    static const bool ENABLE_SNAPSHOT_SCAN = false;
-#endif
-
 
 void read_operation(types::RequestType &type, std::string &key, size_t &len, std::string &value, std::ifstream &file);
 

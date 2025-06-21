@@ -1,21 +1,20 @@
-#ifndef _KVPAXOS_ROCKS_DB_STORAGE_H_
-#define _KVPAXOS_ROCKS_DB_STORAGE_H_
-
+#ifndef _KVPAXOS_LEVEL_DB_STORAGE_H_
+#define _KVPAXOS_LEVEL_DB_STORAGE_H_
 
 #include <string>
 #include <vector>
 #include <atomic>
 #include <filesystem>
-#include <rocksdb/db.h>
+#include <leveldb/db.h>
 
 #include "storage.h"
 
 namespace kvstorage {
 
 template<typename T>
-class RocksDBStorage : public Storage<T> {
+class LevelDBStorage : public Storage<T> {
 public:
-    RocksDBStorage(){}
+    LevelDBStorage(){}
     void init();
 
     int read(const T &key, std::string &value);
@@ -23,30 +22,29 @@ public:
     void del(const T &key);
     std::vector<T> scan(const T &key, size_t len);
 
-
 private:
-    rocksdb::DB* __storage;
+    leveldb::DB* __storage;
     static std::atomic_int db_counter;
     static std::string id;
-
 };
 
 template<typename T>
-inline int RocksDBStorage<T>::read(const T &key, std::string &value) {
-    rocksdb::Status status;
-    status = __storage->Get(rocksdb::ReadOptions(), key, &value);
+inline int LevelDBStorage<T>::read(const T &key, std::string &value) {
+    leveldb::Status status;
+    status = __storage->Get(leveldb::ReadOptions(), key, &value);
     if (status.IsNotFound()) {
         return -1;
     }
     return value.size();
 }
 
+
 template<typename T>
-inline std::vector<T> RocksDBStorage<T>::scan(const T &key, size_t len) {
-    rocksdb::Status status;
-    rocksdb::ReadOptions read_options;
+inline std::vector<T> LevelDBStorage<T>::scan(const T &key, size_t len) {
+    leveldb::Status status;
+    leveldb::ReadOptions read_options;
     read_options.snapshot = __storage->GetSnapshot();
-    std::unique_ptr<rocksdb::Iterator> it(__storage->NewIterator(read_options));
+    std::unique_ptr<leveldb::Iterator> it(__storage->NewIterator(read_options));
     std::vector<T> values;
     values.reserve(len);
     for (it->Seek(key); it->Valid() && len > 0; it->Next(), len--) {
@@ -60,16 +58,16 @@ inline std::vector<T> RocksDBStorage<T>::scan(const T &key, size_t len) {
 }
 
 template<typename T>
-inline void RocksDBStorage<T>::write(const T &key, const std::string &value) {
-    __storage->Put(rocksdb::WriteOptions(), key, value);
+inline void LevelDBStorage<T>::write(const T &key, const std::string &value) {
+    __storage->Put(leveldb::WriteOptions(), key, value);
 }
 
 template<typename T>
-inline void RocksDBStorage<T>::del(const T &key) {
-    __storage->Delete(rocksdb::WriteOptions(), key);
+inline void LevelDBStorage<T>::del(const T &key) {
+    __storage->Delete(leveldb::WriteOptions(), key);
 }
 
-template class kvstorage::RocksDBStorage<std::string>;
+template class kvstorage::LevelDBStorage<std::string>;
 
 };
 
