@@ -23,6 +23,11 @@ public:
 
 public:
     EdgelessGraph(){};
+    void clear(){
+        __vertex_to_pos = vertex_to_pos_t();
+        __vertex_weight = vertex_weight_t();
+        n_edges_ = 0;
+    };
 
 
     inline int increment_vertice_weight(T &data, int weight) {
@@ -71,12 +76,12 @@ public:
     size_t n_vertex() const {return __vertex_to_pos.size();}
     size_t n_edges() const {return n_edges_;}
 
-    inline vertex_weight_t vertex_weight(){
-        return __vertex_weight;
+    inline vertex_weight_t&& vertex_weight(){
+        return std::move(__vertex_weight);
     }
 
-    inline vertex_to_pos_t vertice_to_pos(){
-        return __vertex_to_pos;
+    inline vertex_to_pos_t&& vertice_to_pos(){
+        return std::move(__vertex_to_pos);
     }
 
 private:

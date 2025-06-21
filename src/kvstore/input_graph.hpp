@@ -80,8 +80,9 @@ struct InputGraph{
     }
 
     void greedy_partitioning_data(){
-        vertice_weight = __edgeless_graph->vertex_weight();
-        vertice_to_pos = __edgeless_graph->vertice_to_pos();
+        vertice_weight = std::move(__edgeless_graph->vertex_weight());
+        vertice_to_pos = std::move(__edgeless_graph->vertice_to_pos());
+        __edgeless_graph->clear();
     }
 
     model::Graph<T> *__graph;
