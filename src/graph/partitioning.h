@@ -23,13 +23,14 @@
 
 namespace model {
 
-enum CutMethod {METIS, KAHIP, FENNEL, REFENNEL, ROUND_ROBIN};
+enum CutMethod {METIS, KAHIP, FENNEL, REFENNEL, ROUND_ROBIN, BIN_PACKING};
 const std::unordered_map<std::string, CutMethod> string_to_cut_method({
     {"METIS", METIS},
     {"KAHIP", KAHIP},
     {"FENNEL", FENNEL},
     {"REFENNEL", REFENNEL},
-    {"ROUND_ROBIN", ROUND_ROBIN}
+    {"ROUND_ROBIN", ROUND_ROBIN},
+    {"BIN_PACKING", BIN_PACKING}
 });
 
 

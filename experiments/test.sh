@@ -6,7 +6,7 @@
 q_size=(0 100000)
 n_initial_keys=1000000
 arrival_rate_seed=1672270886
-method=KAHIP
+method=BIN_PACKING
 versions=($1)
 partitions=($2)
 callback=($3)

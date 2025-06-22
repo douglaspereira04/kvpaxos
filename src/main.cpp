@@ -214,9 +214,12 @@ initialize_kvstore(std::queue<operation_data_t> &operation_queue)
 	auto repartition_interval = atoi(params[REPARTITION_INTERVAL]);
 	std::string repartition_method_s = params[REPARTITION_METHOD];
 
-	auto repartition_method = model::string_to_cut_method.at(
+	model::CutMethod repartition_method = model::string_to_cut_method.at(
 		repartition_method_s
 	);
+	if constexpr(!utils::ENABLE_EDGES){
+		assert(repartition_method == model::BIN_PACKING);
+	}
 
 	KVStore* kvstore = new KVStore(
 		repartition_interval, n_partitions,
