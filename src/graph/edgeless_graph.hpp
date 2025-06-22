@@ -24,6 +24,7 @@ public:
 public:
     EdgelessGraph(){};
     void clear(){
+        __available_pos = available_pos_t();
         __vertex_to_pos = vertex_to_pos_t();
         __vertex_weight = vertex_weight_t();
         n_edges_ = 0;
