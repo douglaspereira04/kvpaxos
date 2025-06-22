@@ -352,7 +352,7 @@ public:
     }
 
 
-    void sync_repartition(worker_map_t * old_map) {
+    void sync_repartition() {
         __level++;
         __old_storages.push_back(__storages);
         __storages = new storage_t[__n_partitions];
@@ -371,11 +371,13 @@ public:
     }
 
     void update_partition_scheme(){
-        worker_map_t *old_map =  __worker_map;
-        __worker_map = __updated_worker_map;
-        __updated_worker_map = old_map;
+        if (__n_partitions > 1){
+            worker_map_t *old_map =  __worker_map;
+            __worker_map = __updated_worker_map;
+            __updated_worker_map = old_map;
+        }
 
-        sync_repartition(old_map);
+        sync_repartition();
     }
 
     void order_partitioning(){
@@ -424,6 +426,23 @@ public:
         }
     }
 
+    void not_partitioning(){
+        
+        if constexpr(utils::ENABLE_INFO){
+            __repartition_timestamps.push_back(utils::now());
+        }
+
+
+        types::time_point reconstruction_begin;
+        if constexpr(utils::ENABLE_INFO){
+            __repartition_end_timestamps.push_back(utils::now());
+            reconstruction_begin = utils::now();
+        }
+
+        if constexpr(utils::ENABLE_INFO){
+            __reconstruction_duration.push_back(utils::now() - reconstruction_begin);
+        }
+    }
 
     void partitioning_loop(){
         while(true){
@@ -434,8 +453,7 @@ public:
             if (__n_partitions > 1){
                 partitioning();
             } else {
-                __updated_worker_map->clear();
-                *__updated_worker_map = worker_map_t(*__worker_map);
+                not_partitioning();
             }
             __update.store(true, std::memory_order_release);
         }
