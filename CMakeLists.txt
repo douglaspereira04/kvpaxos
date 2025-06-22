@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(kvstore CXX)
 
-set (CMAKE_CXX_STANDARD 17)
+set (CMAKE_CXX_STANDARD 20)
 
 option(ANSWER "description" ON)
 set(ENGINE "TKRZW" CACHE STRING "ANKERL LMDB TKRZW LEVEL_DB")
