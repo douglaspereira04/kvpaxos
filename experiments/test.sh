@@ -4,15 +4,15 @@
 #./rep_100000_100000      1000000        2           100000         10000000         METIS   ycsb_a_requests.txt     0        167227088  100000
 
 q_size=(0)
-n_initial_keys=1000000
 arrival_rate_seed=1672270886
 method=BIN_PACKING
 versions=($1)
 partitions=($2)
 callback=($3)
 workloads=(ycsb_a ycsb_d ycsb_e)
+n_initial_keys=(1000000 1000000 100000)
 deltat=(1000000 1000000 100000)
-requests=(10000000 10000000 1000000)
+requests=(10000000 10000000 100000)
 
 mkdir -p output
 rm -r /tmp/repart_kv_storage
@@ -23,8 +23,8 @@ for v_ in "${versions[@]}"; do
                 if [ "$v_" = "rep" ]; then
                     for q_size_ in "${q_size[@]}"; do
                         file_name=${v_}_c${c_}_q${q_size_}_p${p_}_dt${deltat[$i]}_w${workloads[$i]}.csv
-                        echo ./${v_}_${q_size_} ${requests[$i]}  $p_  $n_initial_keys  ${deltat[$i]}  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed $c_
-                        ./${v_}_${q_size_} ${requests[$i]}  $p_  $n_initial_keys  ${deltat[$i]}  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed $c_ > output/$file_name
+                        echo ./${v_}_${q_size_} ${requests[$i]}  $p_  ${n_initial_keys[$i]}  ${deltat[$i]}  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed $c_
+                        ./${v_}_${q_size_} ${requests[$i]}  $p_  ${n_initial_keys[$i]}  ${deltat[$i]}  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed $c_ > output/$file_name
                         if [ $? -ne 0 ]; then
                             echo "ERROR"
                         fi
@@ -34,8 +34,8 @@ for v_ in "${versions[@]}"; do
                     done;
                 else
                     file_name=${v_}_c${c_}_p${p_}_w${workloads[$i]}.csv
-                    echo ./${v_} ${requests[$i]}  $p_  $n_initial_keys  0  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed $c_
-                    ./${v_} ${requests[$i]}  $p_  $n_initial_keys  0  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed $c_ > output/$file_name
+                    echo ./${v_} ${requests[$i]}  $p_  ${n_initial_keys[$i]}  0  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed $c_
+                    ./${v_} ${requests[$i]}  $p_  ${n_initial_keys[$i]}  0  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed $c_ > output/$file_name
                     if [ $? -ne 0 ]; then
                         echo "ERROR"
                     fi
