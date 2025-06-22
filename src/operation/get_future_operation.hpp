@@ -4,7 +4,7 @@
 #include <string>
 #include "get_operation.hpp"
 #include "utils.h"
-#include "semaphore.h"
+#include "absl/synchronization/notification.h"
 
 
 namespace workload {
@@ -18,26 +18,23 @@ public:
         this->__type = GET_FUTURE;
         this->__key = key;
         this->__value = value;
-        sem_init(&__sem, 0, 0);
     }
 
-    ~GetFutureOperation(){
-        sem_destroy(&__sem);
-    }
+    ~GetFutureOperation(){}
 
     inline void wait(){
-        sem_wait(&__sem);
+        __sem.WaitForNotification();
     }
 
     inline void notify(){
-        sem_post(&__sem);
+        __sem.Notify();
     }
 
     std::string *value(){
         return __value;
     }
 protected:
-    sem_t __sem;
+    absl::Notification __sem;
     std::string* __value;
 };
 

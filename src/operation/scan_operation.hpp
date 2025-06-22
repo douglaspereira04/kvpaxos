@@ -2,7 +2,7 @@
 #define WORKLOAD_SCAN_OPERATION_H
 
 #include <string>
-#include <pthread.h>
+#include "absl/synchronization/barrier.h"
 #include <atomic>
 
 #include "utils.h"
@@ -12,8 +12,8 @@
 namespace workload {
 
 union sync_t{
-    pthread_barrier_t barrier;
-    std::atomic_int counter;
+    absl::Barrier* barrier;
+    std::atomic_int *counter;
 };
 
 template<typename T>
@@ -29,7 +29,9 @@ public:
 
     ~ScanOperation(){
         if constexpr(utils::ENABLE_LINEARIZABLE){
-            pthread_barrier_destroy(&__synchronizer.barrier);
+            delete __synchronizer.barrier;
+        } else {
+            delete __synchronizer.counter;
         }
         delete[] __key_to_addr;
         delete[] __next_keys;
@@ -64,9 +66,10 @@ public:
 
     inline void init_coordination(size_t involved_partitions){
         if constexpr(utils::ENABLE_LINEARIZABLE){
-            pthread_barrier_init(&__synchronizer.barrier, NULL, involved_partitions);
+            __synchronizer.barrier = new absl::Barrier(involved_partitions);
         } else {
-            __synchronizer.counter.store(involved_partitions, std::memory_order_relaxed);
+            __synchronizer.counter = new std::atomic_int;
+            __synchronizer.counter->store(involved_partitions, std::memory_order_relaxed);
         }
     }
 
@@ -93,9 +96,9 @@ public:
 
     inline bool is_coordinator(){
         if constexpr(utils::ENABLE_LINEARIZABLE){
-            return pthread_barrier_wait(&__synchronizer.barrier) == PTHREAD_BARRIER_SERIAL_THREAD;
+            return __synchronizer.barrier->Block();
         } else {
-            return 1 == __synchronizer.counter.fetch_add(-1);
+            return 1 == __synchronizer.counter->fetch_add(-1);
         }
     }
 

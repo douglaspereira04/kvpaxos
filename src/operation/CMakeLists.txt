@@ -34,6 +34,7 @@ ENDIF()
 target_link_libraries(
     operation
         PUBLIC
+            absl::synchronization
             types
             utils
 )

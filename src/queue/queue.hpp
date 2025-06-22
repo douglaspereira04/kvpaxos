@@ -4,9 +4,9 @@
 
 #include <queue>
 #include <mutex>
-#include <semaphore.h>
 #include <type_traits>
 #include "tbb/concurrent_queue.h"
+#include <semaphore>
 
 
 namespace model {
@@ -24,46 +24,42 @@ public:
         static_cast<size_t>(distance/2+(distance & 1))
     ){}
 
-    Queue(size_t ahead_0, size_t ahead_1){
-        semaphores[0] = sem_t();
-        semaphores[1] = sem_t();
-        sem_init(&semaphores[0], 0, 0);
-        sem_init(&semaphores[1], 0, 0);
+    Queue(size_t ahead_0, size_t ahead_1)
+        : semaphores_0(0),
+        semaphores_1(0),
+        ahead_sems_0(ahead_0),
+        ahead_sems_1(ahead_1)
+    {}
 
-        sem_init(&ahead_sems[0], 0, ahead_0);
-        sem_init(&ahead_sems[1], 0, ahead_1);
-        
-        
-    }
     ~Queue(){}
 
     void push(T t_value, U u_value){
         t_queue.push(t_value);
         u_queue.push(u_value);
-        sem_post(&semaphores[0]);
-        sem_post(&semaphores[1]);
+        semaphores_0.release();
+        semaphores_1.release();
     }
 
     template<typename TorU>
     void pop(TorU &curr_value){
         if constexpr(std::is_same_v<TorU, T>){
-            sem_wait(&semaphores[1]);
-            sem_wait(&ahead_sems[0]);
+            semaphores_1.acquire();
+            ahead_sems_0.acquire();
             t_queue.try_pop(curr_value);
-            sem_post(&ahead_sems[1]);
+            ahead_sems_1.release();
         } else if constexpr(std::is_same_v<TorU, U>){
-            sem_wait(&semaphores[0]);
-            sem_wait(&ahead_sems[1]);
+            semaphores_0.acquire();
+            ahead_sems_1.acquire();
             u_queue.try_pop(curr_value);
-            sem_post(&ahead_sems[0]);
+            ahead_sems_0.release();
         }
     }
 
 
 private:
-    sem_t semaphores[2];
+    std::counting_semaphore<SEM_VALUE_MAX> semaphores_0, semaphores_1;
 
-    sem_t ahead_sems[2];
+    std::counting_semaphore<SEM_VALUE_MAX> ahead_sems_0, ahead_sems_1;
 
     tbb::concurrent_queue<T> t_queue;
     tbb::concurrent_queue<U> u_queue;

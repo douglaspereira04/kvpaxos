@@ -1,7 +1,7 @@
 #ifndef WORKLOAD_REPARTITION_OPERATION_H
 #define WORKLOAD_REPARTITION_OPERATION_H
 
-#include <pthread.h>
+#include <absl/synchronization/barrier.h>
 #include "operation.hpp"
 
 
@@ -13,20 +13,20 @@ class RepartitionOperation: public Operation<T> {
 public:
     template<typename Storage_T>
     RepartitionOperation(size_t partitions, Storage_T* storages) : Operation<T>(REPARTITION){
-        pthread_barrier_init(&__barrier, NULL, partitions);
+        __barrier = new absl::Barrier(partitions);
         this->template storage<Storage_T>(storages);
     }
 
     ~RepartitionOperation(){
-        pthread_barrier_destroy(&__barrier);
+        delete __barrier;
     }
 
-    inline int barrier_wait(){
-        return pthread_barrier_wait(&__barrier);
+    inline bool barrier_wait(){
+        return __barrier->Block();
     }
 
 protected:
-    pthread_barrier_t __barrier;
+    absl::Barrier* __barrier;
 };
 
 }

@@ -34,6 +34,7 @@
 #include "ankerl/unordered_dense.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/container/btree_set.h"
+#include "absl/synchronization/notification.h"
 
 namespace kvpaxos {
 enum PrepareStatus{
@@ -109,7 +110,7 @@ public:
             __update.store(false, std::memory_order_seq_cst);
             __repartitioning = false;
 
-            sem_init(&repart_semaphore, 0, 0);
+            __repart_notification = new absl::Notification();
             reparting_thread = std::thread(&kvstore_t::partitioning_loop, this);
             utils::set_affinity(4, reparting_thread, reparting_cpu_set);
 
@@ -394,7 +395,7 @@ public:
         if constexpr(utils::ENABLE_INFO){
             __repartition_request_timestamp.push_back(utils::now());
         }
-        sem_post(&repart_semaphore);
+        __repart_notification->Notify();
     }
 
     void update_graph_loop() {
@@ -404,7 +405,7 @@ public:
             __scheduling_queue->template pop(tracking_info);
             if (tracking_info->type() == END){
                 __stop.store(true, std::memory_order_relaxed);
-                sem_post(&repart_semaphore);
+                __repart_notification->Notify();
                 delete tracking_info;
                 break;
             }
@@ -446,7 +447,9 @@ public:
 
     void partitioning_loop(){
         while(true){
-            sem_wait(&repart_semaphore);
+            __repart_notification->WaitForNotification();
+            delete __repart_notification;
+            __repart_notification = new absl::Notification();
             if (__stop.load(std::memory_order_relaxed)){
                 break;
             }
@@ -672,7 +675,7 @@ public:
     worker_map_t* __updated_worker_map;
     InputGraph<T> __input_graph;
 
-    sem_t repart_semaphore;
+    absl::Notification *__repart_notification;
 
     std::thread reparting_thread;
     cpu_set_t reparting_cpu_set;

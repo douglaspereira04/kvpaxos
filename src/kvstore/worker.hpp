@@ -28,6 +28,7 @@
 #include "scan_future_operation.hpp"
 #include "get_future_operation.hpp"
 #include "repartition_operation.hpp"
+#include <semaphore>
 
 #include <readerwriterqueue.h>
 
@@ -44,7 +45,10 @@ typedef moodycamel::BlockingReaderWriterQueue<Operation<T>*> operation_queue_t;
 public:
     Worker(size_t id, storage_t *storage)
         : __id{id},
-          __n_executed_operations{0}
+          __n_executed_operations{0},
+          __available(0),
+          __remaining_space(QSize)
+
     {
         __storage = storage;
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
@@ -59,19 +63,13 @@ public:
     }
 
     void start_worker_thread() {
-        sem_init(&__available, 0, 0);
-        if constexpr(QSize > 0){
-            sem_init(&__remaining_space, 0, QSize);
-        }
 
         worker_thread_ = std::thread(&worker_t::thread_loop, this);
         utils::set_affinity(__id+5, worker_thread_, cpu_set);
     }
 
     size_t operation_queue_size() {
-        int size;
-        sem_getvalue(&__available, &size);
-        return static_cast<size_t>(size);
+        return __operations_queue.size_approx();
     }
 
     size_t error_count() {
@@ -80,18 +78,18 @@ public:
 
     void push_operation(Operation<T> *operation) {
         if constexpr(QSize > 0){
-            sem_wait(&__remaining_space);
+            __remaining_space.acquire();
         }
         __operations_queue.enqueue(operation);
-        sem_post(&__available);
+        __available.release();
     }
 
     Operation<T> * pop_operation() {
         Operation<T> *operation;
-        sem_wait(&__available);
+        __available.acquire();
         __operations_queue.try_dequeue(operation);
         if constexpr(QSize > 0){
-            sem_post(&__remaining_space);
+            __remaining_space.release();
         }
         return operation;
     }
@@ -243,8 +241,8 @@ private:
         __storage = &operation->template storage<storage_t>()[__id];
         __storage->init();
 
-        int coordinator = operation->barrier_wait();
-        if (coordinator == PTHREAD_BARRIER_SERIAL_THREAD) {
+        int is_coordinator = operation->barrier_wait();
+        if (is_coordinator) {
             delete operation;
         }
     }
@@ -301,10 +299,10 @@ private:
     cpu_set_t cpu_set;
 
     std::thread worker_thread_;
-    sem_t __available;
+    std::counting_semaphore<SEM_VALUE_MAX> __available;
     operation_queue_t __operations_queue;
 
-    sem_t __remaining_space;
+    std::counting_semaphore<SEM_VALUE_MAX> __remaining_space;
 
     size_t __error_count = 0;
 

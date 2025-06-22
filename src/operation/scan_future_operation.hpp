@@ -5,7 +5,7 @@
 #include <vector>
 #include "scan_operation.hpp"
 #include "utils.h"
-#include "semaphore.h"
+#include "absl/synchronization/notification.h"
 
 
 namespace workload {
@@ -20,22 +20,24 @@ public:
         this->__key = key;
         this->__len = len;
         this->__values = values;
-        sem_init(&__sem, 0, 0);
     }
 
-    ~ScanFutureOperation(){
-        sem_destroy(&__sem);
-    }
+    ~ScanFutureOperation(){}
 
     inline void wait(){
-        sem_wait(&__sem);
+        __sem.WaitForNotification();
     }
 
     inline void notify(){
-        sem_post(&__sem);
+        __sem.Notify();
+    }
+
+    std::string *value(){
+        return __value;
     }
 protected:
-    sem_t __sem;
+    absl::Notification __sem;
+    std::string* __value;
 };
 
 }
