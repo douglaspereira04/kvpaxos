@@ -20,7 +20,7 @@ for v_ in "${versions[@]}"; do
     for c_ in "${callback[@]}"; do
         for ((i=0; i<${#workloads[@]}; i++)); do
             for p_ in "${partitions[@]}"; do
-                if [ "$v_" = "rep" ]; then
+                if [[ "$v_" == rep* ]]; then
                     for q_size_ in "${q_size[@]}"; do
                         file_name=${v_}_c${c_}_q${q_size_}_p${p_}_dt${deltat[$i]}_w${workloads[$i]}.csv
                         echo ./${v_}_${q_size_} ${requests[$i]}  $p_  ${n_initial_keys[$i]}  ${deltat[$i]}  $method  ${workloads[$i]}_requests.txt  0  $arrival_rate_seed $c_
