@@ -3,7 +3,7 @@
 #                        #requests  #partitions   #initial keys   interval in us   method      request file    #rate mean   #rate seed   #dh
 #./rep_100000_100000      1000000        2           100000         10000000         METIS   ycsb_a_requests.txt     0        167227088  100000
 
-q_size=(0 100000)
+q_size=(0)
 n_initial_keys=1000000
 arrival_rate_seed=1672270886
 method=BIN_PACKING
