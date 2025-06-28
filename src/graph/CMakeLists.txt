@@ -12,10 +12,6 @@ IF(${INFO} STREQUAL "ON")
     target_compile_definitions(graph PUBLIC INFO)
 ENDIF()
 
-IF(${EDGES} STREQUAL "ON")
-    target_compile_definitions(graph PUBLIC EDGES)
-ENDIF()
-
 target_link_libraries(graph
     PUBLIC
         utils

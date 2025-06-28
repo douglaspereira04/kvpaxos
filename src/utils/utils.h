@@ -47,12 +47,6 @@ std::uintmax_t used_disk(const char* path);
     static const bool ENABLE_LINEARIZABLE = false;
 #endif
 
-#if defined(EDGES)
-	static const bool ENABLE_EDGES = true;
-#else
-    static const bool ENABLE_EDGES = false;
-#endif
-
 
 void read_operation(types::RequestType &type, std::string &key, size_t &len, std::string &value, std::ifstream &file);
 

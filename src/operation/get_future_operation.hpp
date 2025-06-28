@@ -16,7 +16,7 @@ public:
 
     GetFutureOperation(T &key, std::string *value){
         this->__type = GET_FUTURE;
-        this->__key = key;
+        this->__key = &key;
         this->__value = value;
     }
 

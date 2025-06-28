@@ -62,7 +62,7 @@ typedef kvstorage::LMDBStorage<std::string> storage_t;
 typedef kvstorage::TKRZWStorage<std::string> storage_t;
 #endif
 
-typedef kvpaxos::KVStore<std::string, storage_t, ENABLE_REPARTITION, Q_SIZE, types::OPERATIONS> KVStore;
+typedef kvpaxos::KVStore<std::string, PARTITIONS, storage_t, ENABLE_REPARTITION, Q_SIZE, types::OPERATIONS> KVStore;
 
 
 static int verbose = 0;
@@ -127,10 +127,9 @@ metrics_loop(int sleep_duration, KVStore* kvstore)
 			std::cout << kvstore->graph_vertices() << ",";
 			std::cout << kvstore->graph_edges() << ",";
 
-			std::vector<size_t> in_queue = kvstore->in_queue_amount();
 			for (int i = 0; i < n_partitions; i++)
 			{
-				std::cout << in_queue[i] << ",";
+				std::cout << kvstore->in_queue_amount(i) << ",";
 			}
 		} else {
 			std::cout << ",,";
@@ -214,16 +213,10 @@ initialize_kvstore(std::queue<operation_data_t> &operation_queue)
 	auto repartition_interval = atoi(params[REPARTITION_INTERVAL]);
 	std::string repartition_method_s = params[REPARTITION_METHOD];
 
-	model::CutMethod repartition_method = model::string_to_cut_method.at(
-		repartition_method_s
-	);
-	if constexpr(!utils::ENABLE_EDGES){
-		assert(repartition_method == model::BIN_PACKING);
-	}
+	model::CutMethod repartition_method = model::BIN_PACKING;
 
 	KVStore* kvstore = new KVStore(
-		repartition_interval, n_partitions,
-		repartition_method
+		repartition_interval, repartition_method
 	);
 
 	kvstore->run();
@@ -297,7 +290,6 @@ workload_loop(std::queue<operation_data_t> &operation_queue, KVStore *kvstore)
 			arrived++;
 		}
 	}
-	kvstore->stop();
 }
 
 
@@ -332,10 +324,10 @@ run()
 	cpu_set_t workload_cpu_set;
 	utils::set_affinity(1,workload_thread, workload_cpu_set);
 	workload_thread.join();
+	auto end_scheduling = utils::now();
 	throughput_thread.join();
 	kvstore->join();
 
-	auto end_scheduling = kvstore->schedule_end();
 	auto end_execution_timestamp = utils::now();
 
 
@@ -397,6 +389,8 @@ run()
 	ofs << "\n";
 	ofs.flush();
     ofs.close();
+
+	delete kvstore;
 	
 }
 

@@ -28,6 +28,7 @@
 #include "scan_future_operation.hpp"
 #include "get_future_operation.hpp"
 #include "repartition_operation.hpp"
+#include "tbb/concurrent_queue.h"
 #include <semaphore>
 
 #include <readerwriterqueue.h>
@@ -40,9 +41,14 @@ template <typename T, typename storage_t, size_t QSize = 0>
 class Worker {
 typedef Worker<T, storage_t, QSize> worker_t;
 typedef std::unordered_map<T, worker_t*> worker_map_t;
-typedef moodycamel::BlockingReaderWriterQueue<Operation<T>*> operation_queue_t;
+typedef tbb::concurrent_queue<Operation<T>*> operation_queue_t;
 
 public:
+    Worker()
+        : __available(0),
+          __remaining_space(0)
+    {}
+    
     Worker(size_t id, storage_t *storage)
         : __id{id},
           __n_executed_operations{0},
@@ -53,6 +59,11 @@ public:
         __storage = storage;
         __output_file = std::ofstream("partition_output_" + std::to_string(__id));
     }
+    Worker(const Worker&) = delete;
+    Worker& operator=(const Worker&) = delete;
+
+    Worker(Worker&&) = default;
+    Worker& operator=(Worker&&) = default;
     
     ~Worker() {
         if (worker_thread_.joinable()) {
@@ -68,26 +79,26 @@ public:
         utils::set_affinity(__id+5, worker_thread_, cpu_set);
     }
 
-    size_t operation_queue_size() {
-        return __operations_queue.size_approx();
+    inline const size_t operation_queue_size() const {
+        return __operations_queue.unsafe_size();
     }
 
-    size_t error_count() {
+    inline const size_t error_count() {
         return __error_count;
     }
 
-    void push_operation(Operation<T> *operation) {
+    inline void push_operation(Operation<T> *operation) {
         if constexpr(QSize > 0){
             __remaining_space.acquire();
         }
-        __operations_queue.enqueue(operation);
+        __operations_queue.push(operation);
         __available.release();
     }
 
-    Operation<T> * pop_operation() {
+    inline Operation<T> * pop_operation() {
         Operation<T> *operation;
         __available.acquire();
-        __operations_queue.try_dequeue(operation);
+        __operations_queue.try_pop(operation);
         if constexpr(QSize > 0){
             __remaining_space.release();
         }
@@ -95,11 +106,11 @@ public:
     }
 
 
-    int id() const {
+    inline int id() const {
         return __id;
     }
 
-    size_t n_executed_operations() const {
+    inline size_t n_executed_operations() const {
         return __n_executed_operations;
     }
 

@@ -40,7 +40,7 @@ public:
 
     inline void key(size_t idx, T &key){
         if (idx == 0){
-            this->__key = key;
+            *this->__key = key;
         } else {
             __next_keys[idx-1] = key;
         }
@@ -50,9 +50,9 @@ public:
         return Operation<T>::key();
     }
 
-    inline const T& key(size_t idx){
+    inline T& key(size_t idx){
         if (idx == 0){
-            return this->__key;
+            return *this->__key;
         } else {
             return __next_keys[idx-1];
         }

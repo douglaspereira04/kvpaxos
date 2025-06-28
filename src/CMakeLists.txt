@@ -28,9 +28,6 @@ ENDIF()
 IF(${INFO} STREQUAL "ON")
     target_compile_definitions(main PUBLIC INFO)
 ENDIF()
-IF(${EDGES} STREQUAL "ON")
-    target_compile_definitions(main PUBLIC EDGES)
-ENDIF()
 IF(${LINEARIZABLE} STREQUAL "ON")
     target_compile_definitions(main PUBLIC LINEARIZABLE)
 ENDIF()
@@ -41,6 +38,7 @@ IF(${REPARTITIONING} STREQUAL "ON")
     target_compile_definitions(main PUBLIC REPARTITIONING)
 ENDIF()
 add_definitions( -DQ_SIZE=${Q_SIZE} )
+add_definitions( -DPARTITIONS=${PARTITIONS} )
 
 target_link_libraries(
     main

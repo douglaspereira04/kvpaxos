@@ -50,6 +50,11 @@ public:
 
     Operation(OperationType type, T &key):
         __type{type},
+        __key{&key}
+    {}
+
+    Operation(OperationType type, T *key):
+        __type{type},
         __key{key}
     {}
 
@@ -73,7 +78,7 @@ public:
         return generic_type(__type) == DEL;
     }
 
-    inline const T &key() const {return __key;}
+    inline const T &key() const {return *__key;}
 
     template<typename Storage_T>
     inline void storage(Storage_T *storage_){
@@ -97,7 +102,7 @@ public:
 
 protected:
     OperationType __type;
-    T __key;
+    T *__key;
     char**__storage;
 };
 

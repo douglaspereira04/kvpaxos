@@ -31,7 +31,7 @@ public:
     };
 
 
-    inline int increment_vertice_weight(T &data, int weight) {
+    inline int increment_vertice_weight(const T &data, int weight) {
         int final_weight;
         if (__available_pos.size() > 0){
             int pos = __available_pos.front();
@@ -57,7 +57,7 @@ public:
     }
 
 
-    inline int decrement_vertice_weight(T &data, int weight) {
+    inline int decrement_vertice_weight(const T &data, int weight) {
         int final_weight;
         auto it = __vertex_to_pos.find(data);
         if (it != __vertex_to_pos.end()) {

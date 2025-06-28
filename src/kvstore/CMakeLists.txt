@@ -23,18 +23,17 @@ ENDIF()
 IF(${REPARTITIONING} STREQUAL "ON")
     target_compile_definitions(kvstore PUBLIC REPARTITIONING)
 ENDIF()
-IF(${EDGES} STREQUAL "ON")
-    target_compile_definitions(kvstore PUBLIC EDGES)
-ENDIF()
-
+add_definitions( -DPARTITIONS=${PARTITIONS} )
 
 target_include_directories(storage
     PUBLIC
         ${TKRZW_INCLUDE_DIRS}
 )
 
+find_package(TBB REQUIRED)
 target_link_libraries(kvstore
     PUBLIC
+        TBB::tbb
         absl::btree
         absl::flat_hash_set
         unordered_dense
