@@ -19,99 +19,74 @@ _arrival_rate_seed=1672270886
 case $node in
 
   0)
-    _imb_versions=(async_imb)
+    _versions=(async)
+    _queue_heads_distance=(0 100 10000 100000 50000000)
+    _arrival_rates=(293)
     _workloads=(ycsb_a)
-    _parameters_file="async_imb_parameters.txt"
+    _parameters_file="async_ycsb_a_d_parameters.txt"
     ;;
 
   1)
-    _imb_versions=(async_imb)
+    _versions=(async)
+    _queue_heads_distance=(0 100 10000 100000 50000000)
+    _arrival_rates=(464)
     _workloads=(ycsb_d)
-    _parameters_file="async_imb_parameters.txt"
+    _parameters_file="async_ycsb_a_d_parameters.txt"
     ;;
 
   2)
-    _imb_versions=(async_imb)
-    _workloads=(ycsb_e)
-    _parameters_file="async_imb_parameters.txt"
-    ;;
-
-  3)
-    _imb_versions=(imb)
-    _workloads=(ycsb_a)
-    _parameters_file="old_imb_parameters.txt"
-    ;;
-
-  4)
-    _imb_versions=(imb)
-    _workloads=(ycsb_d)
-    _parameters_file="old_imb_parameters.txt"
-    ;;
-
-  5)
-    _imb_versions=(imb)
-    _workloads=(ycsb_e)
-    _parameters_file="old_imb_parameters.txt"
-    ;;
-
-  6)
-    _imbalance_thresholds=(0)
     _versions=(async)
-    _workloads=(ycsb_a)
-    _parameters_file="async_ycsb_a_d_parameters.txt"
-    ;;
-
-  7)
-    _imbalance_thresholds=(0)
-    _versions=(async)
-    _workloads=(ycsb_d)
-    _parameters_file="async_ycsb_a_d_parameters.txt"
-    ;;
-
-  8)
-
-    _imbalance_thresholds=(0)
-    _versions=(async)
+    _queue_heads_distance=(0 100 10000 100000 50000000)
+    _arrival_rates=(14)
     _workloads=(ycsb_e)
     _parameters_file="async_ycsb_e_parameters.txt"
     ;;
 
-  9)
+  3)
     _versions=(old)
+    _queue_heads_distance=(0 100 10000 100000 50000000)
+    _arrival_rates=(293)
     _workloads=(ycsb_a)
     _parameters_file="old_ycsb_a_d_parameters.txt"
     ;;
 
-  10)
+  4)
     _versions=(old)
+    _queue_heads_distance=(0 100 10000 100000 50000000)
+    _arrival_rates=(464)
     _workloads=(ycsb_d)
     _parameters_file="old_ycsb_a_d_parameters.txt"
     ;;
 
-  11)
+  5)
     _versions=(old)
+    _queue_heads_distance=(0 100 10000 100000 50000000)
+    _arrival_rates=(14)
     _workloads=(ycsb_e)
     _parameters_file="old_ycsb_e_parameters.txt"
     ;;
 
-  12)
+  6)
     _methods=(ROUND_ROBIN)
+    _arrival_rates=(293)
     _partitions=(1 8)
     _versions=(old)
     _workloads=(ycsb_a)
     _parameters_file="rr_parameters.txt"
     ;;
 
-  13)
+  7)
     _methods=(ROUND_ROBIN)
+    _arrival_rates=(464)
     _partitions=(1 8)
     _versions=(old)
     _workloads=(ycsb_d)
     _parameters_file="rr_parameters.txt"
     ;;
 
-  14)
+  8)
     _methods=(ROUND_ROBIN)
+    _arrival_rates=(14)
     _partitions=(1 8)
     _versions=(old)
     _workloads=(ycsb_e)
