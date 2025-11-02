@@ -21,7 +21,7 @@ case $node in
   0)
     _versions=(async)
     _queue_heads_distance=(0 100 10000 100000 50000000)
-    _arrival_rates=(293)
+    _arrival_rates=(293000)
     _workloads=(ycsb_a)
     _parameters_file="async_ycsb_a_d_parameters.txt"
     ;;
@@ -29,7 +29,7 @@ case $node in
   1)
     _versions=(async)
     _queue_heads_distance=(0 100 10000 100000 50000000)
-    _arrival_rates=(464)
+    _arrival_rates=(464000)
     _workloads=(ycsb_d)
     _parameters_file="async_ycsb_a_d_parameters.txt"
     ;;
@@ -37,7 +37,7 @@ case $node in
   2)
     _versions=(async)
     _queue_heads_distance=(0 100 10000 100000 50000000)
-    _arrival_rates=(14)
+    _arrival_rates=(14000)
     _workloads=(ycsb_e)
     _parameters_file="async_ycsb_e_parameters.txt"
     ;;
@@ -45,7 +45,7 @@ case $node in
   3)
     _versions=(old)
     _queue_heads_distance=(0 100 10000 100000 50000000)
-    _arrival_rates=(293)
+    _arrival_rates=(293000)
     _workloads=(ycsb_a)
     _parameters_file="old_ycsb_a_d_parameters.txt"
     ;;
@@ -53,7 +53,7 @@ case $node in
   4)
     _versions=(old)
     _queue_heads_distance=(0 100 10000 100000 50000000)
-    _arrival_rates=(464)
+    _arrival_rates=(464000)
     _workloads=(ycsb_d)
     _parameters_file="old_ycsb_a_d_parameters.txt"
     ;;
@@ -61,14 +61,14 @@ case $node in
   5)
     _versions=(old)
     _queue_heads_distance=(0 100 10000 100000 50000000)
-    _arrival_rates=(14)
+    _arrival_rates=(14000)
     _workloads=(ycsb_e)
     _parameters_file="old_ycsb_e_parameters.txt"
     ;;
 
   6)
     _methods=(ROUND_ROBIN)
-    _arrival_rates=(293)
+    _arrival_rates=(293000)
     _partitions=(1 8)
     _versions=(old)
     _workloads=(ycsb_a)
@@ -77,7 +77,7 @@ case $node in
 
   7)
     _methods=(ROUND_ROBIN)
-    _arrival_rates=(464)
+    _arrival_rates=(464000)
     _partitions=(1 8)
     _versions=(old)
     _workloads=(ycsb_d)
@@ -86,7 +86,7 @@ case $node in
 
   8)
     _methods=(ROUND_ROBIN)
-    _arrival_rates=(14)
+    _arrival_rates=(14000)
     _partitions=(1 8)
     _versions=(old)
     _workloads=(ycsb_e)
@@ -99,37 +99,4 @@ case $node in
     ;;
 esac
 
-:'
-if [[ "${_workloads[0]}" == "ycsb_a" ]]; then
-  if [ "$1" = "pt0" ]; then
-      _arrival_rates=(0 100000)
-  elif [ "$1" = "pt2" ]; then
-      _arrival_rates=(200000 600000)
-  elif [ "$1" = "pt2" ]; then
-      _arrival_rates=(300000 400000 500000)
-  else
-      _arrival_rates=(800000 1000000)
-  fi
-elif [[ "${_workloads[0]}" == "ycsb_d" ]]; then
-  if [ "$1" = "pt0" ]; then
-      _arrival_rates=(0 300000)
-  elif [ "$1" = "pt1" ]; then
-      _arrival_rates=(400000 800000)
-  elif [ "$1" = "pt2" ]; then
-      _arrival_rates=(500000 600000 700000)
-  else
-      _arrival_rates=(1000000 1200000)
-  fi
-else
-  if [ "$1" = "pt0" ]; then
-      _arrival_rates=(0 20000)
-  elif [ "$1" = "pt1" ]; then
-      _arrival_rates=(30000 70000)
-  elif [ "$1" = "pt2" ]; then
-      _arrival_rates=(40000 50000 60000)
-  else
-      _arrival_rates=(90000 110000)
-  fi
-fi
-'
 experiments _methods _partitions _versions _imb_versions _workloads _n_initial_keys _arrival_rates _queue_heads_distance _imbalance_thresholds _max_sucessive_imbalances $_arrival_rate_seed $_parameters_file $_reps $_experiment_name
